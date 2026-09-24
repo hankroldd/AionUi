@@ -16,6 +16,7 @@ import { type TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
+import { withGuidScope } from '@/renderer/mycowork-slots';
 
 export type GuidSendDeps = {
   // Input state
@@ -184,13 +185,13 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
             locale: localeKey,
             conversation_overrides: assistantOverrides,
           },
-          extra: {
+          extra: await withGuidScope({
             default_files: files.map(chatFileRefPath),
             workspace: finalWorkspace,
             custom_workspace: isCustomWorkspace,
             selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
             selected_session_mcp_servers: selectedSessionMcpServersToSend,
-          },
+          }),
         });
 
         if (!conversation || !conversation.id) {
@@ -238,14 +239,14 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           locale: localeKey,
           conversation_overrides: assistantOverrides,
         },
-        extra: {
+        extra: await withGuidScope({
           workspace: finalWorkspace,
           custom_workspace: isCustomWorkspace,
           default_files: files.map(chatFileRefPath),
           selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
           selected_session_mcp_servers:
             selectedMcpServerIds !== undefined ? selectedSessionMcpServers : selectedSessionMcpServersToSend,
-        },
+        }),
       });
       if (!conversation || !conversation.id) {
         console.error('Failed to create ACP conversation - conversation object is null or missing id');

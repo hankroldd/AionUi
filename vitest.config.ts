@@ -9,11 +9,15 @@ const aliases = {
   '@mcp/models/': path.resolve(__dirname, './packages/desktop/src/common/models') + '/',
   '@mcp/types/': path.resolve(__dirname, './packages/desktop/src/common') + '/',
   '@mcp/': path.resolve(__dirname, './packages/desktop/src/common') + '/',
+  // [mycowork] ADR-0011: components live in MyCowork packages/ui (repo root = ../..)
+  '@mycowork/ui': process.env.MYCOWORK_UI_DIR || path.resolve(__dirname, '../../packages/ui/src'),
 };
 
 export default defineConfig({
   resolve: {
     alias: aliases,
+    // [mycowork] ADR-0011: packages/ui sits outside this root; resolve its peers from our node_modules
+    dedupe: ['react', 'react-dom', '@arco-design/web-react'],
   },
   test: {
     globals: true,

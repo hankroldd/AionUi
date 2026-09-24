@@ -18,7 +18,11 @@
       "@/*": ["./packages/desktop/src/*"],
       "@process/*": ["./packages/desktop/src/process/*"],
       "@renderer/*": ["./packages/desktop/src/renderer/*"],
-      "@worker/*": ["./packages/desktop/src/process/worker/*"]
+      "@worker/*": ["./packages/desktop/src/process/worker/*"],
+      "@mycowork/ui": ["../../packages/ui/src/index.ts"],
+      "@mycowork/contracts": ["../../packages/contracts/src/index.ts"],
+      "react": ["./node_modules/@types/react"],
+      "@arco-design/web-react": ["./node_modules/@arco-design/web-react"]
     }
   },
   "include": [

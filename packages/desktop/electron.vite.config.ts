@@ -216,6 +216,8 @@ export default defineConfig(({ mode }) => {
           '@worker': resolve('packages/desktop/src/process/worker'),
           // Force ESM version of streamdown
           streamdown: resolve('node_modules/streamdown/dist/index.js'),
+          // [mycowork] ADR-0011: components live in MyCowork packages/ui (fork root = ../.., repo root = ../../..)
+          '@mycowork/ui': process.env.MYCOWORK_UI_DIR || resolve(__dirname, '../../../../packages/ui/src'),
         },
         extensions: ['.ts', '.tsx', '.js', '.jsx', '.css'],
         // CodeMirror relies on module-level singletons (highlighterFacet, tag
@@ -231,6 +233,7 @@ export default defineConfig(({ mode }) => {
           'react',
           'react-dom',
           'react-router-dom',
+          '@arco-design/web-react', // [mycowork] ADR-0011: packages/ui (outside this root) must share this copy
           '@codemirror/state',
           '@codemirror/view',
           '@codemirror/language',

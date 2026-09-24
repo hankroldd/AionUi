@@ -398,6 +398,84 @@ describe('static-server', () => {
     expect(received).toBe(BODY_LEN);
   });
 
+  describe('[mycowork] /bridge/* proxy (ADR-0011)', () => {
+    const savedBridgeUrl = process.env.AIONUI_BRIDGE_URL;
+    let stopBridge: (() => Promise<void>) | null = null;
+
+    afterEach(async () => {
+      if (savedBridgeUrl === undefined) delete process.env.AIONUI_BRIDGE_URL;
+      else process.env.AIONUI_BRIDGE_URL = savedBridgeUrl;
+      if (stopBridge) {
+        await stopBridge();
+        stopBridge = null;
+      }
+    });
+
+    it('forwards /bridge/v1/scopes with path intact and only the aionui-session cookie', async () => {
+      const backend = await startMockBackend((_req, res) => res.writeHead(404).end());
+      stopBackend = backend.close;
+      const bridge = await startMockBackend((req, res) => {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ path: req.url, cookie: req.headers.cookie, auth: req.headers.authorization }));
+      });
+      stopBridge = bridge.close;
+      process.env.AIONUI_BRIDGE_URL = `http://127.0.0.1:${bridge.port}`;
+      handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
+
+      const r = await fetch(`${handle.localUrl}/bridge/v1/scopes?limit=5`, {
+        headers: { cookie: 'grafana_session=leak; aionui-session=tok123; other=x', authorization: 'Bearer p' },
+      });
+      expect(r.status).toBe(200);
+      const json = (await r.json()) as { path: string; cookie: string; auth: string };
+      expect(json.path).toBe('/bridge/v1/scopes?limit=5');
+      expect(json.cookie).toBe('aionui-session=tok123');
+      expect(json.auth).toBe('Bearer p');
+    });
+
+    it('returns 502 UPSTREAM_UNAVAILABLE JSON when the Bridge is down', async () => {
+      const backend = await startMockBackend((_req, res) => res.writeHead(404).end());
+      stopBackend = backend.close;
+      const placeholder = await startMockBackend((_req, res) => res.end());
+      process.env.AIONUI_BRIDGE_URL = `http://127.0.0.1:${placeholder.port}`;
+      await placeholder.close();
+      handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
+
+      const r = await fetch(`${handle.localUrl}/bridge/v1/scopes`);
+      expect(r.status).toBe(502);
+      expect(await r.json()).toEqual({ error: { code: 'UPSTREAM_UNAVAILABLE', message: 'bridge unavailable' } });
+    });
+
+    it('/logout still returns aioncore response and notifies the Bridge with the session cookie', async () => {
+      const backend = await startMockBackend((req, res) => {
+        res.writeHead(200, { 'content-type': 'application/json', 'set-cookie': 'aionui-session=; Path=/; Max-Age=0' });
+        res.end(JSON.stringify({ path: req.url, proxied: true }));
+      });
+      stopBackend = backend.close;
+      let notified: (v: { method?: string; url?: string; cookie?: string }) => void = () => {};
+      const notification = new Promise<{ method?: string; url?: string; cookie?: string }>((r) => (notified = r));
+      const bridge = await startMockBackend((req, res) => {
+        notified({ method: req.method, url: req.url, cookie: req.headers.cookie });
+        res.writeHead(204).end();
+      });
+      stopBridge = bridge.close;
+      process.env.AIONUI_BRIDGE_URL = `http://127.0.0.1:${bridge.port}`;
+      handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
+
+      const r = await fetch(`${handle.localUrl}/logout`, {
+        method: 'POST',
+        headers: { cookie: 'other=x; aionui-session=tok123' },
+      });
+      expect(r.status).toBe(200);
+      expect(r.headers.get('set-cookie')).toMatch(/Max-Age=0/);
+      expect(((await r.json()) as { path: string }).path).toBe('/logout');
+      expect(await notification).toEqual({
+        method: 'POST',
+        url: '/bridge/v1/session/end',
+        cookie: 'aionui-session=tok123',
+      });
+    });
+  });
+
   it('network URL populated only when allowRemote=true', async () => {
     const backend = await startMockBackend((_req, res) => res.end('nope'));
     stopBackend = backend.close;

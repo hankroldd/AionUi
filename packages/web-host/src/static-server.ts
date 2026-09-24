@@ -2,7 +2,8 @@
  * WebUI static server.
  *
  * Serves out/renderer/ as the SPA and reverse-proxies /api/*, /ws, /api/stt/stream,
- * /login and /logout to aioncore. All auth goes to backend's aionui-auth crate;
+ * /login and /logout to aioncore; [mycowork] /bridge/* goes to the MyCowork Bridge
+ * (AIONUI_BRIDGE_URL, default http://127.0.0.1:25900). All auth goes to backend's aionui-auth crate;
  * /login and /logout are aionui-auth's top-level paths, the rest live under
  * /api/auth/*. /ws and /api/stt/stream are WebSocket/stream upgrades spliced at
  * TCP level; /api/stt/stream is the STT streaming endpoint.
@@ -76,13 +77,19 @@ function getLanIP(): string | null {
   return pickLanIP(networkInterfaces());
 }
 
-function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort: number): void {
+function forward(
+  req: IncomingMessage,
+  res: ServerResponse,
+  target: URL,
+  headers: http.IncomingHttpHeaders,
+  unreachableBody: unknown
+): void {
   const options: http.RequestOptions = {
-    hostname: '127.0.0.1',
-    port: backendPort,
+    hostname: target.hostname,
+    port: target.port,
     path: req.url,
     method: req.method,
-    headers: { ...req.headers, host: `127.0.0.1:${backendPort}` },
+    headers: { ...headers, host: target.host },
   };
   const proxy = http.request(options, (proxyRes) => {
     res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
@@ -91,12 +98,48 @@ function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort
   proxy.on('error', () => {
     if (!res.headersSent) {
       res.writeHead(502, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'BACKEND_UNREACHABLE' }));
+      res.end(JSON.stringify(unreachableBody));
     } else {
       res.destroy();
     }
   });
   req.pipe(proxy);
+}
+
+function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort: number): void {
+  forward(req, res, new URL(`http://127.0.0.1:${backendPort}`), req.headers, { error: 'BACKEND_UNREACHABLE' });
+}
+
+// [mycowork] ADR-0011: same-origin reverse proxy /bridge/* to the MyCowork Bridge.
+// Only the aionui-session cookie may leave for the Bridge (cf. Grafana CVE-2022-39201).
+const BRIDGE_UNAVAILABLE = { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'bridge unavailable' } };
+
+function sessionCookieOnly(cookie: string | undefined): string | undefined {
+  return cookie
+    ?.split(';')
+    .map((c) => c.trim())
+    .find((c) => c.startsWith('aionui-session='));
+}
+
+function bridgeHeaders(req: IncomingMessage): http.IncomingHttpHeaders {
+  const { cookie, ...rest } = req.headers;
+  const session = sessionCookieOnly(cookie);
+  return session ? { ...rest, cookie: session } : rest;
+}
+
+// Fire-and-forget: tell the Bridge to drop its identity cache for this session (ADR-0011 D21).
+// Never awaited, errors ignored — logout itself must not depend on the Bridge.
+function notifyBridgeLogout(bridge: URL, req: IncomingMessage): void {
+  const session = sessionCookieOnly(req.headers.cookie);
+  if (!session) return;
+  const notify = http.request(new URL('/bridge/v1/session/end', bridge), {
+    method: 'POST',
+    headers: { cookie: session },
+  });
+  notify.on('response', (r) => r.resume());
+  notify.on('error', () => {});
+  notify.setTimeout(2000, () => notify.destroy());
+  notify.end();
 }
 
 // Max bytes we peek before forcing a routing decision. An HTTP request-line
@@ -163,6 +206,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   const port = opts.port ?? DEFAULT_PORT;
   const allowRemote = opts.allowRemote === true;
   const host = allowRemote ? '0.0.0.0' : '127.0.0.1';
+  const bridgeUrl = new URL(process.env.AIONUI_BRIDGE_URL ?? 'http://127.0.0.1:25900');
 
   // The HTTP server listens only on loopback — user traffic hits the outer
   // net.Server first. We route to this server for everything except WS
@@ -184,7 +228,13 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       // /login and /logout are aionui-auth's top-level auth endpoints: proxy them too
       // so WebUI browser clients reach the backend without a path-rewrite.
       if (req.url.startsWith('/api/') || req.url.startsWith('/api?') || req.url === '/login' || req.url === '/logout') {
+        if (req.url === '/logout') notifyBridgeLogout(bridgeUrl, req);
         forwardToBackend(req, res, opts.backendPort);
+        return;
+      }
+
+      if (req.url.startsWith('/bridge/')) {
+        forward(req, res, bridgeUrl, bridgeHeaders(req), BRIDGE_UNAVAILABLE);
         return;
       }
 

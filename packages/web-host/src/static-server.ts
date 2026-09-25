@@ -228,7 +228,8 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       // /login and /logout are aionui-auth's top-level auth endpoints: proxy them too
       // so WebUI browser clients reach the backend without a path-rewrite.
       if (req.url.startsWith('/api/') || req.url.startsWith('/api?') || req.url === '/login' || req.url === '/logout') {
-        if (req.url === '/logout') notifyBridgeLogout(bridgeUrl, req);
+        // Notify only after aioncore has finished the logout, so a concurrent Bridge request cannot re-cache the session.
+        if (req.url === '/logout') res.once('finish', () => notifyBridgeLogout(bridgeUrl, req));
         forwardToBackend(req, res, opts.backendPort);
         return;
       }

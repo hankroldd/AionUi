@@ -7,10 +7,21 @@ import React, { useEffect, useState } from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen } from '@icon-park/react';
+import { BookOpen, FolderUpload } from '@icon-park/react';
+import { Tooltip } from '@arco-design/web-react';
+import classNames from 'classnames';
 import { ipcBridge } from '@/common';
 import type { ISessionMcpServer, TChatConversation } from '@/common/config/storage';
-import { ProjectScopeEntry, ScopeChip, ScopeStrip, bindScopedConversation, prepareScopedSession } from '@mycowork/ui';
+import type { SiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
+import {
+  ImportsPage,
+  ProjectScopeEntry,
+  ScopeChip,
+  ScopeStrip,
+  bindScopedConversation,
+  importText,
+  prepareScopedSession,
+} from '@mycowork/ui';
 
 /**
  * Mount point: the "sources" scope chip above the Guid (new task) input. When the Guid page was opened from a
@@ -108,3 +119,49 @@ export const withGuidScope = async <T extends CreateExtra>(extra: T): Promise<T>
  */
 export const bindGuidScope = (conversationId: string): Promise<void> =>
   bindScopedConversation(conversationId, i18n.language);
+
+/**
+ * Mount point: route `/office/imports` (MyCowork P07 import queue). Router state `mycoworkProjectId` (from a project
+ * entry) labels the batch with that project; the home page never guesses a project (MyCowork D23, R018).
+ */
+export const OfficeImportsSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  const state = useLocation().state as { mycoworkProjectId?: unknown } | null;
+  const projectId = typeof state?.mycoworkProjectId === 'string' ? state.mycoworkProjectId : undefined;
+  return <ImportsPage lang={current.language} {...(projectId ? { projectId } : {})} />;
+};
+
+/** Mount point: sidebar nav entry to the import queue, styled like the Scheduled entry next to it. */
+export const OfficeImportsSiderSlot: React.FC<{
+  isMobile: boolean;
+  collapsed: boolean;
+  siderTooltipProps: SiderTooltipProps;
+}> = ({ isMobile, collapsed, siderTooltipProps }) => {
+  const { i18n: current } = useTranslation();
+  const navigate = useNavigate();
+  const active = useLocation().pathname.startsWith('/office/imports');
+  const label = importText(current.language).title;
+  return (
+    <Tooltip {...siderTooltipProps} content={label} position='right'>
+      <div
+        role='link'
+        aria-label={label}
+        className={classNames(
+          'box-border h-34px w-full flex items-center gap-8px rd-8px cursor-pointer shrink-0 transition-colors text-t-primary',
+          collapsed ? 'justify-center' : 'justify-start ps-10px pe-8px',
+          isMobile && 'sider-action-btn-mobile',
+          active ? 'bg-fill-3' : 'hover:bg-fill-3 active:bg-fill-4'
+        )}
+        onClick={() => void navigate('/office/imports')}
+      >
+        <FolderUpload
+          theme='outline'
+          size={collapsed ? '20' : '16'}
+          fill='currentColor'
+          className='block leading-none'
+        />
+        {!collapsed && <span className='collapsed-hidden text-14px font-[500] leading-24px'>{label}</span>}
+      </div>
+    </Tooltip>
+  );
+};

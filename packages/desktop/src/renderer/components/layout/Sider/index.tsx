@@ -1,3 +1,4 @@
+import { OfficeImportsSiderSlot } from '@/renderer/mycowork-slots';
 import classNames from 'classnames';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -216,6 +217,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               siderTooltipProps={siderTooltipProps}
               onClick={handleScheduledClick}
             />
+            <OfficeImportsSiderSlot isMobile={isMobile} collapsed={collapsed} siderTooltipProps={siderTooltipProps} />
             {/* Divider between fixed top nav and scrollable content area */}
             <div
               className={classNames(

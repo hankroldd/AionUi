@@ -7,7 +7,7 @@ import React, { useEffect, useState } from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, FolderUpload, Tag as TagIcon } from '@icon-park/react';
+import { BookOpen, FolderUpload, Tag } from '@icon-park/react';
 import { Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
 import { ipcBridge } from '@/common';
@@ -190,7 +190,7 @@ export const OfficeImportsSiderSlot: React.FC<{
         {...props}
         path='/office/resources'
         label={resourceText(current.language).title}
-        icon={<TagIcon theme='outline' size={size} fill='currentColor' className='block leading-none' />}
+        icon={<Tag theme='outline' size={size} fill='currentColor' className='block leading-none' />}
       />
     </>
   );

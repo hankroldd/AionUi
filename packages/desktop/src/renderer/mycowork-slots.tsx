@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { BookOpen, FolderUpload, Tag } from '@icon-park/react';
 import { Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
@@ -15,6 +15,7 @@ import type { ISessionMcpServer, TChatConversation } from '@/common/config/stora
 import type { SiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
 import {
   askDropChoice,
+  CompositionPage,
   ImportsPage,
   ResourcesPage,
   ProjectScopeEntry,
@@ -202,3 +203,20 @@ export const OfficeImportsSiderSlot: React.FC<{
  * queue) or "attach to this turn" (AionUi's behaviour, also on cancel/close). Returns true when the drop was taken.
  */
 export const mycoworkDropIntercept = (files: File[]): Promise<boolean> => askDropChoice(i18n.language, files);
+
+/**
+ * Mount point: route `/office/compositions/:decisionId` (MyCowork P09 page plan / template review, the `review_url`
+ * returned by the runtime's `template_recommend`). A new choice creates a new decision version; the URL follows it.
+ */
+export const OfficeCompositionSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  const navigate = useNavigate();
+  const { decisionId = '' } = useParams();
+  return (
+    <CompositionPage
+      lang={current.language}
+      decisionId={decisionId}
+      onVersion={(id) => void navigate(`/office/compositions/${encodeURIComponent(id)}`, { replace: true })}
+    />
+  );
+};

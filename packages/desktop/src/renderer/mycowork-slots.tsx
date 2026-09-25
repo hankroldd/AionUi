@@ -19,6 +19,7 @@ import {
   ImportsPage,
   MemoryPage,
   ResourcesPage,
+  VersionsPage,
   ProjectScopeEntry,
   ScopeChip,
   ScopeStrip,
@@ -233,4 +234,11 @@ export const OfficeCompositionSlot: React.FC = () => {
       onVersion={(id) => void navigate(`/office/compositions/${encodeURIComponent(id)}`, { replace: true })}
     />
   );
+};
+
+/** Mount point: route `/office/resources/:resourceId/versions` (MyCowork P12 versions: timeline, compare, restore, publish). */
+export const OfficeVersionsSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  const { resourceId = '' } = useParams();
+  return <VersionsPage lang={current.language} resourceId={resourceId} />;
 };

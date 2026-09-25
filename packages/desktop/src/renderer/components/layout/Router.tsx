@@ -10,6 +10,7 @@ import {
   OfficeImportsSlot,
   OfficeMemorySlot,
   OfficeResourcesSlot,
+  OfficeVersionsSlot,
 } from '@/renderer/mycowork-slots';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
@@ -118,6 +119,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
           <Route path='/office/imports' element={<OfficeImportsSlot />} />
           <Route path='/office/resources' element={<OfficeResourcesSlot />} />
+          <Route path='/office/resources/:resourceId/versions' element={<OfficeVersionsSlot />} />
           <Route path='/office/memory' element={<OfficeMemorySlot />} />
           <Route path='/office/compositions/:decisionId' element={<OfficeCompositionSlot />} />
         </Route>

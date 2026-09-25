@@ -522,6 +522,24 @@ describe('static-server', () => {
     expect(seen.some((l) => /send|batch|switch|status/.test(l))).toBe(false);
   });
 
+  it('watch proxy is default-deny: odd port spellings, case and encodings cannot slip past the whitelist', () => {
+    for (const url of [
+      '/api/office-watch-proxy/+41234/api/send',
+      '/api/office-watch-proxy/%2B41234/api/send',
+      '/api/office-watch-proxy/%341234/api/batch',
+      '/api/Office-Watch-Proxy/41234/api/switch',
+      '/api/ppt-proxy/41234/api/%73end',
+      '/api/office-watch-proxy/41234//api/send',
+      '/api/office-watch-proxy/41234/events/../api/send',
+    ])
+      expect(isBlockedWatchRequest('POST', url)).toBe(true);
+    expect(isBlockedWatchRequest('GET', '/api/office-watch-proxy/+41234')).toBe(true);
+    expect(isBlockedWatchRequest('GET', '/api/office-watch-proxy/41234/api/status')).toBe(true);
+    expect(isBlockedWatchRequest('HEAD', '/api/office-watch-proxy/41234')).toBe(true);
+    expect(isBlockedWatchRequest('GET', '/api/office-watch-proxy/41234/events?x=1')).toBe(false);
+    expect(isBlockedWatchRequest('POST', '/api/office-watch-proxy/41234/api/selection')).toBe(false);
+  });
+
   it('isBlockedWatchRequest leaves other /api routes alone', () => {
     expect(isBlockedWatchRequest('POST', '/api/conversations')).toBe(false);
     expect(isBlockedWatchRequest('GET', '/api/office-watch-proxy/1')).toBe(false);

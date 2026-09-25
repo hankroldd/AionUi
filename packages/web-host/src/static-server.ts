@@ -109,14 +109,16 @@ function forward(
 // [mycowork] D35/A35: the officecli watch preview (proxied by aioncore) is read-only here. Its server also
 // rewrites the live document (/api/send, /api/batch), retargets the preview to any local file (/api/switch)
 // and echoes host paths (/api/status); only the page, its SSE stream and selection reports may pass.
-const WATCH_PROXY = /^\/api\/(?:office-watch-proxy|ppt-proxy)\/\d+(\/[^?]*)?(?:\?.*)?$/;
+// Default-deny: anything under the watch proxy prefix (any case, any port spelling such as `+41234` or `%34…`,
+// which aioncore still accepts) must match the strict whitelist exactly, or it is refused.
+const WATCH_PREFIX = /^\/api\/(?:office-watch-proxy|ppt-proxy)(?:[/?]|$)/i;
+const WATCH_PAGE = /^\/api\/(?:office-watch-proxy|ppt-proxy)\/[0-9]+(?:\/|\/events)?(?:\?.*)?$/;
+const WATCH_SELECTION = /^\/api\/(?:office-watch-proxy|ppt-proxy)\/[0-9]+\/api\/selection(?:\?.*)?$/;
 
 export function isBlockedWatchRequest(method: string, url: string): boolean {
-  const m = WATCH_PROXY.exec(url);
-  if (!m) return false;
-  const sub = m[1] ?? '/';
-  const allowed = method === 'GET' ? sub === '/' || sub === '/events' : method === 'POST' && sub === '/api/selection';
-  return !allowed;
+  if (!WATCH_PREFIX.test(url)) return false;
+  if (method === 'GET') return !WATCH_PAGE.test(url);
+  return !(method === 'POST' && WATCH_SELECTION.test(url));
 }
 
 function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort: number): void {

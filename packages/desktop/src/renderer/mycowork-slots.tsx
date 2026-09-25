@@ -6,14 +6,21 @@
 import React, { useEffect, useState } from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { ipcBridge } from '@/common';
 import type { ISessionMcpServer } from '@/common/config/storage';
 import { ScopeChip, ScopeStrip, bindScopedConversation, prepareScopedSession } from '@mycowork/ui';
 
-/** Mount point: the "sources" scope chip above the Guid (new task) input. */
+/**
+ * Mount point: the "sources" scope chip above the Guid (new task) input. When the Guid page was opened from a
+ * project's "ask about this project" (router state `mycoworkProjectId`), the chip starts from that project's
+ * default sources (MyCowork 01 §5); without it, behaviour is unchanged.
+ */
 export const GuidScopeSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
-  return <ScopeChip lang={current.language} />;
+  const state = useLocation().state as { mycoworkProjectId?: unknown } | null;
+  const projectId = typeof state?.mycoworkProjectId === 'string' ? state.mycoworkProjectId : undefined;
+  return <ScopeChip lang={current.language} projectId={projectId} />;
 };
 
 /**

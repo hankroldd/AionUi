@@ -4,7 +4,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { startStaticServer, type StaticServerHandle } from './static-server.js';
+import { isBlockedWatchRequest, startStaticServer, type StaticServerHandle } from './static-server.js';
 
 async function mkRendererFixture(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ws-static-'));
@@ -497,5 +497,34 @@ describe('static-server', () => {
     // may still be undefined on CI machines without a LAN interface
     expect(typeof h2.networkUrl === 'string' || h2.networkUrl === undefined).toBe(true);
     await h2.stop();
+  });
+
+  // [mycowork] D35/A35: officecli watch preview is read-only through the Web Host.
+  it('watch proxy: only the page, SSE and selection reports reach the backend; write/retarget/status get 403', async () => {
+    const seen: string[] = [];
+    const backend = await startMockBackend((req, res) => {
+      seen.push(`${req.method} ${req.url}`);
+      res.end('ok');
+    });
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
+    const base = `${handle.localUrl}/api/office-watch-proxy/41234`;
+    const status = (url: string, method = 'GET') =>
+      fetch(url, method === 'POST' ? { method, body: '{}' } : undefined).then((r) => r.status);
+    expect(await status(base)).toBe(200);
+    expect(await status(`${base}/?t=1`)).toBe(200);
+    expect(await status(`${base}/events`)).toBe(200);
+    expect(await status(`${base}/api/selection`, 'POST')).toBe(200);
+    for (const sub of ['/api/send', '/api/batch', '/api/switch'])
+      expect(await status(`${base}${sub}`, 'POST')).toBe(403);
+    expect(await status(`${base}/api/status`)).toBe(403);
+    expect(await status(`${handle.localUrl}/api/ppt-proxy/41234/api/send`, 'POST')).toBe(403);
+    expect(seen.some((l) => /send|batch|switch|status/.test(l))).toBe(false);
+  });
+
+  it('isBlockedWatchRequest leaves other /api routes alone', () => {
+    expect(isBlockedWatchRequest('POST', '/api/conversations')).toBe(false);
+    expect(isBlockedWatchRequest('GET', '/api/office-watch-proxy/1')).toBe(false);
+    expect(isBlockedWatchRequest('PUT', '/api/office-watch-proxy/1/api/selection')).toBe(true);
   });
 });

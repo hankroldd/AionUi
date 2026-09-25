@@ -106,6 +106,19 @@ function forward(
   req.pipe(proxy);
 }
 
+// [mycowork] D35/A35: the officecli watch preview (proxied by aioncore) is read-only here. Its server also
+// rewrites the live document (/api/send, /api/batch), retargets the preview to any local file (/api/switch)
+// and echoes host paths (/api/status); only the page, its SSE stream and selection reports may pass.
+const WATCH_PROXY = /^\/api\/(?:office-watch-proxy|ppt-proxy)\/\d+(\/[^?]*)?(?:\?.*)?$/;
+
+export function isBlockedWatchRequest(method: string, url: string): boolean {
+  const m = WATCH_PROXY.exec(url);
+  if (!m) return false;
+  const sub = m[1] ?? '/';
+  const allowed = method === 'GET' ? sub === '/' || sub === '/events' : method === 'POST' && sub === '/api/selection';
+  return !allowed;
+}
+
 function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort: number): void {
   forward(req, res, new URL(`http://127.0.0.1:${backendPort}`), req.headers, { error: 'BACKEND_UNREACHABLE' });
 }
@@ -230,6 +243,10 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       if (req.url.startsWith('/api/') || req.url.startsWith('/api?') || req.url === '/login' || req.url === '/logout') {
         // Notify only after aioncore has finished the logout, so a concurrent Bridge request cannot re-cache the session.
         if (req.url === '/logout') res.once('finish', () => notifyBridgeLogout(bridgeUrl, req));
+        if (isBlockedWatchRequest(req.method, req.url)) {
+          res.writeHead(403, { 'content-type': 'application/json' }).end('{"error":"READ_ONLY_PREVIEW"}');
+          return;
+        }
         forwardToBackend(req, res, opts.backendPort);
         return;
       }

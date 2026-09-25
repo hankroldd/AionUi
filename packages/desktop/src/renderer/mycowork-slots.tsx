@@ -28,9 +28,12 @@ export const GuidScopeSlot: React.FC = () => {
  * Mount point: the "scope this turn" strip above the conversation body (MyCowork 01 §6.4). Refetches the
  * conversation context whenever an assistant turn of this conversation finishes (the same `finish` frame the
  * chat hooks consume); keyed by conversation so a switch never shows the previous conversation's scope.
+ * A strict narrowing of the scope (MyCowork D19) opens the Guid page, where the next send starts a new
+ * conversation on the narrowed plan; this conversation stays readable.
  */
 export const ConversationScopeSlot: React.FC<{ conversation_id: string }> = ({ conversation_id }) => {
   const { i18n: current } = useTranslation();
+  const navigate = useNavigate();
   const [turns, setTurns] = useState(0);
   useEffect(
     () =>
@@ -40,7 +43,13 @@ export const ConversationScopeSlot: React.FC<{ conversation_id: string }> = ({ c
     [conversation_id]
   );
   return (
-    <ScopeStrip key={conversation_id} lang={current.language} conversationId={conversation_id} refreshKey={turns} />
+    <ScopeStrip
+      key={conversation_id}
+      lang={current.language}
+      conversationId={conversation_id}
+      refreshKey={turns}
+      onStrictShrink={() => void navigate('/guid')}
+    />
   );
 };
 

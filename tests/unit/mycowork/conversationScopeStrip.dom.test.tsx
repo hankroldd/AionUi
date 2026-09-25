@@ -1,13 +1,17 @@
 /**
  * [mycowork] ADR-0011: "scope this turn" strip above the conversation body (MyCowork PR03 spec §6 item 8, 01 §6.4).
  * Only external boundaries are mocked: Bridge = fetch, aioncore stream = ipcBridge.conversation.responseStream.
- * Covers the summary line, 404 = plain chat, used-sources list, refresh on turn finish, and error states.
+ * Covers the summary line, 404 = plain chat, used-sources list, refresh on turn finish, and error states;
+ * "change sources": widening rebinds this conversation, strict narrowing (D19) opens the Guid page and the next
+ * send uses the narrowed plan (once); superseded and hand-off notices.
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConversationScopeSlot } from '@/renderer/mycowork-slots';
+// Same as renderer/main.tsx: Arco's global Message needs the React 19 adapter (tests load the CJS lib build).
+import '@arco-design/web-react/lib/_util/react-19-adapter';
+import { ConversationScopeSlot, withGuidScope } from '@/renderer/mycowork-slots';
 
 type StreamMessage = { type: string; conversation_id: string };
 const streamListeners = new Set<(m: StreamMessage) => void>();
@@ -24,6 +28,8 @@ vi.mock('@/common', () => ({
   },
 }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
+const navigateMock = vi.fn();
+vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock, useLocation: () => ({ state: null }) }));
 
 const fetchMock = vi.fn();
 const reply = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => body });
@@ -52,6 +58,7 @@ const CONTEXT = {
     { resource_id: 'r1', source_id: 'src_b', file_name: '产品手册.md', reads: 2, last_read_at: '2026-09-25T02:00:00Z' },
   ],
   withheld: 1,
+  superseded: false,
 };
 const SUMMARY = '项目A资料 + 产品库；公网关闭；可检索 8 · 处理中 1 · 不可用 2';
 
@@ -61,6 +68,7 @@ describe('ConversationScopeSlot', () => {
   beforeEach(() => {
     streamListeners.clear();
     fetchMock.mockReset();
+    navigateMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -127,5 +135,101 @@ describe('ConversationScopeSlot', () => {
     fetchMock.mockResolvedValue(reply(200, empty));
     render(<ConversationScopeSlot conversation_id='conv-1' />);
     expect(await screen.findByText(/所选资料当前不可检索；可补充公开资料/)).toBeInTheDocument();
+  });
+
+  it('shows the superseded notice without a change action, and the hand-off summary of a narrowed conversation', async () => {
+    fetchMock.mockResolvedValueOnce(reply(200, { ...CONTEXT, superseded: true }));
+    const { unmount } = render(<ConversationScopeSlot conversation_id='conv-old' />);
+    expect(await screen.findByText(/本会话的资料范围已严格收缩：不能再检索资料，请在新会话中继续/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '更改范围' })).toBeNull();
+    unmount();
+    const carried = [{ resource_id: 'r1', source_id: 'src_a', file_name: '周报.md' }];
+    fetchMock.mockResolvedValueOnce(
+      reply(200, { ...CONTEXT, handoff: { from_plan_id: 'plan_0', carried, removed: 2 } })
+    );
+    render(<ConversationScopeSlot conversation_id='conv-new' />);
+    expect(await screen.findByText(/由严格收缩新建：带入 1 份仍在范围内的已读资料，移出 2 份/)).toBeInTheDocument();
+  });
+
+  describe('change sources', () => {
+    const SOURCES = ['src_a', 'src_b', 'src_c'].map((id, i) => ({
+      source_id: id,
+      name: ['项目A资料', '产品库', '新增库'][i],
+      provider: 'weknora',
+      counts: counts(1, 0, 0, 0),
+    }));
+    const TOKEN = {
+      token: 't',
+      expires_at: '2026-09-25T20:00:00Z',
+      mcp: {},
+      session_mcp_server: {
+        id: 'mycowork_bridge',
+        name: 'mycowork_bridge',
+        transport: { type: 'streamable_http', url: 'u', headers: {} },
+      },
+      workspace: '/data/ws/1',
+    };
+    /** Bridge by URL + method; the plan POST answers with the given succession. */
+    const bridge = (succession: 'expanded' | 'shrunk') =>
+      fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? 'GET';
+        if (url.endsWith('/context')) return reply(200, CONTEXT);
+        if (url === '/bridge/v1/scopes') return reply(200, { sources: SOURCES, projects: [] });
+        if (url === '/bridge/v1/context-plans' && method === 'POST')
+          return reply(201, { plan_id: 'plan_2', version: 2, status: 'OK', succession });
+        if (url.endsWith('/tokens')) return reply(201, TOKEN);
+        if (method === 'PUT') return reply(200, {});
+        return reply(404, {});
+      });
+    const calls = (method: string, suffix: string) =>
+      fetchMock.mock.calls.filter(([url, init]) => (init?.method ?? 'GET') === method && String(url).endsWith(suffix));
+    const openDrawer = async () => {
+      render(<ConversationScopeSlot conversation_id='conv-1' />);
+      fireEvent.click(await screen.findByRole('button', { name: '更改范围' }));
+      await screen.findByText('新增库');
+    };
+
+    it('widening: a new plan version with the current plan as parent, and this conversation is rebound', async () => {
+      bridge('expanded');
+      await openDrawer();
+      fireEvent.click(screen.getByText('新增库'));
+      fireEvent.click(screen.getByRole('button', { name: '应用' }));
+      await waitFor(() => expect(calls('PUT', '/conversations/conv-1/plan')).toHaveLength(1));
+      const [[, post]] = calls('POST', '/context-plans');
+      expect(JSON.parse(String(post?.body))).toMatchObject({
+        parent_plan_id: 'plan_1',
+        scopes: ['src_a', 'src_b', 'src_c'].map((id) => ({ selector: 'knowledge_base', id })),
+      });
+      expect(JSON.parse(String(calls('PUT', '/conversations/conv-1/plan')[0]?.[1]?.body))).toEqual({
+        plan_id: 'plan_2',
+      });
+      expect(navigateMock).not.toHaveBeenCalled();
+    });
+
+    it('strict narrowing: opens the Guid page, and the next send uses the narrowed plan without freezing another', async () => {
+      bridge('shrunk');
+      await openDrawer();
+      fireEvent.click(screen.getByText('产品库'));
+      fireEvent.click(screen.getByRole('button', { name: '应用' }));
+      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/guid'));
+      expect(calls('PUT', '/conversations/conv-1/plan')).toHaveLength(0);
+      const extra = await withGuidScope({});
+      expect(extra.selected_session_mcp_servers?.[0]?.name).toBe('mycowork_bridge');
+      expect(calls('POST', '/context-plans/plan_2/tokens')).toHaveLength(1);
+      expect(calls('POST', '/context-plans')).toHaveLength(1); // only the narrowing itself
+      await withGuidScope({}); // the narrowed plan is used once: a later send freezes a fresh plan
+      expect(calls('POST', '/context-plans')).toHaveLength(2);
+    });
+
+    it('refuses an empty selection and keeps the drawer open', async () => {
+      bridge('shrunk');
+      await openDrawer();
+      fireEvent.click(screen.getByText('项目A资料'));
+      fireEvent.click(screen.getByText('产品库'));
+      fireEvent.click(screen.getByRole('button', { name: '应用' }));
+      expect(await screen.findByText('至少选择一个知识库；只想普通对话请直接新建会话')).toBeInTheDocument();
+      expect(calls('POST', '/context-plans')).toHaveLength(0);
+      expect(navigateMock).not.toHaveBeenCalled();
+    });
   });
 });

@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Message } from '@arco-design/web-react';
 import type { FileMetadata } from '@renderer/services/FileService';
 import { isSupportedFile, FileService } from '@renderer/services/FileService';
+import { mycoworkDropIntercept } from '@/renderer/mycowork-slots';
 
 export interface UseDragUploadOptions {
   supportedExts?: string[];
@@ -84,6 +85,7 @@ export const useDragUpload = ({ supportedExts = [], onFilesAdded, conversation_i
 
         // 第二步：只处理校验通过的文件
         if (validFiles.length > 0) {
+          if (await mycoworkDropIntercept(validFiles)) return; // [mycowork] ADR-0011: import as resources instead
           // 创建 FileList 对象给 processDroppedFiles
           const validFileList = Object.assign(validFiles, {
             length: validFiles.length,

@@ -14,6 +14,7 @@ import { ipcBridge } from '@/common';
 import type { ISessionMcpServer, TChatConversation } from '@/common/config/storage';
 import type { SiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
 import {
+  askDropChoice,
   ImportsPage,
   ResourcesPage,
   ProjectScopeEntry,
@@ -195,3 +196,9 @@ export const OfficeImportsSiderSlot: React.FC<{
     </>
   );
 };
+
+/**
+ * Mount point: file drop into a chat/Guid input (useDragUpload). Asks "import as resources" (MyCowork P07 import
+ * queue) or "attach to this turn" (AionUi's behaviour, also on cancel/close). Returns true when the drop was taken.
+ */
+export const mycoworkDropIntercept = (files: File[]): Promise<boolean> => askDropChoice(i18n.language, files);

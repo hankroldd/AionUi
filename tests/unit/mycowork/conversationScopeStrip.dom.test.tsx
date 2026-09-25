@@ -3,7 +3,7 @@
  * Only external boundaries are mocked: Bridge = fetch, aioncore stream = ipcBridge.conversation.responseStream.
  * Covers the summary line, 404 = plain chat, used-sources list, refresh on turn finish, and error states;
  * "change sources": widening rebinds this conversation, strict narrowing (D19) opens the Guid page and the next
- * send uses the narrowed plan (once); superseded and hand-off notices.
+ * send uses the narrowed plan (once, kept across a failed token request); superseded and hand-off notices.
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -140,12 +140,14 @@ describe('ConversationScopeSlot', () => {
   it('shows the superseded notice without a change action, and the hand-off summary of a narrowed conversation', async () => {
     fetchMock.mockResolvedValueOnce(reply(200, { ...CONTEXT, superseded: true }));
     const { unmount } = render(<ConversationScopeSlot conversation_id='conv-old' />);
-    expect(await screen.findByText(/本会话的资料范围已严格收缩：不能再检索资料，请在新会话中继续/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/本会话的资料范围已严格收缩：不能再检索资料；如需继续，请新建会话/)
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '更改范围' })).toBeNull();
     unmount();
     const carried = [{ resource_id: 'r1', source_id: 'src_a', file_name: '周报.md' }];
     fetchMock.mockResolvedValueOnce(
-      reply(200, { ...CONTEXT, handoff: { from_plan_id: 'plan_0', carried, removed: 2 } })
+      reply(200, { ...CONTEXT, handoff: { from_plan_id: 'plan_0', carried, removed: 2, removed_revoked: 0 } })
     );
     render(<ConversationScopeSlot conversation_id='conv-new' />);
     expect(await screen.findByText(/由严格收缩新建：带入 1 份仍在范围内的已读资料，移出 2 份/)).toBeInTheDocument();
@@ -169,6 +171,7 @@ describe('ConversationScopeSlot', () => {
       },
       workspace: '/data/ws/1',
     };
+    let tokenFailures = 0;
     /** Bridge by URL + method; the plan POST answers with the given succession. */
     const bridge = (succession: 'expanded' | 'shrunk') =>
       fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -177,7 +180,10 @@ describe('ConversationScopeSlot', () => {
         if (url === '/bridge/v1/scopes') return reply(200, { sources: SOURCES, projects: [] });
         if (url === '/bridge/v1/context-plans' && method === 'POST')
           return reply(201, { plan_id: 'plan_2', version: 2, status: 'OK', succession });
-        if (url.endsWith('/tokens')) return reply(201, TOKEN);
+        if (url.endsWith('/tokens'))
+          return tokenFailures-- > 0
+            ? reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'x' } })
+            : reply(201, TOKEN);
         if (method === 'PUT') return reply(200, {});
         return reply(404, {});
       });
@@ -189,20 +195,18 @@ describe('ConversationScopeSlot', () => {
       await screen.findByText('新增库');
     };
 
-    it('widening: a new plan version with the current plan as parent, and this conversation is rebound', async () => {
+    it('widening: a new plan version with the current plan as parent; the Bridge rebinds this conversation', async () => {
       bridge('expanded');
       await openDrawer();
       fireEvent.click(screen.getByText('新增库'));
       fireEvent.click(screen.getByRole('button', { name: '应用' }));
-      await waitFor(() => expect(calls('PUT', '/conversations/conv-1/plan')).toHaveLength(1));
+      await waitFor(() => expect(calls('GET', '/conversations/conv-1/context')).toHaveLength(2)); // refetched
       const [[, post]] = calls('POST', '/context-plans');
       expect(JSON.parse(String(post?.body))).toMatchObject({
         parent_plan_id: 'plan_1',
         scopes: ['src_a', 'src_b', 'src_c'].map((id) => ({ selector: 'knowledge_base', id })),
       });
-      expect(JSON.parse(String(calls('PUT', '/conversations/conv-1/plan')[0]?.[1]?.body))).toEqual({
-        plan_id: 'plan_2',
-      });
+      expect(calls('PUT', '/conversations/conv-1/plan')).toHaveLength(0); // no separate, non-atomic rebind
       expect(navigateMock).not.toHaveBeenCalled();
     });
 
@@ -213,9 +217,11 @@ describe('ConversationScopeSlot', () => {
       fireEvent.click(screen.getByRole('button', { name: '应用' }));
       await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/guid'));
       expect(calls('PUT', '/conversations/conv-1/plan')).toHaveLength(0);
+      tokenFailures = 1;
+      await expect(withGuidScope({})).rejects.toThrow(); // token failed: nothing sent, the narrowed plan is kept
       const extra = await withGuidScope({});
       expect(extra.selected_session_mcp_servers?.[0]?.name).toBe('mycowork_bridge');
-      expect(calls('POST', '/context-plans/plan_2/tokens')).toHaveLength(1);
+      expect(calls('POST', '/context-plans/plan_2/tokens')).toHaveLength(2); // the retry still uses the narrowed plan
       expect(calls('POST', '/context-plans')).toHaveLength(1); // only the narrowing itself
       await withGuidScope({}); // the narrowed plan is used once: a later send freezes a fresh plan
       expect(calls('POST', '/context-plans')).toHaveLength(2);

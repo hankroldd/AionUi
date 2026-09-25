@@ -21,6 +21,7 @@ import {
   calcLayoutMetrics,
 } from '@/renderer/pages/conversation/utils/layoutCalc';
 import { Layout as ArcoLayout } from '@arco-design/web-react';
+import { ConversationScopeSlot } from '@/renderer/mycowork-slots';
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './chat-layout.css';
@@ -278,6 +279,7 @@ const ChatLayout: React.FC<{
               }}
             >
               <ArcoLayout.Content className='flex flex-col flex-1 bg-1 overflow-hidden'>
+                {conversation_id && <ConversationScopeSlot conversation_id={conversation_id} />}
                 {props.children}
               </ArcoLayout.Content>
             </div>

@@ -3,16 +3,37 @@
  * Each AionUi insertion point is a 1–2 line call into this file; components and Bridge calls
  * live in MyCowork packages/ui (resolved via the `@mycowork/ui` build alias). Ledger: MyCowork upstream/PATCHES.md.
  */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
+import { ipcBridge } from '@/common';
 import type { ISessionMcpServer } from '@/common/config/storage';
-import { ScopeChip, bindScopedConversation, prepareScopedSession } from '@mycowork/ui';
+import { ScopeChip, ScopeStrip, bindScopedConversation, prepareScopedSession } from '@mycowork/ui';
 
 /** Mount point: the "sources" scope chip above the Guid (new task) input. */
 export const GuidScopeSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   return <ScopeChip lang={current.language} />;
+};
+
+/**
+ * Mount point: the "scope this turn" strip above the conversation body (MyCowork 01 §6.4). Refetches the
+ * conversation context whenever an assistant turn of this conversation finishes (the same `finish` frame the
+ * chat hooks consume); keyed by conversation so a switch never shows the previous conversation's scope.
+ */
+export const ConversationScopeSlot: React.FC<{ conversation_id: string }> = ({ conversation_id }) => {
+  const { i18n: current } = useTranslation();
+  const [turns, setTurns] = useState(0);
+  useEffect(
+    () =>
+      ipcBridge.conversation.responseStream.on((message) => {
+        if (message.conversation_id === conversation_id && message.type === 'finish') setTurns((n) => n + 1);
+      }),
+    [conversation_id]
+  );
+  return (
+    <ScopeStrip key={conversation_id} lang={current.language} conversationId={conversation_id} refreshKey={turns} />
+  );
 };
 
 type CreateExtra = {

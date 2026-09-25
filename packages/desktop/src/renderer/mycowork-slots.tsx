@@ -7,7 +7,7 @@ import React, { useEffect, useState } from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen, FolderUpload } from '@icon-park/react';
+import { BookOpen, FolderUpload, Tag as TagIcon } from '@icon-park/react';
 import { Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
 import { ipcBridge } from '@/common';
@@ -15,11 +15,13 @@ import type { ISessionMcpServer, TChatConversation } from '@/common/config/stora
 import type { SiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
 import {
   ImportsPage,
+  ResourcesPage,
   ProjectScopeEntry,
   ScopeChip,
   ScopeStrip,
   bindScopedConversation,
   importText,
+  resourceText,
   prepareScopedSession,
 } from '@mycowork/ui';
 
@@ -131,16 +133,23 @@ export const OfficeImportsSlot: React.FC = () => {
   return <ImportsPage lang={current.language} {...(projectId ? { projectId } : {})} />;
 };
 
-/** Mount point: sidebar nav entry to the import queue, styled like the Scheduled entry next to it. */
-export const OfficeImportsSiderSlot: React.FC<{
+/** Mount point: route `/office/resources` (MyCowork P05 resource center: tags, saved view tabs). */
+export const OfficeResourcesSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  return <ResourcesPage lang={current.language} />;
+};
+
+/** Sidebar nav entry for a MyCowork page, styled like the Scheduled entry next to it. */
+const OfficeNavEntry: React.FC<{
+  path: string;
+  label: string;
+  icon: React.ReactElement;
   isMobile: boolean;
   collapsed: boolean;
   siderTooltipProps: SiderTooltipProps;
-}> = ({ isMobile, collapsed, siderTooltipProps }) => {
-  const { i18n: current } = useTranslation();
+}> = ({ path, label, icon, isMobile, collapsed, siderTooltipProps }) => {
   const navigate = useNavigate();
-  const active = useLocation().pathname.startsWith('/office/imports');
-  const label = importText(current.language).title;
+  const active = useLocation().pathname.startsWith(path);
   return (
     <Tooltip {...siderTooltipProps} content={label} position='right'>
       <div
@@ -152,16 +161,37 @@ export const OfficeImportsSiderSlot: React.FC<{
           isMobile && 'sider-action-btn-mobile',
           active ? 'bg-fill-3' : 'hover:bg-fill-3 active:bg-fill-4'
         )}
-        onClick={() => void navigate('/office/imports')}
+        onClick={() => void navigate(path)}
       >
-        <FolderUpload
-          theme='outline'
-          size={collapsed ? '20' : '16'}
-          fill='currentColor'
-          className='block leading-none'
-        />
+        {icon}
         {!collapsed && <span className='collapsed-hidden text-14px font-[500] leading-24px'>{label}</span>}
       </div>
     </Tooltip>
+  );
+};
+
+/** Mount point: sidebar nav entries to the MyCowork import queue and resource center. */
+export const OfficeImportsSiderSlot: React.FC<{
+  isMobile: boolean;
+  collapsed: boolean;
+  siderTooltipProps: SiderTooltipProps;
+}> = (props) => {
+  const { i18n: current } = useTranslation();
+  const size = props.collapsed ? '20' : '16';
+  return (
+    <>
+      <OfficeNavEntry
+        {...props}
+        path='/office/imports'
+        label={importText(current.language).title}
+        icon={<FolderUpload theme='outline' size={size} fill='currentColor' className='block leading-none' />}
+      />
+      <OfficeNavEntry
+        {...props}
+        path='/office/resources'
+        label={resourceText(current.language).title}
+        icon={<TagIcon theme='outline' size={size} fill='currentColor' className='block leading-none' />}
+      />
+    </>
   );
 };

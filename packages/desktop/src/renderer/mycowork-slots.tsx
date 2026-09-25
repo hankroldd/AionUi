@@ -6,10 +6,11 @@
 import React, { useEffect, useState } from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { BookOpen } from '@icon-park/react';
 import { ipcBridge } from '@/common';
-import type { ISessionMcpServer } from '@/common/config/storage';
-import { ScopeChip, ScopeStrip, bindScopedConversation, prepareScopedSession } from '@mycowork/ui';
+import type { ISessionMcpServer, TChatConversation } from '@/common/config/storage';
+import { ProjectScopeEntry, ScopeChip, ScopeStrip, bindScopedConversation, prepareScopedSession } from '@mycowork/ui';
 
 /**
  * Mount point: the "sources" scope chip above the Guid (new task) input. When the Guid page was opened from a
@@ -40,6 +41,32 @@ export const ConversationScopeSlot: React.FC<{ conversation_id: string }> = ({ c
   );
   return (
     <ScopeStrip key={conversation_id} lang={current.language} conversationId={conversation_id} refreshKey={turns} />
+  );
+};
+
+/**
+ * Mount point: sidebar "Projects" row action (MyCowork 02 P03 "ask about this project / link knowledge bases").
+ * AionUi project ids are opaque and only reach the renderer on conversations (`project_id`), so the entry is
+ * shown only when a conversation of this workspace group carries one. "Ask" opens the Guid page in the project's
+ * workspace (as AionUi's own "+") plus `mycoworkProjectId`; saving the project default is a separate action.
+ */
+export const ProjectScopeSlot: React.FC<{
+  group: { workspace: string; conversations: TChatConversation[] };
+  isMobile: boolean;
+}> = ({ group: { workspace, conversations }, isMobile }) => {
+  const { i18n: current } = useTranslation();
+  const navigate = useNavigate();
+  const projectId = conversations.find((c) => c.project_id)?.project_id;
+  if (!projectId) return null;
+  return (
+    <ProjectScopeEntry
+      lang={current.language}
+      projectId={projectId}
+      onAsk={() => void navigate('/guid', { state: { workspace, mycoworkProjectId: projectId } })}
+      className={`flex-center cursor-pointer transition-colors text-t-secondary hover:text-t-primary size-20px rd-4px sider-action-btn ${isMobile ? 'flex' : 'hidden group-hover:flex'}`}
+    >
+      <BookOpen theme='outline' size='14' fill='currentColor' className='block leading-none' />
+    </ProjectScopeEntry>
   );
 };
 

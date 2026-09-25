@@ -26,6 +26,7 @@ import { useConversationActions } from './hooks/useConversationActions';
 import { useConversations } from './hooks/useConversations';
 import { useDragAndDrop } from './hooks/useDragAndDrop';
 import type { ConversationRowProps, WorkspaceGroupedHistoryProps } from './types';
+import { ProjectScopeSlot } from '@/renderer/mycowork-slots';
 
 const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
   onSessionClick,
@@ -450,6 +451,7 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
                       }
                       trailing={
                         <span className='flex items-center gap-6px'>
+                          <ProjectScopeSlot group={group} isMobile={isMobile} />
                           <Tooltip content={t('conversation.history.newConversationInProject')} position='top'>
                             <span
                               role='button'

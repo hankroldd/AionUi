@@ -7,7 +7,7 @@ import React, { useEffect, useState } from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { BookOpen, FolderUpload, Tag } from '@icon-park/react';
+import { BookOpen, Brain, FolderUpload, Tag } from '@icon-park/react';
 import { Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
 import { ipcBridge } from '@/common';
@@ -17,12 +17,14 @@ import {
   askDropChoice,
   CompositionPage,
   ImportsPage,
+  MemoryPage,
   ResourcesPage,
   ProjectScopeEntry,
   ScopeChip,
   ScopeStrip,
   bindScopedConversation,
   importText,
+  memoryText,
   resourceText,
   prepareScopedSession,
 } from '@mycowork/ui';
@@ -141,6 +143,12 @@ export const OfficeResourcesSlot: React.FC = () => {
   return <ResourcesPage lang={current.language} />;
 };
 
+/** Mount point: route `/office/memory` (MyCowork P11 memory: review, accept/reject/disable, pause precipitation). */
+export const OfficeMemorySlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  return <MemoryPage lang={current.language} />;
+};
+
 /** Sidebar nav entry for a MyCowork page, styled like the Scheduled entry next to it. */
 const OfficeNavEntry: React.FC<{
   path: string;
@@ -172,7 +180,7 @@ const OfficeNavEntry: React.FC<{
   );
 };
 
-/** Mount point: sidebar nav entries to the MyCowork import queue and resource center. */
+/** Mount point: sidebar nav entries to the MyCowork import queue, resource center and memory page. */
 export const OfficeImportsSiderSlot: React.FC<{
   isMobile: boolean;
   collapsed: boolean;
@@ -193,6 +201,12 @@ export const OfficeImportsSiderSlot: React.FC<{
         path='/office/resources'
         label={resourceText(current.language).title}
         icon={<Tag theme='outline' size={size} fill='currentColor' className='block leading-none' />}
+      />
+      <OfficeNavEntry
+        {...props}
+        path='/office/memory'
+        label={memoryText(current.language).title}
+        icon={<Brain theme='outline' size={size} fill='currentColor' className='block leading-none' />}
       />
     </>
   );

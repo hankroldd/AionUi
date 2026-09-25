@@ -5,7 +5,12 @@ import DocumentTitle from '@renderer/components/layout/DocumentTitle';
 import { useCrossSessionRateLimitNotice } from '@/renderer/hooks/system/useCrossSessionRateLimitNotice';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { TEAM_MODE_ENABLED } from '@/common/config/constants';
-import { OfficeCompositionSlot, OfficeImportsSlot, OfficeResourcesSlot } from '@/renderer/mycowork-slots';
+import {
+  OfficeCompositionSlot,
+  OfficeImportsSlot,
+  OfficeMemorySlot,
+  OfficeResourcesSlot,
+} from '@/renderer/mycowork-slots';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const AgentSettings = React.lazy(() => import('@renderer/pages/settings/AgentSettings'));
@@ -113,6 +118,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
           <Route path='/office/imports' element={<OfficeImportsSlot />} />
           <Route path='/office/resources' element={<OfficeResourcesSlot />} />
+          <Route path='/office/memory' element={<OfficeMemorySlot />} />
           <Route path='/office/compositions/:decisionId' element={<OfficeCompositionSlot />} />
         </Route>
         <Route path='*' element={<Navigate to={status === 'authenticated' ? '/guid' : '/login'} replace />} />

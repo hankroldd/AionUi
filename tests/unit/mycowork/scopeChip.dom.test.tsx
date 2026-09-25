@@ -68,6 +68,8 @@ describe('ScopeChip', () => {
     fireEvent.click(screen.getByRole('button', { name: '应用到本轮' }));
     expect(await screen.findByRole('button', { name: '资料范围：产品知识库' })).toBeInTheDocument();
     expect(await screen.findByText('已更新本轮范围；未修改项目默认')).toBeInTheDocument();
+    // R009: applying to this turn only reads the catalog; it never writes a project binding
+    expect(fetchMock.mock.calls.every(([url, init]) => url === '/bridge/v1/scopes' && !init?.method)).toBe(true);
   });
 
   it('keeps the previous selection when the drawer is cancelled', async () => {

@@ -7,7 +7,7 @@ import React from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
 import type { ISessionMcpServer } from '@/common/config/storage';
-import { ScopeChip, prepareScopedSession } from '@mycowork/ui';
+import { ScopeChip, bindScopedConversation, prepareScopedSession } from '@mycowork/ui';
 
 /** Mount point: the "sources" scope chip above the Guid (new task) input. */
 export const GuidScopeSlot: React.FC = () => {
@@ -37,3 +37,10 @@ export const withGuidScope = async <T extends CreateExtra>(extra: T): Promise<T>
     ...(extra.custom_workspace ? {} : { workspace: scoped.workspace, custom_workspace: true }),
   };
 };
+
+/**
+ * Mount point: right after conversation.create succeeds, bind the new conversation to the plan frozen by
+ * withGuidScope (PUT /bridge/v1/conversations/{id}/plan). Never throws: a failed bind only warns, the chat goes on.
+ */
+export const bindGuidScope = (conversationId: string): Promise<void> =>
+  bindScopedConversation(conversationId, i18n.language);

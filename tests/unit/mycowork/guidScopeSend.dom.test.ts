@@ -1,13 +1,15 @@
 /**
  * [mycowork] ADR-0011/0012: Guid send mount point. Scope selected → plan + token → conversation carries the
  * Bridge MCP server and workspace; no scope → unchanged; Bridge failure → no conversation is created.
+ * After create, the conversation is bound to the plan (PUT .../plan); a failed bind only warns (T05c-2).
  * Only external boundaries are mocked (Bridge = fetch, aioncore = ipcBridge.conversation.create).
  */
 
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { Message } from '@arco-design/web-react';
 import { setScopeSelection } from '@mycowork/ui';
-import { withGuidScope } from '@/renderer/mycowork-slots';
+import { bindGuidScope, withGuidScope } from '@/renderer/mycowork-slots';
 import { useGuidSend, type GuidSendDeps } from '@/renderer/pages/guid/hooks/useGuidSend';
 
 const createConversationMock = vi.fn();
@@ -139,6 +141,31 @@ describe('withGuidScope', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('binds the next created conversation to the frozen plan with a JSON PUT', async () => {
+    setScopeSelection([{ source_id: 'src_a', name: 'A' }]);
+    bridgeOk();
+    fetchMock.mockResolvedValueOnce(reply(200, null));
+    await withGuidScope({});
+    await bindGuidScope('conv-9');
+    const [url, init] = fetchMock.mock.calls[2];
+    expect(url).toBe('/bridge/v1/conversations/conv-9/plan');
+    expect(init).toMatchObject({ method: 'PUT', headers: { 'content-type': 'application/json' } });
+    expect(JSON.parse(init.body)).toEqual({ plan_id: 'plan_1' });
+    // bound once: a second call has nothing pending
+    await bindGuidScope('conv-10');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not bind a plan left over from an earlier send once the scope is cleared', async () => {
+    setScopeSelection([{ source_id: 'src_a', name: 'A' }]);
+    bridgeOk();
+    await withGuidScope({});
+    setScopeSelection([]);
+    await withGuidScope({});
+    await bindGuidScope('conv-plain');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects a token response that is not a streamable_http MCP server', async () => {
     setScopeSelection([{ source_id: 'src_a', name: 'A' }]);
     fetchMock
@@ -154,6 +181,7 @@ describe('useGuidSend with a selected scope', () => {
   beforeEach(() => {
     setScopeSelection([{ source_id: 'src_a', name: 'A' }]);
     fetchMock.mockReset();
+    fetchMock.mockResolvedValue(reply(200, null)); // PUT .../plan after create
     vi.stubGlobal('fetch', fetchMock);
     createConversationMock.mockReset();
     createConversationMock.mockResolvedValue({ id: 'conv-1' });
@@ -169,6 +197,33 @@ describe('useGuidSend with a selected scope', () => {
     const extra = createConversationMock.mock.calls[0][0].extra;
     expect(extra.selected_session_mcp_servers).toEqual([SERVER]);
     expect(extra).toMatchObject({ workspace: '/data/ws/1', custom_workspace: true });
+  });
+
+  it('binds the created conversation id to the plan after create, before navigating', async () => {
+    bridgeOk();
+    const d = deps();
+    const { result } = renderHook(() => useGuidSend(d));
+    await act(async () => {
+      await result.current.handleSend();
+    });
+    expect(fetchMock.mock.calls[2][0]).toBe('/bridge/v1/conversations/conv-1/plan');
+    expect(createConversationMock.mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[2]);
+    expect(d.navigate).toHaveBeenCalledWith('/conversation/conv-1');
+  });
+
+  it('still opens the conversation and only warns when binding the plan fails', async () => {
+    const warn = vi.spyOn(Message, 'warning').mockImplementation(() => () => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    bridgeOk();
+    fetchMock.mockResolvedValueOnce(reply(404, { error: { code: 'NOT_FOUND', message: 'x' } }));
+    const d = deps();
+    const { result } = renderHook(() => useGuidSend(d));
+    await act(async () => {
+      await result.current.handleSend();
+    });
+    expect(d.navigate).toHaveBeenCalledWith('/conversation/conv-1');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('未能关联到会话'));
+    warn.mockRestore();
   });
 
   it('does not create a conversation when the Bridge call fails', async () => {

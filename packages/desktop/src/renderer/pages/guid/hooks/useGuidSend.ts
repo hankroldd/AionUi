@@ -16,7 +16,7 @@ import { type TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
-import { withGuidScope } from '@/renderer/mycowork-slots';
+import { bindGuidScope, withGuidScope } from '@/renderer/mycowork-slots';
 
 export type GuidSendDeps = {
   // Input state
@@ -198,6 +198,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           Message.error(t('conversation.createFailed'));
           return;
         }
+        await bindGuidScope(conversation.id);
 
         if (isCustomWorkspace) {
           updateWorkspaceTime(finalWorkspace);
@@ -252,6 +253,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         console.error('Failed to create ACP conversation - conversation object is null or missing id');
         return;
       }
+      await bindGuidScope(conversation.id);
 
       if (isCustomWorkspace) {
         updateWorkspaceTime(finalWorkspace);

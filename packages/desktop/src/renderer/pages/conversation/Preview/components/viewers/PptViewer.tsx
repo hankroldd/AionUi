@@ -9,6 +9,7 @@ import type { ChatFileRef } from '@/common/types/chatFile';
 import OfficeWatchViewer from './OfficeWatchViewer';
 
 interface PptViewerProps {
+  tabId?: string; // [mycowork] S10
   fileRef?: ChatFileRef;
   file_path?: string;
   content?: string;

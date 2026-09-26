@@ -13,6 +13,7 @@ import { isElectronDesktop } from '@/renderer/utils/platform';
 import { Button, Spin } from '@arco-design/web-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { registerTabReloader } from '../../context/tabReloaderRegistry';
 
 type DocType = 'ppt' | 'word' | 'excel';
 type OfficeWatchErrorCode =
@@ -74,6 +75,8 @@ export const OFFICECLI_INSTALL_URL = 'https://github.com/iOfficeAI/OfficeCLI/rel
 
 interface OfficeWatchViewerProps {
   docType: DocType;
+  // [mycowork] S10: lets the panel's refresh reach this viewer (see the reloader effect).
+  tabId?: string;
   // Preferred identity: the backend resolves pe→path and keys the watch by it, so
   // start/stop match even when the tab has no device path (explorer office files).
   fileRef?: ChatFileRef;
@@ -158,7 +161,7 @@ export function resolveOfficeErrorActions(
  * Used by PptViewer, OfficeDocViewer, and ExcelViewer — each passes its
  * docType to select the correct IPC bridge, proxy path, and i18n keys.
  */
-const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, fileRef, file_path, workspace }) => {
+const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, fileRef, file_path, workspace }) => {
   const { t } = useTranslation();
   const keys = I18N_KEYS[docType];
 
@@ -170,6 +173,13 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, fileRef,
   // Mirror both identities for the unmount cleanup; stop prefers the ref.
   const file_pathRef = useRef(file_path);
   const fileRefRef = useRef(fileRef);
+
+  // [mycowork] S10: "refresh" restarts the watch — the effect below stops the old officecli process and starts a new
+  // one, which reads the file afresh (the watch process does not follow external writes such as an online-editor save).
+  useEffect(() => {
+    if (!tabId) return;
+    return registerTabReloader(tabId, () => setRetryKey((value) => value + 1));
+  }, [tabId]);
 
   useEffect(() => {
     file_pathRef.current = file_path;

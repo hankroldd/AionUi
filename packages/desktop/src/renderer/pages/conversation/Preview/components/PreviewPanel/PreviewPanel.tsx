@@ -1124,6 +1124,7 @@ const PreviewPanel: React.FC = () => {
     } else if (content_type === 'ppt') {
       return (
         <PptViewer
+          tabId={activeTabId ?? undefined}
           fileRef={metadata?.fileRef}
           file_path={metadata?.file_path}
           content={content}
@@ -1133,6 +1134,7 @@ const PreviewPanel: React.FC = () => {
     } else if (content_type === 'word') {
       return (
         <OfficeDocPreview
+          tabId={activeTabId ?? undefined}
           fileRef={metadata?.fileRef}
           file_path={metadata?.file_path}
           content={content}
@@ -1142,6 +1144,7 @@ const PreviewPanel: React.FC = () => {
     } else if (content_type === 'excel') {
       return (
         <ExcelPreview
+          tabId={activeTabId ?? undefined}
           fileRef={metadata?.fileRef}
           file_path={metadata?.file_path}
           content={content}

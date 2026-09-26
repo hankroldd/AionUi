@@ -4,6 +4,8 @@
  * Covers: the editor is created from the Bridge-signed config; "finish" closes the session first, then destroys the editor,
  * shows "save pending" and polls until the Bridge reports the new version; a recovery_required session can rejoin the
  * editor; the versions page "edit online" entry opens a session on the head revision and navigates to the editor.
+ * Narrow screens (MyCowork 02 §8) neither open a session nor load the editor; when the editor cannot load (api.js fails),
+ * "close and go back" closes, then discards (the Bridge refuses while someone is still connected) and returns to versions.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -48,7 +50,10 @@ describe('OfficeEditSlot', () => {
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('DocsAPI', { DocEditor });
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    window.innerWidth = 1024;
+  });
 
   it('creates the editor from the signed config; finish closes first, then waits for the Bridge to report the save', async () => {
     let gets = 0;
@@ -111,5 +116,50 @@ describe('OfficeEditSlot', () => {
       resource_id: 'res_1',
       base_revision_id: 'rev_head',
     });
+  });
+
+  it('narrow screens do not open a session or load the editor ("open on a desktop")', async () => {
+    window.innerWidth = 500;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith('/revisions'))
+        return reply(200, {
+          resource_id: 'res_1',
+          current_revision_id: 'rev_head',
+          items: [{ revision_id: 'rev_head', origin: 'original', current: true, created_at: 't' }],
+        });
+      if (url.startsWith('/bridge/v1/publications?')) return reply(200, { items: [] });
+      if (url === '/bridge/v1/scopes') return reply(200, { sources: [], projects: [] });
+      if (url === '/bridge/v1/edit-sessions/eds_1') return reply(200, session('editing'));
+      return reply(404, {});
+    });
+    const { unmount } = render(<OfficeVersionsSlot />);
+    fireEvent.click(await screen.findByRole('button', { name: '在线编辑' }));
+    expect(await screen.findByText('在线编辑需要桌面浏览器：请在桌面打开。')).toBeInTheDocument();
+    expect(calls('POST', '/bridge/v1/edit-sessions')).toHaveLength(0);
+    unmount();
+    render(<OfficeEditSlot />);
+    expect(await screen.findByText('在线编辑需要桌面浏览器：请在桌面打开。')).toBeInTheDocument();
+    expect(DocEditor).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '结束编辑并保存' })).toBeNull();
+  });
+
+  it('when api.js fails to load, "close and go back" closes then discards and returns to the versions page', async () => {
+    vi.stubGlobal('DocsAPI', undefined);
+    const append = vi.spyOn(document.head, 'appendChild').mockImplementation((node) => {
+      setTimeout(() => (node as HTMLScriptElement).onerror?.(new Event('error')), 0);
+      return node;
+    });
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/close') && init?.method === 'POST') return reply(202, session('closing'));
+      if (url.endsWith('/discard') && init?.method === 'POST') return reply(200, {});
+      if (url === '/bridge/v1/edit-sessions/eds_1') return reply(200, session('editing'));
+      return reply(404, {});
+    });
+    render(<OfficeEditSlot />);
+    fireEvent.click(await screen.findByRole('button', { name: '关闭并返回' }));
+    await waitFor(() => expect(window.location.hash).toBe('#/office/resources/res_1/versions'));
+    expect(calls('POST', '/close')).toHaveLength(1);
+    expect(JSON.parse(String(calls('POST', '/discard')[0]?.[1]?.body)).expected_state).toBe('closing');
+    append.mockRestore();
   });
 });

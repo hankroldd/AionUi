@@ -7,6 +7,7 @@ import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { TEAM_MODE_ENABLED } from '@/common/config/constants';
 import {
   OfficeCompositionSlot,
+  OfficeEditSlot,
   OfficeImportsSlot,
   OfficeMemorySlot,
   OfficeResourcesSlot,
@@ -122,6 +123,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/office/resources/:resourceId/versions' element={<OfficeVersionsSlot />} />
           <Route path='/office/memory' element={<OfficeMemorySlot />} />
           <Route path='/office/compositions/:decisionId' element={<OfficeCompositionSlot />} />
+          <Route path='/office/edit/:sessionId' element={<OfficeEditSlot />} />
         </Route>
         <Route path='*' element={<Navigate to={status === 'authenticated' ? '/guid' : '/login'} replace />} />
       </Routes>

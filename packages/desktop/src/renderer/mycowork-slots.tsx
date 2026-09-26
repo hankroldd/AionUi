@@ -20,6 +20,7 @@ import {
   MemoryPage,
   ResourcesPage,
   VersionsPage,
+  OfficeEditorPage,
   ProjectScopeEntry,
   ScopeChip,
   ScopeStrip,
@@ -241,4 +242,14 @@ export const OfficeVersionsSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   const { resourceId = '' } = useParams();
   return <VersionsPage lang={current.language} resourceId={resourceId} />;
+};
+
+/**
+ * Mount point: route `/office/edit/:sessionId` (MyCowork P04 "preview → edit": the ONLYOFFICE editor for a Bridge edit
+ * session; "finish" waits for the editing service to report the save instead of assuming it). Entry: the versions page.
+ */
+export const OfficeEditSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  const { sessionId = '' } = useParams();
+  return <OfficeEditorPage lang={current.language} sessionId={sessionId} />;
 };

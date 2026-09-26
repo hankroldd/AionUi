@@ -162,4 +162,33 @@ describe('OfficeEditSlot', () => {
     expect(JSON.parse(String(calls('POST', '/discard')[0]?.[1]?.body)).expected_state).toBe('closing');
     append.mockRestore();
   });
+
+  it('after the editor failed to load, a successful rejoin shows "finish editing" again', async () => {
+    vi.stubGlobal('DocsAPI', undefined);
+    const append = vi.spyOn(document.head, 'appendChild').mockImplementation((node) => {
+      setTimeout(() => (node as HTMLScriptElement).onerror?.(new Event('error')), 0);
+      return node;
+    });
+    let state = 'editing';
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/close') && init?.method === 'POST') {
+        state = 'recovery_required';
+        return reply(202, session('closing'));
+      }
+      if (url.endsWith('/discard') && init?.method === 'POST')
+        return reply(409, { error: { code: 'EDIT_STATE_CONFLICT', message: 'x' } });
+      if (url === '/bridge/v1/edit-sessions' && init?.method === 'POST') return reply(200, session('editing'));
+      if (url === '/bridge/v1/edit-sessions/eds_1') return reply(200, session(state));
+      return reply(404, {});
+    });
+    render(<OfficeEditSlot />);
+    fireEvent.click(await screen.findByRole('button', { name: '关闭并返回' }));
+    expect(await screen.findByText('编辑器在别处仍打开，写入权保留：请在那里结束编辑。')).toBeInTheDocument();
+    append.mockRestore();
+    vi.stubGlobal('DocsAPI', { DocEditor });
+    fireEvent.click(await screen.findByRole('button', { name: '回到编辑器' }));
+    expect(await screen.findByRole('button', { name: '结束编辑并保存' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '关闭并返回' })).toBeNull();
+    await waitFor(() => expect(DocEditor).toHaveBeenCalledTimes(1));
+  });
 });

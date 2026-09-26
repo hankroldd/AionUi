@@ -174,12 +174,18 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
   const file_pathRef = useRef(file_path);
   const fileRefRef = useRef(fileRef);
 
-  // [mycowork] S10: "refresh" restarts the watch — the effect below stops the old officecli process and starts a new
+  // [mycowork] S10: "refresh" restarts the watch — stop the old officecli process, then let the effect below start a new
   // one, which reads the file afresh (the watch process does not follow external writes such as an online-editor save).
+  // The stop is awaited first: a start racing the unmount's fire-and-forget stop got the old process back (stale content).
   useEffect(() => {
     if (!tabId) return;
-    return registerTabReloader(tabId, () => setRetryKey((value) => value + 1));
-  }, [tabId]);
+    return registerTabReloader(tabId, () => {
+      void BRIDGE[docType].stop
+        .invoke({ file_path: file_pathRef.current, file: fileRefRef.current })
+        .catch(() => {})
+        .then(() => setRetryKey((value) => value + 1));
+    });
+  }, [tabId, docType]);
 
   useEffect(() => {
     file_pathRef.current = file_path;

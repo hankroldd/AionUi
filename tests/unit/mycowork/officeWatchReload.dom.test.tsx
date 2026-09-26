@@ -34,7 +34,8 @@ describe('Office preview refresh (S10)', () => {
     expect(start).toHaveBeenCalledTimes(1);
     expect(reloadViaViewer('tab-1')).toBe(true);
     await waitFor(() => expect(start).toHaveBeenCalledTimes(2));
-    expect(stop).toHaveBeenCalledTimes(1);
+    // the old watch is stopped before the new start (a start racing an unfinished stop got the stale process back)
+    expect(stop.mock.invocationCallOrder[0]).toBeLessThan(start.mock.invocationCallOrder[1] as number);
     expect(reloadViaViewer('tab-other')).toBe(false);
     unmount();
     expect(reloadViaViewer('tab-1')).toBe(false);

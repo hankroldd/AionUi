@@ -294,7 +294,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
         >
           <FileTypeIcon node={{ name, relativePath: keyToRef(key).relative_path, isFile }} expanded={isExpanded} />
           {/* File names are code-like; bidi-neutral leading dots (.claude) must not flip under RTL. */}
-          <span dir='ltr' className='overflow-hidden text-ellipsis whitespace-nowrap'>
+          <span dir='ltr' title={name} className='overflow-hidden text-ellipsis whitespace-nowrap'>
             {name}
           </span>
           {degraded && <Caution theme='outline' size='14' className='flex-shrink-0' />}

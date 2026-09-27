@@ -500,6 +500,14 @@ body[arco-theme='dark'] .arco-message-error {
   background-color: transparent !important;
 }
 
+/* [mycowork] 长文件名不能把行尾“更多”按钮挤出面板：blockNode 让标题块 flex: 1，但 flex 项默认 min-width: auto
+   （= 内容宽度），省略号永远不生效。min-width: 0 让标题块随面板收缩，文件名按省略号截断。
+   A long file name must not push the row's "more" button out of the panel: blockNode gives the title block
+   flex: 1, but a flex item's default min-width is its content width, so the ellipsis never kicks in. */
+.workspace-tree .arco-tree-node-title-block {
+  min-width: 0;
+}
+
 /* Selected text keeps the normal color — the row background is the indicator. */
 .workspace-tree .arco-tree-node-selected .arco-tree-node-title {
   color: var(--color-text-1);

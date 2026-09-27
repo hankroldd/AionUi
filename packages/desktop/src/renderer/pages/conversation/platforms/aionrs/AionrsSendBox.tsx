@@ -55,6 +55,7 @@ import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
 import { useAionrsMessage } from './useAionrsMessage';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
+import { withoutYolo } from '@/renderer/mycowork-approval-guard';
 
 const configErrorMessageKey = (error: unknown) => {
   const errorKind = classifyConfigSetError(error);
@@ -515,19 +516,22 @@ const AionrsSendBox: React.FC<{
   const sheetEntries = useMemo<MobileActionSheetEntry[]>(() => {
     if (!isMobile) return [];
 
-    const availableModes: AgentModeOption[] =
+    // [mycowork] D115：窄屏权限菜单同样去掉 YOLO
+    const availableModes: AgentModeOption[] = withoutYolo(
+      conversationContext?.loadedMcpServers,
       runtimeMode?.options.map((item) => ({
         value: item.value,
         label: item.label,
         description: item.description ?? undefined,
       })) ??
-      (dynamicModes.length > 0
-        ? dynamicModes
-        : [
-            { value: 'default', label: 'Default' },
-            { value: 'auto_edit', label: 'Auto-Accept Edits' },
-            { value: 'yolo', label: 'YOLO' },
-          ]);
+        (dynamicModes.length > 0
+          ? dynamicModes
+          : [
+              { value: 'default', label: 'Default' },
+              { value: 'auto_edit', label: 'Auto-Accept Edits' },
+              { value: 'yolo', label: 'YOLO' },
+            ])
+    );
     const modeOptions: MobileActionSheetOption[] = availableModes.map((mode) => ({
       key: mode.value,
       label: t(`agentMode.${mode.value}`, { defaultValue: mode.label }),
@@ -652,6 +656,7 @@ const AionrsSendBox: React.FC<{
     return entries;
   }, [
     attachEntries,
+    conversationContext?.loadedMcpServers,
     currentMode,
     dynamicModes,
     handleSheetModeChange,

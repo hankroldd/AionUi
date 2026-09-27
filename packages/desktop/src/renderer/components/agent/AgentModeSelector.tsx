@@ -11,6 +11,8 @@ import {
 } from '@/renderer/hooks/agent/useAcpConfigOptions';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { withoutYolo } from '@/renderer/mycowork-approval-guard';
 import { AgentLogoIcon } from './AgentBadge';
 import { Dropdown, Menu, Message, Tooltip } from '@arco-design/web-react';
 import { Down } from '@icon-park/react';
@@ -122,12 +124,14 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
     [runtimeMode?.options]
   );
 
+  // [mycowork] D115：MyCowork 会话不提供 YOLO（aionrs 的 YOLO 跳过全部批准，含 Bridge 写工具）
+  const mcpServers = useConversationContextSafe()?.loadedMcpServers;
   // Priority: observed config_options > dynamic modes from persisted agent_metadata.
   const modes = useMemo(() => {
-    if (runtimeModes && runtimeModes.length > 0) return runtimeModes;
-    if (dynamicModes && dynamicModes.length > 0) return dynamicModes;
+    if (runtimeModes && runtimeModes.length > 0) return withoutYolo(mcpServers, runtimeModes);
+    if (dynamicModes && dynamicModes.length > 0) return withoutYolo(mcpServers, dynamicModes);
     return [];
-  }, [runtimeModes, dynamicModes]);
+  }, [runtimeModes, dynamicModes, mcpServers]);
   const defaultMode = modes[0]?.value ?? initialMode ?? 'default';
   // Validate initialMode against available modes; fall back to backend's default
   // when the provided value doesn't match (e.g. opencode has 'build'/'plan', not 'default')

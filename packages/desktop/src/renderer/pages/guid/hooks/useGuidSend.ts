@@ -185,13 +185,16 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
             locale: localeKey,
             conversation_overrides: assistantOverrides,
           },
-          extra: await withGuidScope({
-            default_files: files.map(chatFileRefPath),
-            workspace: finalWorkspace,
-            custom_workspace: isCustomWorkspace,
-            selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
-            selected_session_mcp_servers: selectedSessionMcpServersToSend,
-          }),
+          extra: await withGuidScope(
+            {
+              default_files: files.map(chatFileRefPath),
+              workspace: finalWorkspace,
+              custom_workspace: isCustomWorkspace,
+              selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
+              selected_session_mcp_servers: selectedSessionMcpServersToSend,
+            },
+            assistantOverrides // [mycowork] D115：带范围时不以 YOLO 创建
+          ),
         });
 
         if (!conversation || !conversation.id) {

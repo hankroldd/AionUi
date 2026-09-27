@@ -108,10 +108,16 @@ type CreateExtra = {
  * Mount point: before conversation.create, if a scope is selected for this turn, add the Bridge-issued
  * session MCP server (plan token) and workspace to `extra` (MyCowork ADR-0012).
  * No scope → `extra` unchanged. Bridge failure → throws, so the caller aborts instead of sending without scope.
+ * [mycowork] D115：带范围的 Aion CLI 会话不以 YOLO 创建——aionrs 以 yolo 创建会把自动批准固定进会话配置，之后切回也不恢复；
+ * 未指定时助手默认值可能是 yolo（固定值或“记住上次”），同样改成 default。调用方传入的 overrides 对象原地修改。
  */
-export const withGuidScope = async <T extends CreateExtra>(extra: T): Promise<T> => {
+export const withGuidScope = async <T extends CreateExtra>(
+  extra: T,
+  overrides?: { permission?: string }
+): Promise<T> => {
   const scoped = await prepareScopedSession(i18n.language);
   if (!scoped) return extra;
+  if (overrides && (!overrides.permission || overrides.permission === 'yolo')) overrides.permission = 'default';
   return {
     ...extra,
     selected_session_mcp_servers: [...(extra.selected_session_mcp_servers ?? []), scoped.session_mcp_server],

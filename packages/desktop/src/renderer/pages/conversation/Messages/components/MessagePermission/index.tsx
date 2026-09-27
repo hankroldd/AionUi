@@ -6,6 +6,8 @@
 
 import { ipcBridge } from '@/common';
 import type { IMessagePermission } from '@/common/chat/chatLib';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { hidesAlwaysAllow } from '@/renderer/mycowork-approval-guard';
 import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PermissionRequestPanel } from './PermissionRequestPanel';
@@ -23,7 +25,11 @@ const MessagePermission: React.FC<MessagePermissionProps> = React.memo(({ messag
   const { t } = useTranslation();
   const content = message.content || ({} as IMessagePermission['content']);
   const { description, title, action, call_id, command_type } = content;
-  const options = Array.isArray(content.options) ? content.options : [];
+  const mcpServers = useConversationContextSafe()?.loadedMcpServers;
+  // [mycowork] D115：MyCowork 会话的 mcp 类卡片不给“始终允许”（aionrs 按类别记住，会连带放行 Bridge 写工具）
+  const options = (Array.isArray(content.options) ? content.options : []).filter(
+    (option) => !hidesAlwaysAllow(mcpServers, command_type, action, String(option?.value))
+  );
   const displayTitle = title || description || t('messages.permissionRequest');
 
   const panelOptions = useMemo<PermissionPanelOption[]>(

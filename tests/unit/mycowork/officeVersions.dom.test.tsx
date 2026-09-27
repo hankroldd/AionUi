@@ -1,13 +1,16 @@
 /**
- * [mycowork] ADR-0011: `/office/resources/:resourceId/versions` (MyCowork P12 versions, PR08 slice 6).
- * Only the Bridge boundary is mocked (fetch). Covers: timeline with vN, current/origin/restored-from and publication badges;
- * comparing two versions shows changes, the partial notice "已保存 vN" (02 §7) with "看原件" and "查看未覆盖项" (localized reasons),
- * and the compared scope; a docx body-only comparison is "正文完整对比", not "完整对比"; restoring an old version sends the read
- * current revision; restoring while the file is edited online says so; accept-and-archive and publish-to-KB send the head revision;
- * publishing a version with speaker notes/comments asks first and resends with confirm_hidden_content (R066, D105).
+ * [mycowork] ADR-0011: `/office/resources/:resourceId/versions` (MyCowork P12 versions, PR08 slice 6; UI polish PR11).
+ * Only the Bridge boundary is mocked (fetch). Covers: the timeline grouped by local day (今天 / 昨天 / cross-year date) with local
+ * clock times instead of ISO strings, vN, current/origin/restored-from and publication badges; nothing is compared until asked;
+ * comparing two versions shows the partial notice "已保存 vN" (02 §7) with "看原件", change counts, grouped changes with localized
+ * aspects, and folded uncovered items with localized reasons; clicking a version compares it with the one before it; the earliest
+ * version has nothing to compare; a docx body-only comparison is "正文完整对比", never "完整对比"; a failed comparison says why and
+ * can be retried; a failed timeline load offers reload; restoring asks first and sends the read current revision; restoring while the
+ * file is edited online says so; accept-and-archive and publish-to-KB send the head revision; publishing a version with speaker
+ * notes/comments or an out-of-scope AI edit asks first and resends with the matching confirm flag (R066/D105, R041/D109).
  */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
@@ -22,19 +25,22 @@ vi.mock('react-router-dom', () => ({
 const fetchMock = vi.fn();
 const reply = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => body });
 const counts = { total: 1, ready: 1, indexing: 0, failed: 0, unavailable: 0 };
+const now = new Date();
+const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 13).toISOString();
+const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 9, 5).toISOString();
 const rev = (id: string, over: object = {}) => ({
   revision_id: id,
   parent_id: null,
   content_sha256: 'x',
   size: 1,
-  created_at: '2026-09-26T00:00:00.000Z',
+  created_at: '2025-03-02T01:00:00.000Z',
   origin: 'original',
   current: false,
   ...over,
 });
 const calls = (method: string, part: string) =>
   fetchMock.mock.calls.filter(([url, init]) => (init?.method ?? 'GET') === method && String(url).includes(part));
-const bodyOf = (method: string, part: string) => JSON.parse(String(calls(method, part)[0]?.[1]?.body));
+const bodyOf = (method: string, part: string, i = 0) => JSON.parse(String(calls(method, part)[i]?.[1]?.body));
 
 const partialDiff = {
   resource_id: 'res_1',
@@ -47,33 +53,39 @@ const partialDiff = {
   changes: [
     {
       kind: 'modified',
+      node_type: 'shape',
       to_path: '/slide[1]/shape[@id=1]',
-      aspects: ['text'],
+      aspects: ['text', 'geometry'],
       text_before: '旧',
       text_after: '新',
+      fragment: { offset: 0, removed: '旧', inserted: '新' },
+      fields: [{ name: 'x', before: '1cm', after: '2cm' }],
     },
   ],
-  unknown_parts: [{ reason: 'content_not_compared', to_path: '/slide[1]/chart[1]' }],
+  unknown_parts: [{ reason: 'content_not_compared', node_type: 'chart', to_path: '/slide[1]/chart[1]' }],
 };
 const bodyDiff = { ...partialDiff, format: 'docx', compared_root: '/body', status: 'complete', unknown_parts: [] };
 
-function bridge(opts: { restoreStatus?: number; diff?: object; hiddenOnce?: boolean } = {}) {
-  let hidden = opts.hiddenOnce ?? false;
+type Opts = { restoreStatus?: number; diff?: object; diffStatus?: number; publishCodes?: string[]; timelineStatus?: number };
+function bridge(opts: Opts = {}) {
+  const codes = [...(opts.publishCodes ?? [])];
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     if (url.endsWith('/revisions'))
-      return reply(200, {
-        resource_id: 'res_1',
-        current_revision_id: 'rev_cccccccc',
-        items: [
-          rev('rev_cccccccc', { current: true, origin: 'restore', restored_from: 'rev_aaaaaaaa' }),
-          rev('rev_bbbbbbbb', { origin: 'edit' }),
-          rev('rev_aaaaaaaa'),
-        ],
-        page: 1,
-        page_size: 50,
-        total: 3,
-      });
+      return opts.timelineStatus
+        ? reply(opts.timelineStatus, { error: { code: 'INTERNAL', message: 'x' } })
+        : reply(200, {
+            resource_id: 'res_1',
+            current_revision_id: 'rev_cccccccc',
+            items: [
+              rev('rev_cccccccc', { current: true, origin: 'restore', restored_from: 'rev_aaaaaaaa', created_at: today }),
+              rev('rev_bbbbbbbb', { origin: 'edit', created_at: yesterday }),
+              rev('rev_aaaaaaaa'),
+            ],
+            page: 1,
+            page_size: 50,
+            total: 3,
+          });
     if (url.startsWith('/bridge/v1/publications?'))
       return reply(200, {
         items: [
@@ -98,22 +110,29 @@ function bridge(opts: { restoreStatus?: number; diff?: object; hiddenOnce?: bool
         sources: [{ source_id: 'src_q', name: '青禾库', provider: 'weknora', counts }],
         projects: [],
       });
-    if (url.includes('/changes?')) return reply(200, opts.diff ?? partialDiff);
+    if (url.includes('/changes?'))
+      return opts.diffStatus ? reply(opts.diffStatus, {}) : reply(200, opts.diff ?? partialDiff);
     if (url.endsWith('/restore'))
       return opts.restoreStatus
         ? reply(opts.restoreStatus, { error: { code: 'EDIT_LEASE_HELD', message: 'x' } })
         : reply(201, {});
     if (url === '/bridge/v1/publications' && method === 'POST') {
-      const kb = JSON.parse(String(init?.body)).target.kind === 'knowledge_base';
-      if (kb && hidden) {
-        hidden = false;
-        return reply(409, { error: { code: 'HIDDEN_CONTENT_PRESENT', message: 'notes=1 comments=0' } });
-      }
-      return reply(201, {});
+      const code = codes.shift();
+      return code ? reply(409, { error: { code, message: 'x' } }) : reply(201, {});
     }
     return reply(404, {});
   });
 }
+const loaded = async () => screen.findByText('v3');
+const openMenu = (v: string) => fireEvent.click(screen.getByRole('button', { name: `更多操作 ${v}` }));
+const publishToKb = async () => {
+  fireEvent.click(screen.getByRole('button', { name: '发布到知识库' }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.click(within(dialog).getByLabelText('选择知识库'));
+  fireEvent.click(await screen.findByText('青禾库'));
+  fireEvent.change(within(dialog).getByLabelText('库里的文件名'), { target: { value: '汇报（虚构）.pptx' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: '发布' }));
+};
 
 describe('OfficeVersionsSlot', () => {
   beforeEach(() => {
@@ -122,25 +141,39 @@ describe('OfficeVersionsSlot', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('shows the timeline with current, origin, restored-from and publication badges', async () => {
+  it('groups the timeline by local day with local clock times, badges and no ISO strings', async () => {
     bridge();
-    render(<OfficeVersionsSlot />);
-    expect(await screen.findByText('cccccccc')).toBeInTheDocument();
-    expect(screen.getByText('v3')).toBeInTheDocument();
-    expect(screen.getByText('当前')).toBeInTheDocument();
-    expect(screen.getByText('恢复自 aaaaaaaa')).toBeInTheDocument();
+    const { container } = render(<OfficeVersionsSlot />);
+    await loaded();
+    expect(screen.getByText('今天')).toBeInTheDocument();
+    expect(screen.getByText('昨天')).toBeInTheDocument();
+    expect(screen.getByText('2025年3月2日')).toBeInTheDocument();
+    expect(screen.getByText('10:13')).toBeInTheDocument();
+    expect(screen.getByText('09:05')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
+    expect(screen.getByText('当前版本')).toBeInTheDocument();
+    expect(screen.getByText('恢复自 v1')).toBeInTheDocument();
     expect(screen.getByText('AI 修改')).toBeInTheDocument();
+    expect(screen.getByText('导入')).toBeInTheDocument();
     expect(screen.getByText('已归档 · 已完成')).toBeInTheDocument();
+    expect(screen.getByText(/^共 3 个版本，全部保留。/)).toBeInTheDocument();
+    expect(calls('GET', '/changes?')).toHaveLength(0); // 打开页面不自动跑对比
   });
 
-  it('compares the default pair: partial notice with saved vN, view original, uncovered items with localized reasons', async () => {
+  it('compares the default pair: partial notice, view original, counts, grouped changes, folded uncovered items', async () => {
     bridge();
     render(<OfficeVersionsSlot />);
-    await screen.findByText('cccccccc');
+    await loaded();
+    expect(screen.getByRole('button', { name: '查看最近一次改动' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '对比这两个版本' }));
     expect(await screen.findByText('Diff 覆盖不足：已保存 v3；部分对象无法比较')).toBeInTheDocument();
     expect(calls('GET', '/changes?')[0]?.[0]).toContain('from=rev_bbbbbbbb&to=rev_cccccccc');
     expect(screen.getByText('新')).toBeInTheDocument();
+    expect(screen.getByText('修改 1')).toBeInTheDocument();
+    expect(screen.getByText('未覆盖 1')).toBeInTheDocument();
+    expect(screen.getByText('第 1 页 · 1')).toBeInTheDocument();
+    expect(screen.getByText('形状')).toBeInTheDocument();
+    expect(screen.getByText('文字、位置与大小')).toBeInTheDocument();
     expect(screen.getByText('比较范围：整份文件（/）')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '看原件' })).toHaveAttribute('href', '/bridge/v1/resources/res_1/preview');
     expect(screen.queryByTestId('version-diff-unknown')).toBeNull();
@@ -150,10 +183,22 @@ describe('OfficeVersionsSlot', () => {
     expect(screen.queryByText('content_not_compared')).toBeNull();
   });
 
+  it('clicking a version compares it with the one before it; the earliest version has nothing before it', async () => {
+    bridge();
+    render(<OfficeVersionsSlot />);
+    await loaded();
+    fireEvent.click(screen.getByText('v2'));
+    await waitFor(() => expect(calls('GET', '/changes?')).toHaveLength(1));
+    expect(calls('GET', '/changes?')[0]?.[0]).toContain('from=rev_aaaaaaaa&to=rev_bbbbbbbb');
+    fireEvent.click(screen.getByText('v1'));
+    expect(await screen.findByText('这是最早的版本，没有上一版可对比。')).toBeInTheDocument();
+    expect(calls('GET', '/changes?')).toHaveLength(1);
+  });
+
   it('a docx body-only comparison is labelled "正文完整对比" with the uncompared parts, never "完整对比"', async () => {
     bridge({ diff: bodyDiff });
     render(<OfficeVersionsSlot />);
-    await screen.findByText('cccccccc');
+    await loaded();
     fireEvent.click(screen.getByRole('button', { name: '对比这两个版本' }));
     expect(await screen.findByText('正文完整对比')).toBeInTheDocument();
     expect(screen.queryByText('完整对比')).toBeNull();
@@ -161,58 +206,83 @@ describe('OfficeVersionsSlot', () => {
     expect(screen.queryByRole('button', { name: /查看未覆盖项/ })).toBeNull();
   });
 
-  it('restores an old version with the read current revision; online editing is reported', async () => {
+  it('a comparison that times out says why and can be retried; a failed timeline load offers reload', async () => {
+    bridge({ diffStatus: 504 });
+    const { unmount } = render(<OfficeVersionsSlot />);
+    await loaded();
+    fireEvent.click(screen.getByRole('button', { name: '对比这两个版本' }));
+    expect(await screen.findByText('对比超时（文件可能太大）；已保存的版本不受影响。')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+    await waitFor(() => expect(calls('GET', '/changes?')).toHaveLength(2));
+    unmount();
+    fetchMock.mockReset();
+    bridge({ timelineStatus: 500 });
+    render(<OfficeVersionsSlot />);
+    expect(await screen.findByText('版本列表没有读取成功')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '重新读取' }));
+    await waitFor(() => expect(calls('GET', '/revisions')).toHaveLength(2));
+  });
+
+  it('restoring asks first and sends the read current revision; online editing is reported', async () => {
     bridge();
     const { unmount } = render(<OfficeVersionsSlot />);
-    await screen.findByText('cccccccc');
-    fireEvent.click(screen.getAllByRole('button', { name: '恢复为新版本' })[1] as HTMLElement);
+    await loaded();
+    openMenu('v1');
+    fireEvent.click(await screen.findByRole('menuitem', { name: '恢复为新版本' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('把 v1 恢复为新版本？')).toBeInTheDocument();
+    expect(calls('POST', '/restore')).toHaveLength(0);
+    fireEvent.click(within(dialog).getByRole('button', { name: '恢复为新版本' }));
     await waitFor(() => expect(calls('POST', '/revisions/rev_aaaaaaaa/restore')).toHaveLength(1));
     expect(bodyOf('POST', '/restore').expected_current_revision_id).toBe('rev_cccccccc');
     unmount();
     fetchMock.mockReset();
     bridge({ restoreStatus: 409 });
     render(<OfficeVersionsSlot />);
-    await screen.findByText('cccccccc');
-    fireEvent.click(screen.getAllByRole('button', { name: '恢复为新版本' })[0] as HTMLElement);
-    expect(await screen.findByText('文件正在在线编辑，编辑中不能恢复覆盖。')).toBeInTheDocument();
+    await loaded();
+    openMenu('v2');
+    fireEvent.click(await screen.findByRole('menuitem', { name: '恢复为新版本' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '恢复为新版本' }));
+    expect(await screen.findByText('文件正在在线编辑，编辑中不能恢复覆盖。结束编辑并保存后再试。')).toBeInTheDocument();
   });
 
   it('accept-and-archive and publish-to-KB send the head revision', async () => {
     bridge();
     render(<OfficeVersionsSlot />);
-    await screen.findByText('cccccccc');
-    fireEvent.click(screen.getAllByRole('button', { name: '接受并归档' })[0] as HTMLElement);
+    await loaded();
+    openMenu('v3');
+    fireEvent.click(await screen.findByRole('menuitem', { name: '接受并归档' }));
     await waitFor(() => expect(calls('POST', '/bridge/v1/publications')).toHaveLength(1));
     expect(bodyOf('POST', '/bridge/v1/publications')).toMatchObject({
       revision_id: 'rev_cccccccc',
       expected_head_revision_id: 'rev_cccccccc',
       target: { kind: 'archive' },
     });
-    fireEvent.click(screen.getByLabelText('发布到知识库'));
-    fireEvent.click(await screen.findByText('青禾库'));
-    fireEvent.change(screen.getByLabelText('库里的文件名'), { target: { value: '汇报（虚构）.pptx' } });
-    fireEvent.click(screen.getByRole('button', { name: '发布' }));
+    await publishToKb();
     await waitFor(() => expect(calls('POST', '/bridge/v1/publications')).toHaveLength(2));
-    expect(JSON.parse(String(calls('POST', '/bridge/v1/publications')[1]?.[1]?.body)).target).toEqual({
+    expect(bodyOf('POST', '/bridge/v1/publications', 1).target).toEqual({
       kind: 'knowledge_base',
       source_id: 'src_q',
       file_name: '汇报（虚构）.pptx',
     });
   });
 
-  it('publishing a version with speaker notes/comments asks first, then resends with confirm_hidden_content', async () => {
-    bridge({ hiddenOnce: true });
+  it('speaker notes/comments and out-of-scope AI edits ask first, then resend with both confirm flags', async () => {
+    bridge({ publishCodes: ['DIFF_OUT_OF_SCOPE', 'HIDDEN_CONTENT_PRESENT'] });
     render(<OfficeVersionsSlot />);
-    await screen.findByText('cccccccc');
-    fireEvent.click(screen.getByLabelText('发布到知识库'));
-    fireEvent.click(await screen.findByText('青禾库'));
-    fireEvent.change(screen.getByLabelText('库里的文件名'), { target: { value: '汇报（虚构）.pptx' } });
-    fireEvent.click(screen.getByRole('button', { name: '发布' }));
-    expect(await screen.findByText(/含演讲者备注或批注/)).toBeInTheDocument();
-    expect(bodyOf('POST', '/bridge/v1/publications').confirm_hidden_content).toBeUndefined();
+    await loaded();
+    await publishToKb();
+    expect(await screen.findByText(/除了所改的对象还有别的变化/)).toBeInTheDocument();
+    expect(bodyOf('POST', '/bridge/v1/publications').confirm_out_of_scope).toBeUndefined();
     fireEvent.click(screen.getByRole('button', { name: '仍要发布' }));
-    await waitFor(() => expect(calls('POST', '/bridge/v1/publications')).toHaveLength(2));
-    expect(JSON.parse(String(calls('POST', '/bridge/v1/publications')[1]?.[1]?.body)).confirm_hidden_content).toBe(true);
+    expect(await screen.findByText(/含演讲者备注或批注/)).toBeInTheDocument();
+    expect(bodyOf('POST', '/bridge/v1/publications', 1).confirm_out_of_scope).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '仍要发布' }));
+    await waitFor(() => expect(calls('POST', '/bridge/v1/publications')).toHaveLength(3));
+    expect(bodyOf('POST', '/bridge/v1/publications', 2)).toMatchObject({
+      confirm_out_of_scope: true,
+      confirm_hidden_content: true,
+    });
     await waitFor(() => expect(screen.queryByText(/含演讲者备注或批注/)).toBeNull());
   });
 });

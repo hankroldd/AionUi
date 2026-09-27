@@ -102,7 +102,7 @@ describe('OfficeEditSlot', () => {
         return reply(200, {
           resource_id: 'res_1',
           current_revision_id: 'rev_head',
-          items: [{ revision_id: 'rev_head', origin: 'original', current: true, created_at: 't' }],
+          items: [{ revision_id: 'rev_head', origin: 'original', current: true, created_at: '2026-09-26T00:00:00.000Z' }],
         });
       if (url.startsWith('/bridge/v1/publications?')) return reply(200, { items: [] });
       if (url === '/bridge/v1/scopes') return reply(200, { sources: [], projects: [] });
@@ -125,7 +125,7 @@ describe('OfficeEditSlot', () => {
         return reply(200, {
           resource_id: 'res_1',
           current_revision_id: 'rev_head',
-          items: [{ revision_id: 'rev_head', origin: 'original', current: true, created_at: 't' }],
+          items: [{ revision_id: 'rev_head', origin: 'original', current: true, created_at: '2026-09-26T00:00:00.000Z' }],
         });
       if (url.startsWith('/bridge/v1/publications?')) return reply(200, { items: [] });
       if (url === '/bridge/v1/scopes') return reply(200, { sources: [], projects: [] });

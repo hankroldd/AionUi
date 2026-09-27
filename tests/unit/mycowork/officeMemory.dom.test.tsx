@@ -2,7 +2,7 @@
  * [mycowork] ADR-0011: `/office/memory` (MyCowork P11 memory page, PR09 slice b).
  * Only the Bridge boundary is mocked (fetch). Covers: candidates grouped by scope with source links; accept/reject carry
  * the read revision; editing sends `modify` with the new text; switching to "active" lists active items with "disable";
- * a 409 reloads and says so; the pause switch PUTs settings; an empty column explains how candidates arrive. Candidates are submitted from the conversation entry
+ * a 409 reloads and says so; the pause switch PUTs settings; an empty column explains how candidates arrive; an unavailable Bridge is explained in plain words. Candidates are submitted from the conversation entry
  * (R057: always with a source), so the page has no free-text input.
  */
 
@@ -133,6 +133,13 @@ describe('OfficeMemorySlot', () => {
     fireEvent.click(screen.getByRole('tab', { name: '已拒绝' }));
     expect(await screen.findByText('这一栏还没有条目')).toBeInTheDocument();
     expect(screen.getByText(/候选会出现在“待确认”/)).toBeInTheDocument();
+  });
+
+  it('an unavailable Bridge is explained in plain words, not as an error code', async () => {
+    fetchMock.mockResolvedValue(reply(503, {}));
+    render(<OfficeMemorySlot />);
+    expect(await screen.findByText('资料服务暂不可用，请稍后重试；已保存的内容不受影响。')).toBeInTheDocument();
+    expect(screen.queryByText(/unavailable/)).toBeNull();
   });
 
   it('the pause switch PUTs the whole settings object', async () => {

@@ -75,6 +75,8 @@ describe('OfficeCompositionSlot', () => {
     fetchMock.mockResolvedValue(reply(200, decision(1, null)));
     render(<OfficeCompositionSlot />);
     expect(await screen.findByText('对比两个方案的成本')).toBeInTheDocument();
+    expect(screen.getByText('对比')).toBeInTheDocument(); // 页关系显示中文，不直出 comparison
+    expect(screen.queryByText('comparison')).toBeNull();
     expect(screen.getAllByText('适合“对比”关系')).toHaveLength(2);
     expect(screen.getAllByText('预览待渲染')).toHaveLength(2);
     expect(screen.getByText('整页海报：画幅是 4:3')).toBeInTheDocument();

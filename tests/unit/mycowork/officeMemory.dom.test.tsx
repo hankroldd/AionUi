@@ -2,7 +2,7 @@
  * [mycowork] ADR-0011: `/office/memory` (MyCowork P11 memory page, PR09 slice b).
  * Only the Bridge boundary is mocked (fetch). Covers: candidates grouped by scope with source links; accept/reject carry
  * the read revision; editing sends `modify` with the new text; switching to "active" lists active items with "disable";
- * a 409 reloads and says so; the pause switch PUTs settings. Candidates are submitted from the conversation entry
+ * a 409 reloads and says so; the pause switch PUTs settings; an empty column explains how candidates arrive. Candidates are submitted from the conversation entry
  * (R057: always with a source), so the page has no free-text input.
  */
 
@@ -38,7 +38,9 @@ function bridge(opts: { actStatus?: number } = {}) {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     if (url.startsWith('/bridge/v1/memory-items?')) {
-      const items = url.includes('status=active')
+      const items = url.includes('status=rejected')
+        ? []
+        : url.includes('status=active')
         ? [
             mem({
               memory_id: 'mem_2',
@@ -122,6 +124,15 @@ describe('OfficeMemorySlot', () => {
     fireEvent.click(screen.getAllByRole('button', { name: '接受' })[0] as HTMLElement);
     expect(await screen.findByText('条目已被更新，已重新读取；请再操作一次。')).toBeInTheDocument();
     expect(calls('GET', '/memory-items?').length).toBeGreaterThan(before);
+  });
+
+  it('an empty column shows an empty state that says how candidates arrive', async () => {
+    bridge();
+    render(<OfficeMemorySlot />);
+    await screen.findByText('二期验收定在十月（虚构）');
+    fireEvent.click(screen.getByRole('tab', { name: '已拒绝' }));
+    expect(await screen.findByText('这一栏还没有条目')).toBeInTheDocument();
+    expect(screen.getByText(/候选会出现在“待确认”/)).toBeInTheDocument();
   });
 
   it('the pause switch PUTs the whole settings object', async () => {

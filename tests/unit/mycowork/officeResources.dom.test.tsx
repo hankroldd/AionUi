@@ -2,7 +2,7 @@
  * [mycowork] ADR-0011: `/office/resources` (MyCowork P05 resource center, PR04 slice d/f).
  * Only the Bridge boundary is mocked (fetch). Covers: "my imports" list with states and tags, switching to a granted
  * source; clicking a tag filters, the filter can be saved as a view tab and the tab filters by view; editing a
- * resource's tags patches metadata with the read revision (409 → reload + notice); moving a tag to the top level.
+ * resource's tags patches metadata with the read revision (409 → reload + notice); moving a tag to the top level; no resources shows an empty state leading to the import page.
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -41,7 +41,7 @@ const item = (over: object) => ({
 const calls = (method: string, part: string) =>
   fetchMock.mock.calls.filter(([url, init]) => (init?.method ?? 'GET') === method && String(url).includes(part));
 
-function bridge(opts: { patchStatus?: number } = {}) {
+function bridge(opts: { patchStatus?: number; empty?: boolean } = {}) {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     if (url === '/bridge/v1/scopes')
@@ -50,7 +50,9 @@ function bridge(opts: { patchStatus?: number } = {}) {
         projects: [],
       });
     if (url.startsWith('/bridge/v1/resources?')) {
-      const items = url.includes('source_id=src_q')
+      const items = opts.empty
+        ? []
+        : url.includes('source_id=src_q')
         ? [item({ resource_id: 'res_q', file_name: '周报.md', source_id: 'src_q', state: 'ready', purpose: undefined })]
         : [item({ tag_ids: ['tag_c'] })];
       return reply(200, { page: 1, page_size: 50, total: items.length, items });
@@ -93,6 +95,13 @@ describe('OfficeResourcesSlot', () => {
       'href',
       '/bridge/v1/resources/res_q/preview'
     );
+  });
+
+  it('no resources: an empty state leads to the import page', async () => {
+    bridge({ empty: true });
+    render(<OfficeResourcesSlot />);
+    expect(await screen.findByText('这里还没有资源')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '去导入资料' })).toHaveAttribute('href', '#/office/imports');
   });
 
   it('filters by a tag, saves the filter as a view tab, and filters by the view', async () => {

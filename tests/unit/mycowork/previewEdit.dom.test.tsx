@@ -158,7 +158,10 @@ describe('preview "Edit" (D125)', () => {
         fileRef: { kind: 'project', pe_id: 'peA', relative_path: 'out/memo.docx' },
       });
       fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
-      expect((await screen.findByTestId('ai-wait')).textContent).toContain('AI 正在修改这个文件，请稍候');
+      // the toolbar is narrow: a short countdown, the full sentence in the tooltip / accessible name
+      const waiting = await screen.findByTestId('ai-wait');
+      expect(waiting.textContent).toContain('AI 修改中');
+      expect(waiting.getAttribute('aria-label')).toContain('AI 正在修改这个文件，请稍候');
       await waitFor(() => expect(window.location.hash).toBe('#/office/edit/eds_9'), { timeout: 3000 });
       expect(opens).toBe(2);
       expect(JSON.parse(String(posts('/edit-sessions')[1]?.[1]?.body))).toEqual({

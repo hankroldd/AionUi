@@ -13,6 +13,7 @@ import {
   type SupportedLanguage,
 } from '@/common/config/i18n';
 import { applyDocumentDirection } from './direction';
+import { MYCOWORK_DEFAULT_LANGUAGE, startupLanguage } from './mycowork-language';
 
 // Static imports for all locales to ensure packaged app can always switch language.
 import enUS from './locales/en-US/index';
@@ -92,7 +93,8 @@ function getInitialLanguage(): SupportedLanguage {
   const hint = backendStartupFailed
     ? injectedLanguage || localStorageLanguage || systemLanguage
     : localStorageLanguage || injectedLanguage;
-  return normalizeLanguageCode(hint || DEFAULT_LANGUAGE);
+  // [mycowork] first paint before the config is known: MyCowork default, not the en-US fallback locale
+  return normalizeLanguageCode(hint || MYCOWORK_DEFAULT_LANGUAGE);
 }
 
 async function loadLocaleModules(locale: string): Promise<Record<string, unknown>> {
@@ -145,7 +147,8 @@ async function initLanguage(): Promise<void> {
   try {
     await configService.whenReady();
     const savedLanguage = configService.get('language');
-    const language = savedLanguage || normalizeLanguageCode(navigator.language || DEFAULT_LANGUAGE);
+    // [mycowork] D130: saved setting wins; otherwise zh-CN (upstream fell back to the browser locale here)
+    const language = startupLanguage(savedLanguage as string | undefined);
     await ensureAndSwitch(i18n, language, loadLocaleModules);
     // Sync to localStorage so next page load can use it as a fast hint
     if (typeof localStorage !== 'undefined') {

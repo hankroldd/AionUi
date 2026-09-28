@@ -2,7 +2,8 @@
  * [mycowork] ADR-0011: `/office/compositions/:decisionId` (MyCowork P09 page plan, PR05 slice e).
  * Only the Bridge boundary is mocked (fetch). Covers: pages with intent, candidates (rule reasons/limits, honest
  * "preview pending"), read-only excluded templates and fallbacks, no scores; choosing a structure posts an idempotent
- * choice and follows the new decision version; a no-longer-eligible choice (409) reloads and says so.
+ * choice and follows the new decision version; a no-longer-eligible choice (409) reloads and says so; the page sits in the
+ * shared skeleton with a back action, a Steps bar and a header action that turns into "back to chat" once every page is chosen.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -83,6 +84,11 @@ describe('OfficeCompositionSlot', () => {
     expect(screen.getByText(/拆成两页/)).toBeInTheDocument();
     expect(screen.getByText('整套主题：蓝色简洁（虚构）')).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/score|分数|\d+\.\d+/);
+    // 主布局：返回、步骤条、待选页数；缩略图位是骨架占位而不是一行橙字
+    expect(screen.getByRole('button', { name: '返回对话' })).toBeInTheDocument();
+    expect(screen.getByText('选版式')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '还有 1 页待选' })).toBeInTheDocument();
+    expect(document.querySelectorAll('.arco-skeleton-image')).toHaveLength(2);
   });
 
   it('choosing a structure posts an idempotent choice and follows the new decision version', async () => {
@@ -99,6 +105,7 @@ describe('OfficeCompositionSlot', () => {
     expect(body.submission_id).toMatch(/^[0-9a-f-]{36}$/);
     expect(navigateMock).toHaveBeenCalledWith('/office/compositions/dec_2', { replace: true });
     expect(screen.getByRole('button', { name: '已选中' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '回到对话，批准生成' })).toBeInTheDocument();
   });
 
   it('a choice that is no longer eligible (409) reloads and says so', async () => {

@@ -4,11 +4,12 @@
  * typing is possible in jsdom; the slot must still pick MarkdownEditor for markdown and CodeEditor for text).
  * Covers: open → edit → save with the base revision → new base + writeback conflict notice; a stale base
  * (REVISION_CONFLICT) keeps the typed text; AI_EDITING shows "please wait" and retries by itself at editable_at;
- * a text file has no preview pane and "close" releases the lease and returns to the versions page; on the versions page
+ * a text file has no preview pane and "close" releases the lease and returns to the versions page; the page uses the shared
+ * skeleton (fills the content area, own scroller, canvas mode) with the file name as title; on the versions page
  * "edit online" for a .md file goes to the text editor page instead of opening an ONLYOFFICE session.
  */
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
@@ -133,6 +134,14 @@ describe('OfficeTextEditSlot', () => {
     const { unmount } = render(<OfficeTextEditSlot />);
     expect(await screen.findByTestId('code-editor')).toBeInTheDocument();
     expect(screen.queryByTestId('md-preview')).toBeNull();
+    // 页面骨架（.claude/rules/ui.md）：占满内容区、正文自带滚动容器、画布模式不限 1024 宽；标题是文件名
+    const root = screen.getByTestId('mycowork-text-editor');
+    expect(root.style.overflow).toBe('hidden');
+    expect(root.style.minHeight).toBe('0px');
+    const scroller = within(root).getByTestId('mycowork-page-scroll');
+    expect(scroller.style.overflowY).toBe('auto');
+    expect((scroller.firstElementChild as HTMLElement).style.maxWidth).toBe('none');
+    expect(screen.getByRole('heading', { name: 'a.txt' })).toBeInTheDocument();
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '关闭' })));
     await waitFor(() => expect(window.location.hash).toBe('#/office/resources/res_1/versions'));
     expect(calls('/txe_1/close')).toHaveLength(1);

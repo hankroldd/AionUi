@@ -1,7 +1,8 @@
 /**
  * [mycowork] ADR-0011: `/office/resources/:resourceId/versions` (MyCowork P12 versions, PR08 slice 6; UI polish PR11).
  * Only the Bridge boundary is mocked (fetch). Covers: the timeline grouped by local day (今天 / 昨天 / cross-year date) with local
- * clock times instead of ISO strings, vN, current/origin/restored-from and publication badges; nothing is compared until asked;
+ * clock times instead of ISO strings, vN, current/origin/restored-from and publication badges; the page opens on the
+ * "previous → current" comparison by itself (D130, one OfficeCLI call) and any other pair only when asked;
  * comparing two versions shows the partial notice "已保存 vN" (02 §7) with "看原件", change counts, grouped changes with localized
  * aspects, and folded uncovered items with localized reasons; clicking a version compares it with the one before it; the earliest
  * version has nothing to compare; a docx body-only comparison is "正文完整对比", never "完整对比"; a failed comparison says why and
@@ -66,7 +67,13 @@ const partialDiff = {
 };
 const bodyDiff = { ...partialDiff, format: 'docx', compared_root: '/body', status: 'complete', unknown_parts: [] };
 
-type Opts = { restoreStatus?: number; diff?: object; diffStatus?: number; publishCodes?: string[]; timelineStatus?: number };
+type Opts = {
+  restoreStatus?: number;
+  diff?: object;
+  diffStatus?: number;
+  publishCodes?: string[];
+  timelineStatus?: number;
+};
 function bridge(opts: Opts = {}) {
   const codes = [...(opts.publishCodes ?? [])];
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -78,7 +85,12 @@ function bridge(opts: Opts = {}) {
             resource_id: 'res_1',
             current_revision_id: 'rev_cccccccc',
             items: [
-              rev('rev_cccccccc', { current: true, origin: 'restore', restored_from: 'rev_aaaaaaaa', created_at: today }),
+              rev('rev_cccccccc', {
+                current: true,
+                origin: 'restore',
+                restored_from: 'rev_aaaaaaaa',
+                created_at: today,
+              }),
               rev('rev_bbbbbbbb', { origin: 'edit', created_at: yesterday }),
               rev('rev_aaaaaaaa'),
             ],
@@ -131,6 +143,8 @@ const publishToKb = async () => {
   fireEvent.click(within(dialog).getByLabelText('选择知识库'));
   fireEvent.click(await screen.findByText('青禾库'));
   fireEvent.change(within(dialog).getByLabelText('库里的文件名'), { target: { value: '汇报（虚构）.pptx' } });
+  // 影响预览：以什么名字进哪个库、谁能看到（Google Drive 式）
+  expect(await within(dialog).findByText(/将以文件名“汇报（虚构）.pptx”进入知识库“青禾库”/)).toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('button', { name: '发布' }));
 };
 
@@ -157,17 +171,20 @@ describe('OfficeVersionsSlot', () => {
     expect(screen.getByText('导入')).toBeInTheDocument();
     expect(screen.getByText('已归档 · 已完成')).toBeInTheDocument();
     expect(screen.getByText(/^共 3 个版本，全部保留。/)).toBeInTheDocument();
-    expect(calls('GET', '/changes?')).toHaveLength(0); // 打开页面不自动跑对比
+    // 打开页面自动跑一次“上一版 → 当前版”（D130），不再是空白的“请在左侧选一个版本”
+    await waitFor(() => expect(calls('GET', '/changes?')).toHaveLength(1));
+    expect(calls('GET', '/changes?')[0]?.[0]).toContain('from=rev_bbbbbbbb&to=rev_cccccccc');
+    expect(await screen.findByText('修改 1')).toBeInTheDocument();
   });
 
   it('compares the default pair: partial notice, view original, counts, grouped changes, folded uncovered items', async () => {
     bridge();
     render(<OfficeVersionsSlot />);
     await loaded();
-    expect(screen.getByRole('button', { name: '查看最近一次改动' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '对比这两个版本' }));
     expect(await screen.findByText('Diff 覆盖不足：已保存 v3；部分对象无法比较')).toBeInTheDocument();
-    expect(calls('GET', '/changes?')[0]?.[0]).toContain('from=rev_bbbbbbbb&to=rev_cccccccc');
+    fireEvent.click(screen.getByRole('button', { name: '对比这两个版本' })); // 同一对再比一次也是真实调用
+    await waitFor(() => expect(calls('GET', '/changes?')).toHaveLength(2));
+    expect(calls('GET', '/changes?')[1]?.[0]).toContain('from=rev_bbbbbbbb&to=rev_cccccccc');
     expect(screen.getByText('新')).toBeInTheDocument();
     expect(screen.getByText('修改 1')).toBeInTheDocument();
     expect(screen.getByText('未覆盖 1')).toBeInTheDocument();
@@ -187,19 +204,19 @@ describe('OfficeVersionsSlot', () => {
     bridge();
     render(<OfficeVersionsSlot />);
     await loaded();
+    await waitFor(() => expect(calls('GET', '/changes?')).toHaveLength(1)); // 自动对比
     fireEvent.click(screen.getByText('v2'));
-    await waitFor(() => expect(calls('GET', '/changes?')).toHaveLength(1));
-    expect(calls('GET', '/changes?')[0]?.[0]).toContain('from=rev_aaaaaaaa&to=rev_bbbbbbbb');
+    await waitFor(() => expect(calls('GET', '/changes?')).toHaveLength(2));
+    expect(calls('GET', '/changes?')[1]?.[0]).toContain('from=rev_aaaaaaaa&to=rev_bbbbbbbb');
     fireEvent.click(screen.getByText('v1'));
     expect(await screen.findByText('这是最早的版本，没有上一版可对比。')).toBeInTheDocument();
-    expect(calls('GET', '/changes?')).toHaveLength(1);
+    expect(calls('GET', '/changes?')).toHaveLength(2);
   });
 
   it('a docx body-only comparison is labelled "正文完整对比" with the uncompared parts, never "完整对比"', async () => {
     bridge({ diff: bodyDiff });
     render(<OfficeVersionsSlot />);
     await loaded();
-    fireEvent.click(screen.getByRole('button', { name: '对比这两个版本' }));
     expect(await screen.findByText('正文完整对比')).toBeInTheDocument();
     expect(screen.queryByText('完整对比')).toBeNull();
     expect(screen.getByText('比较范围：正文（/body）；未比较：样式表、编号、页眉页脚')).toBeInTheDocument();
@@ -210,7 +227,6 @@ describe('OfficeVersionsSlot', () => {
     bridge({ diffStatus: 504 });
     const { unmount } = render(<OfficeVersionsSlot />);
     await loaded();
-    fireEvent.click(screen.getByRole('button', { name: '对比这两个版本' }));
     expect(await screen.findByText('对比超时（文件可能太大）；已保存的版本不受影响。')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     await waitFor(() => expect(calls('GET', '/changes?')).toHaveLength(2));
@@ -246,12 +262,17 @@ describe('OfficeVersionsSlot', () => {
     expect(await screen.findByText('文件正在在线编辑，编辑中不能恢复覆盖。结束编辑并保存后再试。')).toBeInTheDocument();
   });
 
-  it('accept-and-archive and publish-to-KB send the head revision', async () => {
+  it('accept-and-archive asks first (archive ≠ publish), then it and publish-to-KB send the head revision', async () => {
     bridge();
     render(<OfficeVersionsSlot />);
     await loaded();
     openMenu('v3');
     fireEvent.click(await screen.findByRole('menuitem', { name: '接受并归档' }));
+    const ask = await screen.findByRole('dialog');
+    expect(within(ask).getByText('接受 v3 并归档？')).toBeInTheDocument();
+    expect(within(ask).getByText(/只记录在本地，不会发到任何知识库/)).toBeInTheDocument();
+    expect(calls('POST', '/bridge/v1/publications')).toHaveLength(0);
+    fireEvent.click(within(ask).getByRole('button', { name: '接受并归档' }));
     await waitFor(() => expect(calls('POST', '/bridge/v1/publications')).toHaveLength(1));
     expect(bodyOf('POST', '/bridge/v1/publications')).toMatchObject({
       revision_id: 'rev_cccccccc',

@@ -11,6 +11,7 @@ import {
   OfficeImportsSlot,
   OfficeMemorySlot,
   OfficeResourcesSlot,
+  OfficeTextEditSlot,
   OfficeVersionsSlot,
 } from '@/renderer/mycowork-slots';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
@@ -124,6 +125,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/office/memory' element={<OfficeMemorySlot />} />
           <Route path='/office/compositions/:decisionId' element={<OfficeCompositionSlot />} />
           <Route path='/office/edit/:sessionId' element={<OfficeEditSlot />} />
+          <Route path='/office/edit-text/:resourceId' element={<OfficeTextEditSlot />} />
         </Route>
         <Route path='*' element={<Navigate to={status === 'authenticated' ? '/guid' : '/login'} replace />} />
       </Routes>

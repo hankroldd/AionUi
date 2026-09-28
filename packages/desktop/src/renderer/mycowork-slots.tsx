@@ -11,6 +11,8 @@ import { BookOpen, Brain, FolderUpload, Tag } from '@icon-park/react';
 import { Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
 import { ipcBridge } from '@/common';
+import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
+import { MarkdownViewer } from '@/renderer/pages/conversation/Preview/components/viewers';
 import type { ISessionMcpServer, TChatConversation } from '@/common/config/storage';
 import type { SiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
 import {
@@ -21,6 +23,8 @@ import {
   ResourcesPage,
   VersionsPage,
   OfficeEditorPage,
+  PreviewEditButton,
+  TextEditorPage,
   ProjectScopeEntry,
   ScopeChip,
   ScopeStrip,
@@ -258,4 +262,39 @@ export const OfficeEditSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   const { sessionId = '' } = useParams();
   return <OfficeEditorPage lang={current.language} sessionId={sessionId} />;
+};
+
+/**
+ * [mycowork] D124: route `/office/edit-text/:resourceId` (MyCowork md/txt online editing with a write lease; save = new
+ * version). The page lives in MyCowork packages/ui; the editor and the markdown preview are AionUi's own CodeMirror
+ * editors and MarkdownViewer, passed in here because CodeMirror only resolves from this repo (MyCowork ADR-0020).
+ */
+export const OfficeTextEditSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  const { resourceId = '' } = useParams();
+  return (
+    <TextEditorPage
+      lang={current.language}
+      resourceId={resourceId}
+      renderEditor={({ value, onChange, format }) =>
+        format === 'markdown' ? (
+          <MarkdownEditor value={value} onChange={onChange} />
+        ) : (
+          <CodeEditor value={value} onChange={onChange} />
+        )
+      }
+      renderPreview={(content) => <MarkdownViewer content={content} />}
+    />
+  );
+};
+
+/**
+ * [mycowork] D125: mount point in the preview tab toolbar — an "Edit" button that opens the file of this conversation's
+ * workspace in a separate editor (the preview itself stays read-only, MyCowork 01 §10). Only on `/conversation/:id`.
+ */
+export const PreviewEditSlot: React.FC<{ filePath?: string }> = ({ filePath }) => {
+  const { i18n: current } = useTranslation();
+  const { id } = useParams();
+  if (!id) return null;
+  return <PreviewEditButton lang={current.language} conversationId={id} filePath={filePath} />;
 };

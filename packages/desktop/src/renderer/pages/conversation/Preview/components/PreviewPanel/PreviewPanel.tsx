@@ -63,6 +63,7 @@ import {
 import { usePreviewKeyboardShortcuts, useScrollSync, useTabOverflow, useThemeDetection } from '../../hooks';
 import { useTranslation } from 'react-i18next';
 import './preview.css';
+import { PreviewEditSlot } from '@/renderer/mycowork-slots';
 
 /**
  * 预览面板主组件
@@ -1266,7 +1267,13 @@ const PreviewPanel: React.FC = () => {
             inspectMode={inspectMode}
             onInspectModeToggle={() => setInspectMode(!inspectMode)}
             leftExtra={toolbarExtras?.left}
-            rightExtra={toolbarExtras?.right}
+            // [mycowork] D125: "Edit" opens this workspace file in a separate editor; the preview stays read-only
+            rightExtra={
+              <>
+                {toolbarExtras?.right}
+                {metadata?.file_path && <PreviewEditSlot filePath={metadata.file_path} />}
+              </>
+            }
           />
         )}
 

@@ -6,9 +6,10 @@
  * editor; the versions page "edit online" entry opens a session on the head revision and navigates to the editor.
  * Narrow screens (MyCowork 02 §8) neither open a session nor load the editor; when the editor cannot load (api.js fails),
  * "close and go back" closes, then discards (the Bridge refuses while someone is still connected) and returns to versions.
+ * Cannot reach the service (network failure / 502) and "not configured or unavailable" (503) are told apart; the former offers Retry.
  */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
@@ -102,7 +103,9 @@ describe('OfficeEditSlot', () => {
         return reply(200, {
           resource_id: 'res_1',
           current_revision_id: 'rev_head',
-          items: [{ revision_id: 'rev_head', origin: 'original', current: true, created_at: '2026-09-26T00:00:00.000Z' }],
+          items: [
+            { revision_id: 'rev_head', origin: 'original', current: true, created_at: '2026-09-26T00:00:00.000Z' },
+          ],
         });
       if (url.startsWith('/bridge/v1/publications?')) return reply(200, { items: [] });
       if (url === '/bridge/v1/scopes') return reply(200, { sources: [], projects: [] });
@@ -125,7 +128,9 @@ describe('OfficeEditSlot', () => {
         return reply(200, {
           resource_id: 'res_1',
           current_revision_id: 'rev_head',
-          items: [{ revision_id: 'rev_head', origin: 'original', current: true, created_at: '2026-09-26T00:00:00.000Z' }],
+          items: [
+            { revision_id: 'rev_head', origin: 'original', current: true, created_at: '2026-09-26T00:00:00.000Z' },
+          ],
         });
       if (url.startsWith('/bridge/v1/publications?')) return reply(200, { items: [] });
       if (url === '/bridge/v1/scopes') return reply(200, { sources: [], projects: [] });
@@ -190,5 +195,26 @@ describe('OfficeEditSlot', () => {
     expect(await screen.findByRole('button', { name: '结束编辑并保存' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '关闭并返回' })).toBeNull();
     await waitFor(() => expect(DocEditor).toHaveBeenCalledTimes(1));
+  });
+
+  it('tells "cannot reach the service" (network / 502, with Retry) apart from "not configured" (503)', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    fetchMock.mockResolvedValueOnce({ status: 200, ok: true, json: async () => session('closed') });
+    render(<OfficeEditSlot />);
+    expect(await screen.findByText(/连不上 MyCowork 服务/)).toBeInTheDocument();
+    expect(screen.queryByText(/未配置/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+    expect(await screen.findByText('编辑已结束，没有保存新版本（没有改动，或已放弃）。')).toBeInTheDocument();
+    cleanup();
+    for (const [status, expected] of [
+      [502, /连不上 MyCowork 服务/],
+      [503, /在线编辑未配置或编辑服务不可用/],
+    ] as const) {
+      fetchMock.mockReset();
+      fetchMock.mockResolvedValue({ status, ok: false, json: async () => ({}) });
+      const { unmount } = render(<OfficeEditSlot />);
+      expect(await screen.findByText(expected)).toBeInTheDocument();
+      unmount();
+    }
   });
 });

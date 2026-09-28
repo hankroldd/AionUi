@@ -33,6 +33,14 @@ export const hidesAlwaysAllow = (
   ((isMycoworkSession(mcpServers) && GUARDED_IN_SESSION.has(category ?? '')) ||
     (category === 'mcp' && WRITE_TOOL.test(tool ?? '')));
 
+/**
+ * [mycowork] D115：ACP 批准卡（Claude Code 等，aioncore 投成 acp_permission）的类别。原生 Claude Code 卡片 title 为工具名、
+ * 无 kind（aioncore session_agent.rs），ACP 适配器给 kind。shell 执行（kind execute、Bash）→ exec；MCP 工具
+ * （title `mcp__<服务>__<工具>`）→ mcp；其余不归类（照常给“始终允许”）。
+ */
+export const acpCategory = (kind: string | undefined, title: string | undefined): string | undefined =>
+  kind === 'execute' || title === 'Bash' ? 'exec' : title?.startsWith('mcp__') ? 'mcp' : undefined;
+
 /** 权限模式列表：MyCowork 会话去掉 yolo（auto_edit 只放行 info/edit 类，不含 mcp，保留）。 */
 export const withoutYolo = <T extends { value: string }>(mcpServers: string[] | undefined, modes: T[]): T[] =>
   isMycoworkSession(mcpServers) ? modes.filter((mode) => mode.value !== 'yolo') : modes;

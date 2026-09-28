@@ -6,6 +6,8 @@
 
 import type { IMessageAcpPermission } from '@/common/chat/chatLib';
 import { conversation } from '@/common/adapter/ipcBridge';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { acpCategory, hidesAlwaysAllow } from '@/renderer/mycowork-approval-guard';
 import {
   classifyAcpPermission,
   normalizePermissionOperationKind,
@@ -21,7 +23,16 @@ type MessageAcpPermissionProps = {
 const MessageAcpPermission: React.FC<MessageAcpPermissionProps> = React.memo(({ message }) => {
   const content = message.content || ({} as IMessageAcpPermission['content']);
   const { tool_call } = content;
-  const options = Array.isArray(content.options) ? content.options : [];
+  const mcpServers = useConversationContextSafe()?.loadedMcpServers;
+  // [mycowork] D115：MyCowork 会话的 exec 类（Bash）与 mcp 类卡片不给 allow_always（Claude Code 会记成规则，shell 免批准后
+  // 可直连 Bridge MCP；写工具卡片无论会话都不给），与 aionrs 卡片同一判定
+  const options = (Array.isArray(content.options) ? content.options : []).filter(
+    (option) =>
+      !(
+        option?.kind === 'allow_always' &&
+        hidesAlwaysAllow(mcpServers, acpCategory(tool_call?.kind, tool_call?.title), tool_call?.title, 'proceed_always')
+      )
+  );
   const { t } = useTranslation();
   const toolCallId = tool_call?.tool_call_id;
 

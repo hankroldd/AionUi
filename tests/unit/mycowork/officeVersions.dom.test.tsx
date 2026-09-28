@@ -122,6 +122,14 @@ function bridge(opts: Opts = {}) {
         sources: [{ source_id: 'src_q', name: '青禾库', provider: 'weknora', counts }],
         projects: [],
       });
+    if (url.endsWith('/metadata'))
+      return reply(200, {
+        resource_id: 'res_1',
+        metadata_revision: 1,
+        current_revision_id: 'rev_cccccccc',
+        tag_ids: [],
+        secret: opts.secret === true,
+      });
     if (url.includes('/changes?'))
       return opts.diffStatus ? reply(opts.diffStatus, {}) : reply(200, opts.diff ?? partialDiff);
     if (url.endsWith('/restore'))
@@ -213,6 +221,28 @@ describe('OfficeVersionsSlot', () => {
     expect(calls('GET', '/changes?')).toHaveLength(2);
   });
 
+  it('a comparison the user picks while the automatic one is still running is the one shown (request sequencing)', async () => {
+    let release: (() => void) | undefined;
+    const first = new Promise<void>((r) => (release = r));
+    let n = 0;
+    bridge();
+    const base = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes('/changes?') && ++n === 1) await first; // 自动对比挂住
+      return base(url, init);
+    });
+    render(<OfficeVersionsSlot />);
+    await loaded();
+    fireEvent.click(screen.getByText('v2')); // 用户选了别的对比对
+    await waitFor(() => expect(calls('GET', '/changes?')).toHaveLength(2));
+    release?.();
+    expect(await screen.findByText('修改 1')).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 50)); // 让迟到的自动对比结果有机会到达
+    // 显示的仍是用户选的 v1→v2，没被迟到的自动对比（v2→v3）覆盖
+    expect(screen.getByRole('combobox', { name: '对比终点' }).textContent).toContain('v2');
+    expect(screen.getByRole('combobox', { name: '对比起点' }).textContent).toContain('v1');
+  });
+
   it('a docx body-only comparison is labelled "正文完整对比" with the uncompared parts, never "完整对比"', async () => {
     bridge({ diff: bodyDiff });
     render(<OfficeVersionsSlot />);
@@ -286,6 +316,17 @@ describe('OfficeVersionsSlot', () => {
       source_id: 'src_q',
       file_name: '汇报（虚构）.pptx',
     });
+  });
+
+  it('a Secret resource cannot be published: the dialog says so and offers no publish (D116)', async () => {
+    bridge({ secret: true });
+    render(<OfficeVersionsSlot />);
+    await loaded();
+    fireEvent.click(screen.getByRole('button', { name: '发布到知识库' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText(/已标为 Secret，不能发布到知识库/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '发布' })).toBeDisabled();
+    expect(within(dialog).queryByText(/将以文件名/)).toBeNull();
   });
 
   it('speaker notes/comments and out-of-scope AI edits ask first, then resend with both confirm flags', async () => {

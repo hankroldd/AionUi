@@ -41,26 +41,26 @@ function bridge(opts: { actStatus?: number } = {}) {
       const items = url.includes('status=rejected')
         ? []
         : url.includes('status=active')
-        ? [
-            mem({
-              memory_id: 'mem_2',
-              kind: 'preference',
-              scope: { type: 'personal' },
-              text: '图表用蓝色',
-              status: 'active',
-              sources: { resource_ids: [] },
-            }),
-          ]
-        : [
-            mem({}),
-            mem({
-              memory_id: 'mem_3',
-              kind: 'preference',
-              scope: { type: 'personal' },
-              text: '先写结论',
-              sources: { resource_ids: [] },
-            }),
-          ];
+          ? [
+              mem({
+                memory_id: 'mem_2',
+                kind: 'preference',
+                scope: { type: 'personal' },
+                text: '图表用蓝色',
+                status: 'active',
+                sources: { resource_ids: [] },
+              }),
+            ]
+          : [
+              mem({}),
+              mem({
+                memory_id: 'mem_3',
+                kind: 'preference',
+                scope: { type: 'personal' },
+                text: '先写结论',
+                sources: { resource_ids: [] },
+              }),
+            ];
       return reply(200, { items, page: 1, page_size: 50, total: items.length });
     }
     if (url.endsWith('/actions'))
@@ -132,7 +132,7 @@ describe('OfficeMemorySlot', () => {
     await screen.findByText('二期验收定在十月（虚构）');
     fireEvent.click(screen.getByRole('tab', { name: '已拒绝' }));
     expect(await screen.findByText('这一栏还没有条目')).toBeInTheDocument();
-    expect(screen.getByText(/候选会出现在“待确认”/)).toBeInTheDocument();
+    expect(screen.getByText(/该入口随后续切片提供/)).toBeInTheDocument();
   });
 
   it('an unavailable Bridge is explained in plain words, not as an error code', async () => {

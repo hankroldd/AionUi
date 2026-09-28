@@ -89,6 +89,11 @@ describe('OfficeCompositionSlot', () => {
     expect(screen.getByText('选版式')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '还有 1 页待选' })).toBeInTheDocument();
     expect(document.querySelectorAll('.arco-skeleton-image')).toHaveLength(2);
+    // Steps 从 1 起：还有页待选时高亮第 2 步“选版式”，第 1 步已完成
+    const steps = document.querySelectorAll('.arco-steps-item');
+    expect(steps[0]?.className).toContain('arco-steps-item-finish');
+    expect(steps[1]?.className).toContain('arco-steps-item-process');
+    expect(steps[2]?.className).toContain('arco-steps-item-wait');
   });
 
   it('choosing a structure posts an idempotent choice and follows the new decision version', async () => {
@@ -106,6 +111,8 @@ describe('OfficeCompositionSlot', () => {
     expect(navigateMock).toHaveBeenCalledWith('/office/compositions/dec_2', { replace: true });
     expect(screen.getByRole('button', { name: '已选中' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '回到对话，批准生成' })).toBeInTheDocument();
+    // 全部选定：第 3 步“生成”高亮
+    expect(document.querySelectorAll('.arco-steps-item')[2]?.className).toContain('arco-steps-item-process');
   });
 
   it('a choice that is no longer eligible (409) reloads and says so', async () => {

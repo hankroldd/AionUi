@@ -1,5 +1,5 @@
 /**
- * [mycowork] D115：MyCowork 会话（挂了 Bridge MCP）里，aionrs 批准卡不给“始终允许”（mcp 类）、权限模式不给 YOLO、
+ * [mycowork] D115：MyCowork 会话（挂了 Bridge MCP）里，aionrs 批准卡不给“始终允许”（mcp 类、exec 类）、权限模式不给 YOLO、
  * 带范围新建 Aion CLI 会话不以 YOLO 创建；其余卡片、非 MyCowork 会话不受影响。
  * 只替身外部边界：aioncore（ipcBridge）、Bridge（fetch）、运行时配置读取（useAcpConfigOptions）。
  */
@@ -111,8 +111,21 @@ describe('D115 批准卡', () => {
     expect(optionValues()).toEqual(['proceed_once', 'cancel']);
   });
 
-  it('MyCowork 会话里 exec 类卡片不受影响', () => {
-    render(inSession(MYCOWORK, <MessagePermission message={card('ExecCommand', 'exec')} />));
+  it.each(['ExecCommand', 'Spawn'])(
+    '[mycowork] D115 M3：MyCowork 会话里 exec 类卡片 %s 也不给（否则 shell 免批准后可直连 Bridge MCP 调写工具）',
+    (tool) => {
+      render(inSession(MYCOWORK, <MessagePermission message={card(tool, 'exec')} />));
+      expect(optionValues()).toEqual(['proceed_once', 'cancel']);
+    }
+  );
+
+  it('[mycowork] D115 M3：非 MyCowork 会话的 exec 类卡片不受影响', () => {
+    render(inSession(OTHER, <MessagePermission message={card('ExecCommand', 'exec')} />));
+    expect(optionValues()).toEqual(['proceed_once', 'proceed_always', 'cancel']);
+  });
+
+  it('MyCowork 会话里 info / edit 类卡片不受影响（auto_edit 本就放行这两类）', () => {
+    render(inSession(MYCOWORK, <MessagePermission message={card('Write', 'edit')} />));
     expect(optionValues()).toEqual(['proceed_once', 'proceed_always', 'cancel']);
   });
 

@@ -14,8 +14,14 @@ const WRITE_TOOL = /(^|_)office_(edit|register_output|copy_to_workspace)$/;
 export const isMycoworkSession = (mcpServers?: string[]): boolean => Boolean(mcpServers?.includes(BRIDGE_MCP));
 
 /**
- * 批准卡是否隐藏此选项：只隐藏“始终允许”（proceed_always），且只在 mcp 类卡片上——MyCowork 会话里任一 mcp 卡片点了
- * 始终允许都会连带放行三个写工具，所以整类不给；写工具本身的卡片无论会话信息是否可得都不给。其余卡片与会话不受影响。
+ * [mycowork] D115 安全审查 M3：MyCowork 会话里 exec 类（ExecCommand、Spawn）同样不给——“始终允许”一次后 shell 免批准，
+ * 模型可从 AionUi 库里读出计划令牌、用 curl 直连 Bridge MCP 调写工具，绕过写工具卡片。
+ */
+const GUARDED_IN_SESSION = new Set(['mcp', 'exec']);
+
+/**
+ * 批准卡是否隐藏此选项：只隐藏“始终允许”（proceed_always）。MyCowork 会话里 mcp 类（任一 mcp 卡片点了始终允许都会连带放行
+ * 三个写工具）与 exec 类（见上）整类不给；写工具本身的卡片无论会话信息是否可得都不给。其余卡片与会话不受影响。
  */
 export const hidesAlwaysAllow = (
   mcpServers: string[] | undefined,
@@ -23,7 +29,9 @@ export const hidesAlwaysAllow = (
   tool: string | undefined,
   value: string
 ): boolean =>
-  value === 'proceed_always' && category === 'mcp' && (isMycoworkSession(mcpServers) || WRITE_TOOL.test(tool ?? ''));
+  value === 'proceed_always' &&
+  ((isMycoworkSession(mcpServers) && GUARDED_IN_SESSION.has(category ?? '')) ||
+    (category === 'mcp' && WRITE_TOOL.test(tool ?? '')));
 
 /** 权限模式列表：MyCowork 会话去掉 yolo（auto_edit 只放行 info/edit 类，不含 mcp，保留）。 */
 export const withoutYolo = <T extends { value: string }>(mcpServers: string[] | undefined, modes: T[]): T[] =>

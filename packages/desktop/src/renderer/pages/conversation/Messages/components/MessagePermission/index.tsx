@@ -26,7 +26,7 @@ const MessagePermission: React.FC<MessagePermissionProps> = React.memo(({ messag
   const content = message.content || ({} as IMessagePermission['content']);
   const { description, title, action, call_id, command_type } = content;
   const mcpServers = useConversationContextSafe()?.loadedMcpServers;
-  // [mycowork] D115：MyCowork 会话的 mcp 类卡片不给“始终允许”（aionrs 按类别记住，会连带放行 Bridge 写工具）
+  // [mycowork] D115：MyCowork 会话的 mcp 类与 exec 类卡片不给“始终允许”（aionrs 按类别记住，会连带放行 Bridge 写工具或免批准 shell）
   const options = (Array.isArray(content.options) ? content.options : []).filter(
     (option) => !hidesAlwaysAllow(mcpServers, command_type, action, String(option?.value))
   );

@@ -214,6 +214,7 @@ describe('OfficeEditSlot', () => {
       fetchMock.mockResolvedValue({ status, ok: false, json: async () => ({}) });
       const { unmount } = render(<OfficeEditSlot />);
       expect(await screen.findByText(expected)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '重试' }) !== null).toBe(status === 502); // 503 重试无用，不给
       unmount();
     }
   });

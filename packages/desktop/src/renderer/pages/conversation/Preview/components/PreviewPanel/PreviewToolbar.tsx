@@ -210,7 +210,10 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
   const toolbarIconSize = 12;
 
   return (
-    <div className='flex items-center justify-between h-32px px-10px bg-bg-2 flex-shrink-0 border-b border-border-1 overflow-x-auto'>
+    // [mycowork] `mycowork-preview-toolbar`: a CSS container; below ~560px the labelled buttons keep only their icon
+    // (title stays as the tooltip) so a 1024-wide three-column layout does not push Download/Edit out of view
+    // (MyCowork PR11 audit; rule in styles/arco-override.css).
+    <div className='mycowork-preview-toolbar flex items-center justify-between h-32px px-10px bg-bg-2 flex-shrink-0 border-b border-border-1 overflow-x-auto'>
       <div className='flex items-center justify-between gap-8px w-full' style={{ minWidth: 'max-content' }}>
         {/* 左侧：Tabs（Markdown/HTML）+ 文件名 / Left: Tabs (Markdown/HTML) + Filename */}
         <div className='flex items-center h-full gap-8px'>

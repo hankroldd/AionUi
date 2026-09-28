@@ -24,6 +24,10 @@ import { useProjectExplorerColumnWidth } from '@renderer/hooks/ui/useProjectExpl
 import { useResizableSplit } from '@renderer/hooks/ui/useResizableSplit';
 import { useProjectPreviewRegionWidth } from '@renderer/hooks/ui/useProjectPreviewRegionWidth';
 import { useProjectPanelCollapse } from '@renderer/hooks/ui/useProjectPanelCollapse';
+
+// [mycowork] below this [content | explorer] row width the explorer is auto-collapsed once when the preview opens
+// (explorer 260 + chat 400 + preview 400 + chrome, i.e. a 1024 viewport with the sidebar open).
+const EXPLORER_AUTO_COLLAPSE_PX = 1100;
 import { dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
 import { MIN_PREVIEW_PANEL_PX } from '@renderer/pages/conversation/utils/layoutCalc';
 import { PreviewPanel } from '@renderer/pages/conversation/Preview';
@@ -189,7 +193,7 @@ const Layout: React.FC<{
   );
   // P3: host-level collapse (project-scoped on desktop; overlay on mobile). The
   // explorer stays mounted (width 0) on collapse, so it is not remounted.
-  const { collapsed: explorerCollapsed } = useProjectPanelCollapse({
+  const { collapsed: explorerCollapsed, setCollapsed: setExplorerCollapsed } = useProjectPanelCollapse({
     projectId: currentProject,
     isMobile,
     active: Boolean(currentProject),
@@ -207,6 +211,25 @@ const Layout: React.FC<{
   // Maximized: hide the chat area and let the preview fill the space it vacated;
   // the left sidebar and the right explorer column are both left untouched.
   const previewMaximized = previewRegionActive && isPreviewMaximized;
+  // [mycowork] PR11 audit B5: at ~1024px a project conversation with the preview open squeezes chat + preview + explorer
+  // into three cramped columns. When the preview opens and the [content | explorer] row is narrower than
+  // EXPLORER_AUTO_COLLAPSE_PX, collapse the explorer once (not persisted; the toggle re-opens it as usual).
+  const explorerNudgedRef = useRef(false);
+  useEffect(() => {
+    if (!previewRegionActive) {
+      explorerNudgedRef.current = false;
+      return;
+    }
+    if (
+      explorerNudgedRef.current ||
+      explorerCollapsed ||
+      mainRowWidth <= 0 ||
+      mainRowWidth >= EXPLORER_AUTO_COLLAPSE_PX
+    )
+      return;
+    explorerNudgedRef.current = true;
+    setExplorerCollapsed(true);
+  }, [previewRegionActive, explorerCollapsed, mainRowWidth, setExplorerCollapsed]);
   const { widthPx: previewWidthPx, createDragHandle: createPreviewRegionDragHandle } = useProjectPreviewRegionWidth(
     mainRowWidth,
     explorerCollapsed ? 0 : explorerWidthPx,

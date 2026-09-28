@@ -508,6 +508,17 @@ body[arco-theme='dark'] .arco-message-error {
   min-width: 0;
 }
 
+/* [mycowork] 预览工具栏在窄面板（1024 宽三栏时约 378px）只留图标：带 title 的按钮隐藏文字标签，Source/Preview 页签与
+   “编辑”主操作不受影响；宽面板照旧。The preview toolbar keeps icons only when its container is narrow. */
+.mycowork-preview-toolbar {
+  container-type: inline-size;
+}
+@container (max-width: 560px) {
+  .mycowork-preview-toolbar div[title] > span {
+    display: none;
+  }
+}
+
 /* Selected text keeps the normal color — the row background is the indicator. */
 .workspace-tree .arco-tree-node-selected .arco-tree-node-title {
   color: var(--color-text-1);

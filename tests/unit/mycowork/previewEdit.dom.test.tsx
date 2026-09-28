@@ -119,6 +119,10 @@ describe('preview "Edit" (D125)', () => {
         file_name: 'notes.txt',
         fileRef: { kind: 'project', pe_id: 'peA', relative_path: 'notes.txt' },
       });
+      // [mycowork] the toolbar is a CSS container; labelled buttons keep a title so the icon-only narrow mode stays accessible
+      const toolbar = document.querySelector('.mycowork-preview-toolbar');
+      expect(toolbar).not.toBeNull();
+      expect(toolbar?.querySelectorAll('div[title] > span').length).toBeGreaterThan(0);
       fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
       await waitFor(() => expect(window.location.hash).toBe('#/office/edit-text/res_1'));
       expect(JSON.parse(String(posts('/edit-target')[0]?.[1]?.body))).toEqual({ relative_path: 'notes.txt' });
@@ -176,7 +180,9 @@ describe('preview "Edit" (D125)', () => {
     'a disk-path tab sends its workspace-relative path; a refused path gets a plain explanation; no relative path, no button',
     async () => {
       fetchMock.mockImplementation(async () =>
-        reply(400, { error: { code: 'INVALID_REQUEST', message: 'relative_path must stay inside your session workspace' } })
+        reply(400, {
+          error: { code: 'INVALID_REQUEST', message: 'relative_path must stay inside your session workspace' },
+        })
       );
       openTab('x', 'code', { title: 'a.md', file_name: 'a.md', file_path: '/ws/sub/a.md', workspace: '/ws' });
       fireEvent.click(await screen.findByRole('button', { name: '编辑' }));

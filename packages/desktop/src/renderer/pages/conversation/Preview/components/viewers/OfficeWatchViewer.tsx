@@ -14,6 +14,10 @@ import { Button, Spin } from '@arco-design/web-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { registerTabReloader } from '../../context/tabReloaderRegistry';
+// [mycowork] B4: liveness probe + copy for a watch whose process is gone (MyCowork packages/ui)
+import { isWatchAlive, previewWatchText } from '@mycowork/ui';
+
+const WATCH_PROBE_MS = 30_000;
 
 type DocType = 'ppt' | 'word' | 'excel';
 type OfficeWatchErrorCode =
@@ -88,6 +92,8 @@ interface OfficeWatchViewerProps {
 interface OfficeWatchErrorState {
   code?: OfficeWatchErrorCode;
   message: string;
+  // [mycowork] the watch process is gone (its /events stream no longer answers): offer "reopen", no install hint
+  gone?: boolean;
 }
 
 export function resolveOfficeWatchUrl(url: string, docType: DocType): string {
@@ -162,7 +168,7 @@ export function resolveOfficeErrorActions(
  * docType to select the correct IPC bridge, proxy path, and i18n keys.
  */
 const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, fileRef, file_path, workspace }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const keys = I18N_KEYS[docType];
 
   const [watchUrl, setWatchUrl] = useState<string | null>(null);
@@ -265,6 +271,25 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
     };
   }, [docType, fileRef, file_path, retryKey, t, workspace]);
 
+  // [mycowork] B4: on web the proxy answers with the SPA's HTML once the officecli watch process is gone (after a page
+  // reload or a long idle), and the iframe only logs an EventSource error. Probe the stream once the URL is known and
+  // every WATCH_PROBE_MS; when it is gone, replace the stale iframe with a visible state and a "reopen" action.
+  useEffect(() => {
+    if (!watchUrl || isElectronDesktop()) return;
+    let stopped = false;
+    const probe = async () => {
+      if (await isWatchAlive(watchUrl)) return;
+      if (stopped) return;
+      setError({ message: previewWatchText(i18n?.language).gone, gone: true });
+    };
+    void probe();
+    const timer = setInterval(() => void probe(), WATCH_PROBE_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [watchUrl, i18n?.language]);
+
   if (loading) {
     return (
       <div className='h-full w-full flex items-center justify-center bg-bg-1'>
@@ -285,10 +310,12 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
     );
 
     return (
-      <div className='h-full w-full flex items-center justify-center bg-bg-1'>
+      <div className='h-full w-full flex items-center justify-center bg-bg-1' data-testid='office-watch-error'>
         <div className='text-center max-w-400px'>
-          <div className='text-16px text-danger mb-8px'>{error.message}</div>
-          {!error.code && <div className='text-12px text-t-secondary mb-12px'>{t(keys.installHint)}</div>}
+          <div className={`text-16px mb-8px ${error.gone ? 'text-t-primary' : 'text-danger'}`}>{error.message}</div>
+          {!error.code && !error.gone && (
+            <div className='text-12px text-t-secondary mb-12px'>{t(keys.installHint)}</div>
+          )}
           {showServerInstallGuide && (
             <div className='text-start mb-12px'>
               <div className='text-12px text-t-secondary mb-8px'>{t('preview.office.serverInstall.hint')}</div>
@@ -305,10 +332,10 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
               </Button>
             </div>
           )}
-          {showRetry && (
+          {(showRetry || error.gone) && (
             <div className='flex justify-center'>
               <Button size='small' type='primary' onClick={() => setRetryKey((value) => value + 1)}>
-                {t('common.retry', { defaultValue: 'Retry' })}
+                {error.gone ? previewWatchText(i18n?.language).reopen : t('common.retry', { defaultValue: 'Retry' })}
               </Button>
             </div>
           )}

@@ -137,7 +137,7 @@ describe('OfficeResourcesSlot', () => {
     expect(within(weekly).getAllByText('今天 10:13').length).toBeGreaterThan(0);
     expect(within(weekly).getByText('—')).toBeInTheDocument(); // 只在知识库，没有 MyCowork 版本
     expect(within(weekly).getByText('可检索')).toBeInTheDocument();
-    expect(within(draft).getByText('我的导入（仅存原件）')).toBeInTheDocument();
+    expect(within(draft).getByText('我的导入')).toBeInTheDocument();
     expect(within(draft).getByRole('link', { name: '3 个版本' })).toHaveAttribute(
       'href',
       '#/office/resources/res_1/versions'

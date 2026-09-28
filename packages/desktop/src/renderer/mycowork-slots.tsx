@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { BookOpen, Brain, FolderUpload, Tag } from '@icon-park/react';
 import { Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
@@ -291,10 +291,12 @@ export const OfficeTextEditSlot: React.FC = () => {
 /**
  * [mycowork] D125: mount point in the preview tab toolbar — an "Edit" button that opens the file of this conversation's
  * workspace in a separate editor (the preview itself stays read-only, MyCowork 01 §10). Only on `/conversation/:id`.
+ * The panel is rendered by the app Layout, outside the conversation route element, so the id comes from matching the
+ * location (useParams is empty there — found in a real browser).
  */
-export const PreviewEditSlot: React.FC<{ filePath?: string }> = ({ filePath }) => {
+export const PreviewEditSlot: React.FC<{ relativePath?: string }> = ({ relativePath }) => {
   const { i18n: current } = useTranslation();
-  const { id } = useParams();
+  const id = useMatch('/conversation/:id')?.params.id;
   if (!id) return null;
-  return <PreviewEditButton lang={current.language} conversationId={id} filePath={filePath} />;
+  return <PreviewEditButton lang={current.language} conversationId={id} relativePath={relativePath} />;
 };

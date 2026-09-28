@@ -3,10 +3,12 @@
  * The preview itself stays read-only; the button resolves the workspace file to a Bridge resource (registering it on the
  * user's behalf when needed) and opens a separate editor: md/txt → text editor page, docx/pptx/xlsx → ONLYOFFICE.
  * Renders the real PreviewPanel (removing the mount line makes these fail). Mocked: fetch (Bridge) and the AionUi IPC
- * bridge (same stubs as previewPanelNotices), plus the route param of `/conversation/:id`.
+ * bridge (same stubs as previewPanelNotices). Rendered under a router at `/conversation/conv_1` but outside any route
+ * element, as the app Layout renders the panel (useParams is empty there; the slot must match the location).
  */
 
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
@@ -16,10 +18,6 @@ vi.mock('react-i18next', () => ({
     t: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
     i18n: { language: 'zh-CN' },
   }),
-}));
-vi.mock('react-router-dom', async (orig) => ({
-  ...(await orig<typeof import('react-router-dom')>()),
-  useParams: () => ({ id: 'conv_1' }),
 }));
 vi.mock('@/renderer/hooks/context/ThemeContext', () => ({ useThemeContext: () => ({ theme: 'light' }) }));
 vi.mock('@/common', () => ({
@@ -64,10 +62,12 @@ const Probe: React.FC = () => {
 };
 // mount the panel into an already-open preview (PreviewPanel's hook count changes across closed → open)
 const Harness: React.FC<{ showPanel: boolean }> = ({ showPanel }) => (
-  <PreviewProvider>
-    <Probe />
-    {showPanel ? <PreviewPanel /> : null}
-  </PreviewProvider>
+  <MemoryRouter initialEntries={['/conversation/conv_1']}>
+    <PreviewProvider>
+      <Probe />
+      {showPanel ? <PreviewPanel /> : null}
+    </PreviewProvider>
+  </MemoryRouter>
 );
 const openTab = (content: string, type: 'code' | 'word', metadata: object) => {
   const view = render(<Harness showPanel={false} />);
@@ -113,10 +113,15 @@ describe('preview "Edit" (D125)', () => {
           return reply(201, { session_id: 'txe_1', resource_id: 'res_1', base_revision_id: 'rev_a', content: 'hi' });
         return reply(404, {});
       });
-      openTab('hi', 'code', { title: 'notes.txt', file_name: 'notes.txt', file_path: '/ws/notes.txt' });
+      // the Explorer's shape: only a project ref, no absolute path in the renderer
+      openTab('hi', 'code', {
+        title: 'notes.txt',
+        file_name: 'notes.txt',
+        fileRef: { kind: 'project', pe_id: 'peA', relative_path: 'notes.txt' },
+      });
       fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
       await waitFor(() => expect(window.location.hash).toBe('#/office/edit-text/res_1'));
-      expect(JSON.parse(String(posts('/edit-target')[0]?.[1]?.body))).toEqual({ path: '/ws/notes.txt' });
+      expect(JSON.parse(String(posts('/edit-target')[0]?.[1]?.body))).toEqual({ relative_path: 'notes.txt' });
       expect(posts('/text-edit-sessions')).toHaveLength(1);
     },
     TIMEOUT_MS
@@ -147,7 +152,11 @@ describe('preview "Edit" (D125)', () => {
         if (url === '/bridge/v1/edit-sessions') return reply(201, { session_id: 'eds_9', state: 'editing' });
         return reply(404, {});
       });
-      openTab('', 'word', { title: 'memo.docx', file_name: 'memo.docx', file_path: '/ws/memo.docx' });
+      openTab('', 'word', {
+        title: 'memo.docx',
+        file_name: 'memo.docx',
+        fileRef: { kind: 'project', pe_id: 'peA', relative_path: 'out/memo.docx' },
+      });
       fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
       expect((await screen.findByTestId('ai-wait')).textContent).toContain('AI 正在修改这个文件，请稍候');
       await waitFor(() => expect(window.location.hash).toBe('#/office/edit/eds_9'), { timeout: 3000 });
@@ -161,21 +170,18 @@ describe('preview "Edit" (D125)', () => {
   );
 
   it(
-    'a file outside the session workspace gets a plain explanation; a tab without a disk path has no button',
+    'a disk-path tab sends its workspace-relative path; a refused path gets a plain explanation; no relative path, no button',
     async () => {
       fetchMock.mockImplementation(async () =>
-        reply(400, { error: { code: 'INVALID_REQUEST', message: 'path must be inside the session workspace' } })
+        reply(400, { error: { code: 'INVALID_REQUEST', message: 'relative_path must stay inside your session workspace' } })
       );
-      openTab('x', 'code', { title: 'a.md', file_name: 'a.md', file_path: '/elsewhere/a.md' });
+      openTab('x', 'code', { title: 'a.md', file_name: 'a.md', file_path: '/ws/sub/a.md', workspace: '/ws' });
       fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
       expect(await screen.findByText('只能编辑本会话工作目录里的文件。')).toBeInTheDocument();
+      expect(JSON.parse(String(posts('/edit-target')[0]?.[1]?.body))).toEqual({ relative_path: 'sub/a.md' });
       expect(window.location.hash).toBe('');
       cleanup();
-      openTab('x', 'code', {
-        title: 'b.log',
-        file_name: 'b.log',
-        fileRef: { kind: 'project', pe_id: 'peA', relative_path: 'b.log' },
-      });
+      openTab('x', 'code', { title: 'b.log', file_name: 'b.log', file_path: '/elsewhere/b.log' });
       await screen.findByText('b.log');
       expect(screen.queryByRole('button', { name: '编辑' })).toBeNull();
     },

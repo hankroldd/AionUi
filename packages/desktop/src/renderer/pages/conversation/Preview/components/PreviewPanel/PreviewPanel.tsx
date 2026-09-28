@@ -1267,11 +1267,12 @@ const PreviewPanel: React.FC = () => {
             inspectMode={inspectMode}
             onInspectModeToggle={() => setInspectMode(!inspectMode)}
             leftExtra={toolbarExtras?.left}
-            // [mycowork] D125: "Edit" opens this workspace file in a separate editor; the preview stays read-only
+            // [mycowork] D125: "Edit" opens this workspace file in a separate editor; the preview stays read-only.
+            // Explorer tabs carry only {pe_id, relative_path} (no absolute path), so pass the workspace-relative path.
             rightExtra={
               <>
                 {toolbarExtras?.right}
-                {metadata?.file_path && <PreviewEditSlot filePath={metadata.file_path} />}
+                {activeTab && <PreviewEditSlot relativePath={previewTabPaths(activeTab).relative} />}
               </>
             }
           />

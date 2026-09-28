@@ -3,7 +3,7 @@
  * restarts the officecli watch (stop the old process, start a new one that reads the file afresh), so a file changed
  * outside (e.g. saved from the online editor) can be seen without closing the tab. Only the backend boundary is mocked.
  * [mycowork] B4: the viewer probes the watch's /events stream; when the proxy no longer answers with text/event-stream
- * (the officecli process is gone) the stale iframe is replaced by a visible "disconnected" state whose action restarts the watch.
+ * (the officecli process is gone) twice in a row, the stale iframe is replaced by a visible "disconnected" state whose action restarts the watch.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -49,9 +49,16 @@ describe('Office preview refresh (S10)', () => {
 
   it('web: a watch whose event stream is gone shows a disconnected state; "reopen" restarts the watch', async () => {
     platform.electron = false;
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     fetchMock.mockImplementation(async () => stream('text/html'));
     render(<PptViewer tabId='tab-2' file_path='/w/deck.pptx' workspace='/w' />);
+    // one miss is not enough (a single network hiccup must not tear the preview down)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByTestId('office-watch-error')).toBeNull();
+    await vi.advanceTimersByTimeAsync(15_000);
     const gone = await screen.findByTestId('office-watch-error');
+    vi.useRealTimers();
     expect(gone.textContent).toContain('Preview disconnected');
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/ppt-proxy/51234/events');
     fetchMock.mockImplementation(async () => stream('text/event-stream'));

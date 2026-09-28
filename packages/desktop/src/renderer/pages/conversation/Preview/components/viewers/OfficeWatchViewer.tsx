@@ -15,9 +15,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { registerTabReloader } from '../../context/tabReloaderRegistry';
 // [mycowork] B4: liveness probe + copy for a watch whose process is gone (MyCowork packages/ui)
-import { isWatchAlive, previewWatchText } from '@mycowork/ui';
+import { isWatchAlive, previewWatchText, watchGone } from '@mycowork/ui';
 
-const WATCH_PROBE_MS = 30_000;
+const WATCH_PROBE_MS = 15_000; // 两次连续失败才判断开，总延迟仍 ≤ 30 秒
 
 type DocType = 'ppt' | 'word' | 'excel';
 type OfficeWatchErrorCode =
@@ -273,13 +273,14 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
 
   // [mycowork] B4: on web the proxy answers with the SPA's HTML once the officecli watch process is gone (after a page
   // reload or a long idle), and the iframe only logs an EventSource error. Probe the stream once the URL is known and
-  // every WATCH_PROBE_MS; when it is gone, replace the stale iframe with a visible state and a "reopen" action.
+  // every WATCH_PROBE_MS; after two consecutive misses, replace the stale iframe with a visible state and a "reopen" action.
   useEffect(() => {
     if (!watchUrl || isElectronDesktop()) return;
     let stopped = false;
+    const misses = { n: 0 }; // 连续两次探活失败才算断开，一次网络抖动不打扰
     const probe = async () => {
-      if (await isWatchAlive(watchUrl)) return;
-      if (stopped) return;
+      const gone = watchGone(await isWatchAlive(watchUrl), misses);
+      if (stopped || !gone) return;
       setError({ message: previewWatchText(i18n?.language).gone, gone: true });
     };
     void probe();

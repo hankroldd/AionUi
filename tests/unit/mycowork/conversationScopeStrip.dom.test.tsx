@@ -60,7 +60,7 @@ const CONTEXT = {
   withheld: 1,
   superseded: false,
 };
-const SUMMARY = '项目A资料 + 产品库；公网关闭；可检索 8 · 处理中 1 · 不可用 2';
+const SUMMARY = '项目A资料 + 产品库；公网关闭；AI 可引用 8 · 入库中 1 · 暂不可用 2'; // D140 文案
 
 const emit = (m: StreamMessage) => act(() => streamListeners.forEach((fn) => fn(m)));
 
@@ -173,11 +173,20 @@ describe('ConversationScopeSlot', () => {
     };
     let tokenFailures = 0;
     /** Bridge by URL + method; the plan POST answers with the given succession. */
-    const bridge = (succession: 'expanded' | 'shrunk') =>
+    const bridge = (succession: 'expanded' | 'shrunk', context: unknown = CONTEXT) =>
       fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
         const method = init?.method ?? 'GET';
-        if (url.endsWith('/context')) return reply(200, CONTEXT);
+        if (url.endsWith('/context')) return reply(200, context);
         if (url === '/bridge/v1/scopes') return reply(200, { sources: SOURCES, projects: [] });
+        if (url === '/bridge/v1/tags') return reply(200, { tags: [] });
+        if (url === '/bridge/v1/saved-views') return reply(200, { views: [] });
+        if (url.startsWith('/bridge/v1/resources?'))
+          return reply(200, {
+            page: 1,
+            page_size: 50,
+            total: 1,
+            items: [{ resource_id: 'r9', file_name: '竞品.md', state: 'ready', tag_ids: ['tag_1'] }],
+          });
         if (url === '/bridge/v1/context-plans' && method === 'POST')
           return reply(201, { plan_id: 'plan_2', version: 2, status: 'OK', succession });
         if (url.endsWith('/tokens'))
@@ -227,13 +236,27 @@ describe('ConversationScopeSlot', () => {
       expect(calls('POST', '/context-plans')).toHaveLength(2);
     });
 
+    it('restores the tag narrowing from brief.scopes, so an unchanged apply keeps it instead of widening to the whole base (D139)', async () => {
+      const scopes = [
+        { selector: 'knowledge_base', id: 'src_a', tag_ids: ['tag_1'] },
+        { selector: 'knowledge_base', id: 'src_b' },
+      ];
+      bridge('expanded', { ...CONTEXT, brief: { ...CONTEXT.brief, scopes } });
+      await openDrawer();
+      expect(await screen.findByText('符合条件 1 份')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '应用' }));
+      await waitFor(() => expect(calls('POST', '/context-plans')).toHaveLength(1));
+      const [[, post]] = calls('POST', '/context-plans');
+      expect(JSON.parse(String(post?.body))).toMatchObject({ parent_plan_id: 'plan_1', scopes });
+    });
+
     it('refuses an empty selection and keeps the drawer open', async () => {
       bridge('shrunk');
       await openDrawer();
       fireEvent.click(screen.getByText('项目A资料'));
       fireEvent.click(screen.getByText('产品库'));
       fireEvent.click(screen.getByRole('button', { name: '应用' }));
-      expect(await screen.findByText('至少选择一个知识库；只想普通对话请直接新建会话')).toBeInTheDocument();
+      expect(await screen.findByText('至少选择一个知识库或智能分组；只想普通对话请直接新建会话')).toBeInTheDocument();
       expect(calls('POST', '/context-plans')).toHaveLength(0);
       expect(navigateMock).not.toHaveBeenCalled();
     });

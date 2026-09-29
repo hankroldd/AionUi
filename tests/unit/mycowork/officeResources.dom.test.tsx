@@ -1,18 +1,23 @@
 /**
  * [mycowork] ADR-0011: `/office/resources` (MyCowork P05 resource center, PR04 slice d/f; redesign PR11/D123).
  * Only the Bridge boundary is mocked (fetch). Covers: the home view "Recent" merges My imports and every granted knowledge base
- * newest first (sort=updated) and shows type, source, local time, version count and state; the left nav switches to one knowledge
+ * newest first (sort=updated) and shows type, source, local time, tags and the state in "will AI use it" words (D140; no version
+ * count in the list, D141); the left nav switches to one knowledge
  * base or My imports; a failing source only shows a local notice, other results stay (02 P05); the search box looks up names/tags
  * across all sources (q=…) and says content search is not available; card/list/table switch, remembered locally and on a saved
  * view; starring creates or updates the "starred" collection and the Starred nav lists it; a tag filters across sources and can be
  * saved as a view; editing tags patches metadata with the read revision (409 → reload + notice); moving a tag to the top level;
- * empty and no-permission states.
+ * empty and no-permission states. Round 3 (2026-09-29): collapsible nav groups remembered locally and a keyboard-resizable
+ * nav width clamped to 200–360; smart groups (D143) edited / deleted from their "More" menu; a knowledge base filtered by tags,
+ * saved as a smart group limited to that base, and "ask with these files" (D139); search lists matching tags (D141);
+ * archive-only items show at most two tags plus "+N" and offer "add to a knowledge base" (D140).
  */
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
+import { ScopeChip } from '@mycowork/ui';
 import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
@@ -62,7 +67,14 @@ const calls = (method: string, part: string) =>
   fetchMock.mock.calls.filter(([url, init]) => (init?.method ?? 'GET') === method && String(url).includes(part));
 const bodyOf = (method: string, part: string, i = 0) => JSON.parse(String(calls(method, part)[i]?.[1]?.body));
 
-type Opts = { patchStatus?: number; empty?: boolean; sourceStatus?: number; starred?: string[]; views?: object[] };
+type Opts = {
+  patchStatus?: number;
+  empty?: boolean;
+  sourceStatus?: number;
+  starred?: string[];
+  views?: object[];
+  tags3?: boolean;
+};
 function bridge(opts: Opts = {}) {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
@@ -75,12 +87,19 @@ function bridge(opts: Opts = {}) {
       const q = new URLSearchParams(url.split('?')[1]);
       if (q.get('source_id') && opts.sourceStatus)
         return reply(opts.sourceStatus, { error: { code: 'NOT_FOUND', message: 'x' } });
-      let items = opts.empty ? [] : q.get('source_id') === 'src_q' ? [WEEKLY] : [item({})];
+      let items = opts.empty
+        ? []
+        : q.get('source_id') === 'src_q'
+          ? [WEEKLY]
+          : [item(opts.tags3 ? { tag_ids: ['tag_c', 'tag_p', 'tag_x'] } : {})];
       if (q.get('collection_id')) items = items.filter((i) => opts.starred?.includes(i.resource_id));
       if (q.get('q')) items = items.filter((i) => i.file_name.includes(q.get('q') as string));
       return reply(200, { page: 1, page_size: 50, total: items.length, items });
     }
-    if (url === '/bridge/v1/tags' && method === 'GET') return reply(200, { tags: TAGS });
+    if (url === '/bridge/v1/tags' && method === 'GET')
+      return reply(200, {
+        tags: opts.tags3 ? [...TAGS, { ...TAGS[0], tag_id: 'tag_x', name: '第三个', revision: 1 }] : TAGS,
+      });
     if (url === '/bridge/v1/saved-views' && method === 'GET') return reply(200, { views: opts.views ?? [] });
     if (url === '/bridge/v1/collections' && method === 'GET')
       return reply(200, {
@@ -135,14 +154,14 @@ describe('OfficeResourcesSlot', () => {
     const [weekly, draft] = rows as [HTMLElement, HTMLElement];
     expect(within(weekly).getByText('青禾库')).toBeInTheDocument();
     expect(within(weekly).getAllByText('今天 10:13').length).toBeGreaterThan(0);
-    expect(within(weekly).getByText('—')).toBeInTheDocument(); // 只在知识库，没有 MyCowork 版本
-    expect(within(weekly).getByText('可检索')).toBeInTheDocument();
+    expect(within(weekly).getByText('AI 可引用')).toBeInTheDocument();
     expect(within(draft).getByText('我的导入')).toBeInTheDocument();
-    expect(within(draft).getByRole('link', { name: '3 个版本' })).toHaveAttribute(
+    expect(within(draft).getByRole('link', { name: '工作稿.pptx' })).toHaveAttribute(
       'href',
       '#/office/resources/res_1/versions'
     );
-    expect(within(draft).getByText('只存原件')).toBeInTheDocument();
+    expect(screen.queryByText(/个版本/)).toBeNull(); // 版本数在版本与变化页看（D141）
+    expect(within(draft).getByText('仅存档')).toBeInTheDocument();
     expect(within(draft).getByText('风险')).toBeInTheDocument();
     expect(screen.queryByText(/T\d\d:\d\d/)).toBeNull(); // 不直出 ISO
   });
@@ -179,11 +198,16 @@ describe('OfficeResourcesSlot', () => {
     render(<OfficeResourcesSlot />);
     await screen.findByText('周报.md');
     expect(screen.getByText(/按正文内容跨来源搜索尚未提供/)).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('搜索名称或标签'), { target: { value: '周报' } });
+    fireEvent.change(screen.getByLabelText('搜索文件名或标签'), { target: { value: '周报' } });
     await waitFor(() => expect(calls('GET', `q=${encodeURIComponent('周报')}`)).toHaveLength(2));
     expect(await screen.findByRole('heading', { name: '搜索“周报”' })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('搜索名称或标签'), { target: { value: '不存在的词' } });
+    fireEvent.change(screen.getByLabelText('搜索文件名或标签'), { target: { value: '不存在的词' } });
     expect(await screen.findByText('没有名称或标签匹配的资料')).toBeInTheDocument();
+    // D141：名字匹配的标签列在结果上方（全路径），点一下进入该标签
+    fireEvent.change(screen.getByLabelText('搜索文件名或标签'), { target: { value: '风险' } });
+    const hits = await screen.findByTestId('mycowork-hit-tags');
+    fireEvent.click(within(hits).getByText('项目 / 风险'));
+    await waitFor(() => expect(calls('GET', 'tag_id=tag_c')).toHaveLength(2));
   });
 
   it('switches card / list / table and remembers the choice locally', async () => {
@@ -254,8 +278,8 @@ describe('OfficeResourcesSlot', () => {
     await screen.findByText('周报.md');
     fireEvent.click(screen.getByTestId('mycowork-nav-tag-tag_c'));
     await waitFor(() => expect(calls('GET', 'tag_id=tag_c')).toHaveLength(2));
-    fireEvent.click(screen.getByRole('button', { name: '存为视图' }));
-    fireEvent.change(await screen.findByLabelText('视图名'), { target: { value: '我的风险' } });
+    fireEvent.click(screen.getByRole('button', { name: '存为智能分组' }));
+    fireEvent.change(await screen.findByLabelText('分组名'), { target: { value: '我的风险' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
     await waitFor(() => expect(calls('POST', '/bridge/v1/saved-views')).toHaveLength(1));
     expect(bodyOf('POST', '/bridge/v1/saved-views')).toEqual({
@@ -296,6 +320,110 @@ describe('OfficeResourcesSlot', () => {
     await act(async () => fireEvent.click(await screen.findByRole('menuitem', { name: '（顶层）' })));
     await waitFor(() => expect(calls('PATCH', '/bridge/v1/tags/tag_c')).toHaveLength(1));
     expect(bodyOf('PATCH', '/bridge/v1/tags/tag_c')).toEqual({ expected_revision: 3, parent_id: null });
+  });
+
+  it('nav groups collapse and stay collapsed; the nav width is keyboard-resizable within 200–360 and remembered', async () => {
+    bridge();
+    const first = render(<OfficeResourcesSlot />);
+    await screen.findByText('周报.md');
+    const tagsHeader = () =>
+      screen.getByText('标签', { selector: '.arco-collapse-item-header *' }).closest('.arco-collapse-item-header');
+    fireEvent.click(tagsHeader() as HTMLElement);
+    await waitFor(() =>
+      expect(JSON.parse(String(localStorage.getItem('mycowork.resources.nav'))).open).not.toContain('tags')
+    );
+    const sep = screen.getByRole('separator', { name: '拖动或用方向键调整导航宽度' });
+    expect(sep).toHaveAttribute('aria-valuenow', '232');
+    for (let i = 0; i < 20; i++) fireEvent.keyDown(sep, { key: 'ArrowRight' });
+    expect(sep).toHaveAttribute('aria-valuenow', '360');
+    for (let i = 0; i < 20; i++) fireEvent.keyDown(sep, { key: 'ArrowLeft' });
+    expect(sep).toHaveAttribute('aria-valuenow', '200');
+    first.unmount();
+    render(<OfficeResourcesSlot />);
+    await screen.findByText('周报.md');
+    expect(screen.getByRole('separator', { name: '拖动或用方向键调整导航宽度' })).toHaveAttribute(
+      'aria-valuenow',
+      '200'
+    );
+    expect(tagsHeader()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('a smart group is edited (name and conditions) and deleted from its "More" menu (D143)', async () => {
+    bridge({
+      views: [
+        {
+          view_id: 'view_1',
+          name: '风险视图',
+          filter: { tag_ids: ['tag_c'], include_descendants: true, source_ids: ['src_q'] },
+          layout: 'list',
+          revision: 5,
+          missing_tag_ids: [],
+        },
+      ],
+    });
+    render(<OfficeResourcesSlot />);
+    await screen.findByText('周报.md');
+    expect(screen.getByText('智能分组')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '智能分组“风险视图”的更多操作' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '编辑名称与条件' }));
+    const name = await screen.findByLabelText('分组名');
+    expect(name).toHaveValue('风险视图');
+    fireEvent.change(name, { target: { value: '青禾风险' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(calls('PATCH', '/bridge/v1/saved-views/view_1')).toHaveLength(1));
+    expect(bodyOf('PATCH', '/saved-views/view_1')).toEqual({
+      expected_revision: 5,
+      name: '青禾风险',
+      filter: { tag_ids: ['tag_c'], source_ids: ['src_q'] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '智能分组“风险视图”的更多操作' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '删除' }));
+    expect(await screen.findByText('只删除这个分组本身；里面的文件、标签与知识库都不受影响。')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: '删除' }).at(-1) as HTMLElement);
+    await waitFor(() => expect(calls('DELETE', '/bridge/v1/saved-views/view_1')).toHaveLength(1));
+  });
+
+  it('shows at most two tags plus "+N"; an archive-only item offers "add to a knowledge base" (D140, D141)', async () => {
+    bridge({ tags3: true });
+    render(<OfficeResourcesSlot />);
+    const draft = (await screen.findByText('工作稿.pptx')).closest(
+      '[data-testid="mycowork-resource-item"]'
+    ) as HTMLElement;
+    const chips = within(draft).getByTestId('mycowork-item-tags');
+    expect(within(chips).getAllByText(/^(项目|风险|第三个)$/)).toHaveLength(2);
+    expect(within(chips).getByText('+1')).toBeInTheDocument();
+    fireEvent.click(within(draft).getByRole('button', { name: '更多操作 工作稿.pptx' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '加入知识库（让 AI 可引用）' }));
+    expect(window.location.hash).toBe('#/office/resources/res_1/versions');
+  });
+
+  it('a knowledge base filtered by tags lists base ∩ tags, saves a smart group limited to it, and asks with it (D139)', async () => {
+    bridge();
+    render(
+      <>
+        <OfficeResourcesSlot />
+        <ScopeChip lang='zh-CN' />
+      </>
+    );
+    await screen.findByText('周报.md');
+    fireEvent.click(screen.getByTestId('mycowork-nav-source-src_q'));
+    await screen.findByRole('heading', { name: '青禾库' });
+    fireEvent.click(document.querySelector('.mcw-rc-tagfilter') as HTMLElement);
+    fireEvent.click(await screen.findByText('风险', { selector: '.arco-tree-select-popup *' }));
+    await waitFor(() => expect(calls('GET', 'source_id=src_q&page=1&tag_id=tag_c')).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: '存为智能分组' }));
+    fireEvent.change(await screen.findByLabelText('分组名'), { target: { value: '青禾里的风险' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(calls('POST', '/bridge/v1/saved-views')).toHaveLength(1));
+    expect(bodyOf('POST', '/bridge/v1/saved-views')).toEqual({
+      name: '青禾里的风险',
+      filter: { tag_ids: ['tag_c'], source_ids: ['src_q'] },
+      layout: 'list',
+    });
+    const ask = screen.getByRole('link', { name: /用这些资料提问/ });
+    expect(ask).toHaveAttribute('href', '#/guid');
+    fireEvent.click(ask);
+    expect(await screen.findByRole('button', { name: '资料范围：青禾库（按标签）' })).toBeInTheDocument();
   });
 
   it('no resources: the empty state leads to the import page', async () => {

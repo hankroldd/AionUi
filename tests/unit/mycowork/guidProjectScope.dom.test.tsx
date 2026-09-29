@@ -47,6 +47,9 @@ const TOKEN = {
 const bridge = (scopes: () => Promise<unknown> | unknown) => {
   fetchMock.mockImplementation(async (url: string) => {
     if (url === '/bridge/v1/scopes') return scopes();
+    // 选范围浮层另读本人标签与智能分组（D139）；这里都没有
+    if (url === '/bridge/v1/tags') return reply(200, { tags: [] });
+    if (url === '/bridge/v1/saved-views') return reply(200, { views: [] });
     if (url === '/bridge/v1/context-plans') return reply(201, { plan_id: 'plan_1', version: 1, status: 'OK' });
     if (url === '/bridge/v1/context-plans/plan_1/tokens') return reply(201, TOKEN);
     return reply(500, { error: { code: 'UNEXPECTED', message: url } });

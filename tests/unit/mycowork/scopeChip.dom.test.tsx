@@ -251,11 +251,19 @@ describe('ScopeChip', () => {
       { source_id: 'src_b', name: '项目A资料', tag_ids: ['tag_rival'], resource_ids: ['res_gone'] },
     ]);
     render(<ScopeChip lang='zh-CN' />);
-    expect(screen.getByRole('button', { name: '资料范围：产品知识库（挑选 2 份）、项目A资料（挑选 1 份）' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '资料范围：产品知识库（挑选 2 份）、项目A资料（挑选 1 份）' })
+    ).toBeInTheDocument();
     await openDialog();
-    await waitFor(() => expect(screen.getAllByText(/已勾选/).map((e) => e.textContent)).toEqual(['已勾选 1 / 2 份', '已勾选 0 / 2 份']));
-    expect(screen.getByText(NONE_CHECKED)).toBeInTheDocument();
-    expect(screen.getByTestId('mycowork-scope-summary')).toHaveTextContent('已选 1 个知识库（另有 1 个库一份没勾，不会加入）');
+    await waitFor(() =>
+      expect(screen.getAllByText(/已勾选/).map((e) => e.textContent)).toEqual(['已勾选 1 / 2 份', '已勾选 0 / 2 份'])
+    );
+    expect(await screen.findByText(NONE_CHECKED)).toBeInTheDocument(); // 清掉残留勾选是下一次渲染写回的
+    await waitFor(() =>
+      expect(screen.getByTestId('mycowork-scope-summary')).toHaveTextContent(
+        '已选 1 个知识库（另有 1 个库一份没勾，不会加入）'
+      )
+    );
     fireEvent.click(screen.getByRole('button', { name: '应用到本轮' }));
     expect(await screen.findByRole('button', { name: '资料范围：产品知识库（挑选 1 份）' })).toBeInTheDocument();
   });

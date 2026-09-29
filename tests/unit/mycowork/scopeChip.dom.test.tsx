@@ -214,8 +214,9 @@ describe('ScopeChip', () => {
     await openDrawer();
     tick(await screen.findByText('产品知识库').then(() => '产品知识库'));
     fireEvent.click(await screen.findByRole('button', { name: '挑选文件' }));
-    tick(await screen.findByText('价格带.xlsx').then(() => '价格带.xlsx'));
-    expect(await screen.findByText(/已勾选/)).toHaveTextContent('已勾选 1 / 2 份');
+    expect(await screen.findByText('已勾选 2 / 2 份')).toBeInTheDocument(); // 清单读到后默认全选，再去掉一份
+    tick('价格带.xlsx');
+    await waitFor(() => expect(screen.getByText(/已勾选/)).toHaveTextContent('已勾选 1 / 2 份'));
     fireEvent.click(screen.getByRole('button', { name: '应用到本轮' }));
     expect(await screen.findByRole('button', { name: '资料范围：产品知识库（挑选 1 份）' })).toBeInTheDocument();
     await openDrawer();

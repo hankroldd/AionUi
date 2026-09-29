@@ -141,7 +141,7 @@ describe('OfficeResourcesSlot', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('Recent merges My imports and granted knowledge bases newest first, with type, source, local time, versions and state', async () => {
+  it('Recent merges My imports and granted knowledge bases newest first, with type, source, local time, tags and state (no version count)', async () => {
     bridge();
     render(<OfficeResourcesSlot />);
     const rows = await screen.findAllByTestId('mycowork-resource-item');
@@ -376,6 +376,11 @@ describe('OfficeResourcesSlot', () => {
       name: '青禾风险',
       filter: { tag_ids: ['tag_c'], source_ids: ['src_q'] },
     });
+    // 选中一个智能分组时，标题区也有“编辑分组”（负责人第 1 条：找得到编辑入口）
+    fireEvent.click(screen.getByTestId('mycowork-nav-view-view_1'));
+    fireEvent.click(await screen.findByRole('button', { name: '编辑分组' }));
+    expect(await screen.findByLabelText('分组名')).toHaveValue('风险视图');
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
     fireEvent.click(screen.getByRole('button', { name: '智能分组“风险视图”的更多操作' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: '删除' }));
     expect(await screen.findByText('只删除这个分组本身；里面的文件、标签与知识库都不受影响。')).toBeInTheDocument();
@@ -393,7 +398,7 @@ describe('OfficeResourcesSlot', () => {
     expect(within(chips).getAllByText(/^(项目|风险|第三个)$/)).toHaveLength(2);
     expect(within(chips).getByText('+1')).toBeInTheDocument();
     fireEvent.click(within(draft).getByRole('button', { name: '更多操作 工作稿.pptx' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: '加入知识库（让 AI 可引用）' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '去版本页加入知识库…' }));
     expect(window.location.hash).toBe('#/office/resources/res_1/versions');
   });
 

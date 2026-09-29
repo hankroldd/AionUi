@@ -1,18 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import {
+  isBlockedRemoteRequest,
   isBlockedWatchRequest,
-  isRemoteResetPassword,
+  isSensitivePath,
+  normalizeGuardPath,
   startStaticServer,
   type StaticServerHandle,
 } from './static-server.js';
 
-// 首行以 \n 结尾，模拟到齐的 HTTP 请求行（isRemoteResetPassword 按 \n 判定首行边界）。
-const line = (s: string): Buffer => Buffer.from(`${s}\n`);
+// [mycowork] 安全（A67/D150）端到端用例需要从非回环地址发起（否则守卫按回环放行）。取本机第一个
+// 非回环 IPv4；无则跳过这些用例（在无网卡的 CI 上），纯函数用例仍全跑。
+const LAN_IP = Object.values(os.networkInterfaces())
+  .flat()
+  .find((i) => i && i.family === 'IPv4' && !i.internal)?.address;
 
 async function mkRendererFixture(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ws-static-'));
@@ -554,69 +560,243 @@ describe('static-server', () => {
     expect(isBlockedWatchRequest('PUT', '/api/office-watch-proxy/1/api/selection')).toBe(true);
   });
 
-  // [mycowork] 安全（A67/D150）：非回环来源不得触达无鉴权的 reset-password。
-  it('isRemoteResetPassword blocks reset-password from a non-loopback client', () => {
-    for (const l of [
-      'POST /api/webui/reset-password HTTP/1.1\r',
-      'POST /api/webui/reset-password/ HTTP/1.1\r',
-      'POST /api/webui/reset-password?x=1 HTTP/1.0\r',
-      'GET /api/Webui/Reset-Password HTTP/1.1\r', // 大小写与方法都默认拒绝
+  // [mycowork] 安全（A67/D150）：非回环敏感族逐请求守卫（独立审查 M1–M3、S1–S2）。
+  it('normalizeGuardPath 归一成后端会用的小写绝对路径', () => {
+    expect(normalizeGuardPath('/api/webui/reset-password')).toBe('/api/webui/reset-password');
+    expect(normalizeGuardPath('/api/webui/reset-password?x=1#f')).toBe('/api/webui/reset-password');
+    expect(normalizeGuardPath('/api/webui/reset-password/')).toBe('/api/webui/reset-password');
+    expect(normalizeGuardPath('/api/webui/./reset-password')).toBe('/api/webui/reset-password');
+    expect(normalizeGuardPath('/api//webui//reset-password')).toBe('/api/webui/reset-password');
+    expect(normalizeGuardPath('/api/webui/reset-password;x=1')).toBe('/api/webui/reset-password');
+    expect(normalizeGuardPath('/api/%77ebui/reset-password')).toBe('/api/webui/reset-password'); // %77=w
+    expect(normalizeGuardPath('/api/webui%2Freset-password')).toBe('/api/webui/reset-password'); // 编码斜杠
+    expect(normalizeGuardPath('http://x/api/webui/reset-password')).toBe('/api/webui/reset-password'); // 绝对形式
+    expect(normalizeGuardPath('/api/auth/internal/../internal/users')).toBe('/api/auth/internal/users');
+    expect(normalizeGuardPath('/API/WebUI/Reset-Password')).toBe('/api/webui/reset-password'); // 小写化
+    expect(normalizeGuardPath('/%zz')).toBeNull(); // 坏转义 → 拒绝
+    expect(normalizeGuardPath('notapath')).toBeNull();
+    expect(normalizeGuardPath(undefined)).toBeNull();
+  });
+
+  it('isSensitivePath 覆盖整个 /api/webui/ 与 /api/auth/internal/ 族', () => {
+    for (const p of [
+      '/api/webui',
+      '/api/webui/reset-password',
+      '/api/webui/change-password',
+      '/api/webui/change-username',
+      '/api/webui/generate-qr-token',
+      '/api/auth/internal',
+      '/api/auth/internal/users/system',
     ])
-      expect(isRemoteResetPassword(line(l), '192.168.10.7')).toBe(true);
+      expect(isSensitivePath(p)).toBe(true);
+    for (const p of [
+      '/api/auth/status',
+      '/api/auth/user',
+      '/login',
+      '/logout',
+      '/qr-login',
+      '/api/conversations',
+      '/',
+      '/api/webuix',
+    ])
+      expect(isSensitivePath(p)).toBe(false);
   });
 
-  it('isRemoteResetPassword allows reset-password from loopback (resetpass path 1)', () => {
-    const l = line('POST /api/webui/reset-password HTTP/1.1\r');
-    for (const addr of ['127.0.0.1', '127.0.0.5', '::1', '::ffff:127.0.0.1'])
-      expect(isRemoteResetPassword(l, addr)).toBe(false);
+  it('isBlockedRemoteRequest：回环放行、非回环敏感/变体/不可解析拒绝、非回环正常放行', () => {
+    // 回环一律放行（含敏感族：resetpass 路径 1、桌面本机）
+    for (const addr of ['127.0.0.1', '::1', '::ffff:127.0.0.1'])
+      expect(isBlockedRemoteRequest('/api/webui/reset-password', addr)).toBe(false);
+    // 非回环敏感族 + 归一化变体 → 拒绝
+    for (const u of [
+      '/api/webui/reset-password',
+      '/api/webui/change-password',
+      '/api/webui/generate-qr-token',
+      '/api/auth/internal/users',
+      '/api/webui%2Freset-password',
+      '/api/webui/./reset-password',
+      'http://x/api/webui/reset-password',
+      '/api/auth/internal/../internal/users',
+    ])
+      expect(isBlockedRemoteRequest(u, '192.168.10.7')).toBe(true);
+    // 非回环不可解析 → fail-closed
+    expect(isBlockedRemoteRequest('/%zz', '192.168.10.7')).toBe(true);
+    // 非回环非敏感 → 放行
+    for (const u of ['/api/auth/status', '/login', '/qr-login?token=x', '/', '/api/conversations'])
+      expect(isBlockedRemoteRequest(u, '192.168.10.7')).toBe(false);
   });
 
-  it('isRemoteResetPassword leaves other routes and partial buffers alone', () => {
-    expect(isRemoteResetPassword(line('POST /login HTTP/1.1\r'), '192.168.10.7')).toBe(false);
-    expect(isRemoteResetPassword(line('GET /api/auth/status HTTP/1.1\r'), '10.0.0.9')).toBe(false);
-    // reset-password 作为其它路径的前缀不误伤（如 .../reset-password-log）
-    expect(isRemoteResetPassword(line('POST /api/webui/reset-password-log HTTP/1.1\r'), '10.0.0.9')).toBe(false);
-    // 首行未到齐（无换行）→ 需要更多字节，尚不判定
-    expect(isRemoteResetPassword(Buffer.from('POST /api/webui/reset-password HT'), '192.168.10.7')).toBe(false);
-  });
+  // 端到端：真实 net.Server + mock 后端，从本机非回环 IP 发起（无网卡则跳过）。
+  const itRemote = LAN_IP ? it : it.skip;
 
-  // 正向：allowRemote 下，来自本机回环的 reset-password 仍被代理转发到后端（正常找回口令流程不受影响）。
-  it('[mycowork] loopback reset-password is still proxied to backend under allowRemote', async () => {
-    const net = await import('node:net');
-    let sawReset = false;
+  itRemote(`非回环单发敏感请求 403 且不触达后端（LAN=${LAN_IP ?? 'skip'}）`, async () => {
+    const seen: string[] = [];
     const backend = await startMockBackend((req, res) => {
-      if (req.url === '/api/webui/reset-password' && req.method === 'POST') {
-        sawReset = true;
-        res.writeHead(200, { 'content-type': 'application/json' });
-        res.end('{"success":true,"data":{"new_password":"x"}}');
-        return;
-      }
-      res.writeHead(404).end();
+      seen.push(req.url!);
+      res.writeHead(200).end('{"ok":true}');
     });
     stopBackend = backend.close;
     handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0, allowRemote: true });
+    const r = await collect(
+      LAN_IP!,
+      handle.port,
+      'POST /api/webui/reset-password HTTP/1.1\r\nHost: h\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
+    );
+    expect(r.statuses).toEqual(['403']);
+    expect(r.body).toContain('REMOTE_FORBIDDEN');
+    // 变异守卫：去掉逐请求拦截，reset-password 会到后端、此断言变红。
+    expect(seen).not.toContain('/api/webui/reset-password');
+  });
 
-    const status: string = await new Promise((resolve, reject) => {
-      const sock = net.connect({ host: '127.0.0.1', port: handle!.port }, () => {
-        sock.write(
-          `POST /api/webui/reset-password HTTP/1.1\r\nHost: 127.0.0.1:${handle!.port}\r\nContent-Length: 0\r\n\r\n`
-        );
-      });
-      let buf = Buffer.alloc(0);
-      sock.on('data', (d) => {
-        buf = Buffer.concat([buf, d]);
-        if (buf.indexOf('\r\n\r\n') >= 0) {
-          sock.destroy();
-          resolve(buf.slice(0, buf.indexOf(0x0a)).toString('ascii').trim());
-        }
-      });
-      sock.on('error', reject);
-      setTimeout(() => {
-        sock.destroy();
-        reject(new Error('timeout'));
-      }, 3000).unref();
+  itRemote('非回环 keep-alive 第二个请求也 403（审查 M1）', async () => {
+    const seen: string[] = [];
+    const backend = await startMockBackend((req, res) => {
+      seen.push(req.url!);
+      res.writeHead(200).end('{}');
     });
-    expect(status).toMatch(/HTTP\/1\.1 200/);
-    expect(sawReset).toBe(true);
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0, allowRemote: true });
+    const r = await collect(
+      LAN_IP!,
+      handle.port,
+      'GET /api/auth/status HTTP/1.1\r\nHost: h\r\n\r\n',
+      'POST /api/webui/reset-password HTTP/1.1\r\nHost: h\r\nContent-Length: 0\r\n\r\n'
+    );
+    expect(r.statuses).toEqual(['200', '403']);
+    expect(seen).toContain('/api/auth/status');
+    expect(seen).not.toContain('/api/webui/reset-password');
+  });
+
+  itRemote('非回环超长首行仍 403（审查 M2）', async () => {
+    const seen: string[] = [];
+    const backend = await startMockBackend((req, res) => {
+      seen.push(req.url!);
+      res.writeHead(200).end('{}');
+    });
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0, allowRemote: true });
+    const r = await collect(
+      LAN_IP!,
+      handle.port,
+      `POST /api/webui/reset-password?x=${'a'.repeat(4200)} HTTP/1.1\r\nHost: h\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`
+    );
+    expect(r.statuses).toEqual(['403']);
+    expect(seen).not.toContain('/api/webui/reset-password');
+  });
+
+  itRemote('非回环归一化变体逐条 403（审查 S2）', async () => {
+    const seen: string[] = [];
+    const backend = await startMockBackend((req, res) => {
+      seen.push(req.url!);
+      res.writeHead(200).end('{}');
+    });
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0, allowRemote: true });
+    for (const p of [
+      '/api/webui/reset-password/',
+      '/api/webui/./reset-password',
+      '/api/webui/reset-password;x=1',
+      '/api//webui//reset-password',
+      '/api/%77ebui/reset-password',
+      'http://x/api/webui/reset-password',
+      '/api/auth/internal/../internal/users',
+    ]) {
+      const r = await collect(
+        LAN_IP!,
+        handle.port,
+        `POST ${p} HTTP/1.1\r\nHost: h\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`
+      );
+      expect(r.statuses, p).toEqual(['403']);
+    }
+    expect(seen).toEqual([]);
+  });
+
+  itRemote('非回环 WebSocket upgrade：敏感路径拒绝、/ws 转发后端并回传 101', async () => {
+    const backend = http.createServer((_req, res) => res.writeHead(404).end());
+    let sawWsUpgrade = false;
+    backend.on('upgrade', (req, socket) => {
+      if (req.url === '/ws') {
+        sawWsUpgrade = true;
+        socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n');
+      }
+      socket.end();
+    });
+    await new Promise<void>((r) => backend.listen(0, '127.0.0.1', () => r()));
+    stopBackend = () => new Promise<void>((r) => backend.close(() => r()));
+    const backendPort = (backend.address() as AddressInfo).port;
+    handle = await startStaticServer({ staticDir, backendPort, port: 0, allowRemote: true });
+    const up = (p: string): string =>
+      `GET ${p} HTTP/1.1\r\nHost: h\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n`;
+    const bad = await collect(LAN_IP!, handle.port, up('/api/webui/reset-password'));
+    expect(bad.statuses).toEqual(['403']);
+    expect(sawWsUpgrade).toBe(false);
+    const ok = await collect(LAN_IP!, handle.port, up('/ws'));
+    expect(ok.statuses).toEqual(['101']);
+    expect(sawWsUpgrade).toBe(true);
+  });
+
+  itRemote('非回环正常请求可达（/api/auth/status 到后端，/qr-login 与静态页 200）', async () => {
+    const seen: string[] = [];
+    const backend = await startMockBackend((req, res) => {
+      seen.push(req.url!);
+      res.writeHead(200).end('{}');
+    });
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0, allowRemote: true });
+    const st = await collect(
+      LAN_IP!,
+      handle.port,
+      'GET /api/auth/status HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n'
+    );
+    expect(st.statuses).toEqual(['200']);
+    expect(seen).toContain('/api/auth/status');
+    // /qr-login 与静态页由 SPA/静态目录服务（不转发后端），非回环不应被拦成 403。
+    const qr = await collect(
+      LAN_IP!,
+      handle.port,
+      'GET /qr-login?token=x HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n'
+    );
+    expect(qr.statuses).toEqual(['200']);
+    const root = await collect(LAN_IP!, handle.port, 'GET / HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n');
+    expect(root.statuses).toEqual(['200']);
+  });
+
+  it('回环来源敏感请求仍转发后端（resetpass 路径 1、桌面本机不受影响）', async () => {
+    const seen: string[] = [];
+    const backend = await startMockBackend((req, res) => {
+      seen.push(req.url!);
+      res.writeHead(200).end('{"success":true}');
+    });
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0, allowRemote: true });
+    const r = await collect(
+      '127.0.0.1',
+      handle.port,
+      'POST /api/webui/reset-password HTTP/1.1\r\nHost: h\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
+    );
+    expect(r.statuses).toEqual(['200']);
+    expect(seen).toContain('/api/webui/reset-password');
   });
 });
+
+// 原始 socket 上按序发若干请求，收集响应状态码与全文（不含任何机密断言）。
+function collect(host: string, port: number, ...requests: string[]): Promise<{ statuses: string[]; body: string }> {
+  return new Promise((resolve, reject) => {
+    const sock = net.connect({ host, port }, () => {
+      sock.write(requests[0]);
+      for (let i = 1; i < requests.length; i++) setTimeout(() => sock.write(requests[i]), 200 * i);
+    });
+    let buf = Buffer.alloc(0);
+    sock.on('data', (d) => {
+      buf = Buffer.concat([buf, d]);
+    });
+    sock.on('error', reject);
+    setTimeout(
+      () => {
+        sock.destroy();
+        const s = buf.toString('latin1');
+        resolve({ statuses: [...s.matchAll(/HTTP\/1\.[01] (\d{3})/g)].map((m) => m[1]), body: s });
+      },
+      requests.length > 1 ? 1000 : 600
+    );
+  });
+}

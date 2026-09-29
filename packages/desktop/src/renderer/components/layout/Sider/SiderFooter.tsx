@@ -64,7 +64,7 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
             onClick={onSettingsClick}
             className={classNames(
               'group h-34px flex items-center rd-0.5rem cursor-pointer transition-colors',
-              collapsed ? 'w-full justify-center' : 'flex-1 min-w-0 justify-start gap-8px ps-10px pe-8px',
+              collapsed ? 'w-full justify-center' : 'min-w-0 justify-start gap-8px ps-10px pe-8px',
               isMobile && 'sider-footer-btn-mobile',
               {
                 'bg-fill-3': isSettings,
@@ -84,7 +84,7 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
               onClick={onLogoutClick}
               className={classNames(
                 'h-32px flex items-center rd-0.5rem cursor-pointer transition-colors hover:bg-[rgba(var(--primary-6),0.14)] active:bg-fill-2',
-                collapsed ? 'w-full justify-center' : 'flex-1 min-w-0 justify-start gap-10px px-14px',
+                collapsed ? 'w-full justify-center' : 'min-w-0 justify-start gap-10px px-14px',
                 isMobile && 'sider-footer-btn-mobile'
               )}
             >
@@ -103,14 +103,15 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
             </div>
           </Tooltip>
         )}
-        {/* [mycowork] Theme toggle on every page and in the collapsed rail (upstream: Settings page, expanded only) */}
+        {/* [mycowork] Theme toggle on every page and in the collapsed rail (upstream: Settings page, expanded only). To
+            leave room for it, Settings / Log out are content-width (upstream: flex-1 each) and the toggle sits at the end. */}
         <Tooltip {...siderTooltipProps} content={themeTooltip} position='right'>
           <div
             onClick={onThemeToggle}
             data-testid='theme-toggle'
             className={classNames(
               'h-32px shrink-0 flex items-center justify-center cursor-pointer rd-0.5rem transition-colors text-t-secondary hover:bg-fill-2 hover:text-t-primary active:bg-fill-3',
-              collapsed ? 'w-full' : 'w-40px',
+              collapsed ? 'w-full' : 'box-border w-40px ms-auto', // box-border: the mobile padding must not widen it
               isMobile && 'sider-footer-btn-mobile'
             )}
             aria-label={themeTooltip}

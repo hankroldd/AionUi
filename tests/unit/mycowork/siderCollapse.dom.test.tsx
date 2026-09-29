@@ -3,7 +3,7 @@
  * Covers: the collapsed desktop sider keeps a 64px icon rail (AionUi v1.x behaviour) instead of 0; the MyCowork nav
  * entries use the same markup as AionUi's Scheduled entry in both states (collapsed = centred icon only, expanded =
  * icon in the same 22px box, so icons line up); hovering a collapsed item shows its name; the theme toggle is in the
- * footer outside Settings and when collapsed.
+ * footer outside Settings and when collapsed without truncating Settings / Log out; mobile still collapses to 0.
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -79,6 +79,19 @@ describe('[mycowork] sidebar collapse', () => {
     expect(sider.style.width).toBe('64px');
   });
 
+  it('mobile sider still collapses to 0 (overlay)', () => {
+    const width = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      const { container } = render(<Layout sider={<SiderStub />} />);
+      const sider = container.querySelector('.layout-sider') as HTMLElement;
+      expect(sider.className).toContain('collapsed');
+      expect(sider.style.width).toBe('0px');
+    } finally {
+      window.innerWidth = width;
+    }
+  });
+
   it.each([false, true])('MyCowork entries use the native entry markup (collapsed=%s)', (collapsed) => {
     const native = render(
       <SiderScheduledEntry
@@ -134,5 +147,29 @@ describe('[mycowork] sidebar collapse', () => {
       />
     );
     expect(getByTestId('theme-toggle').getAttribute('aria-label')).toBe('settings.darkMode');
+  });
+
+  it('expanded footer: Settings and Log out keep their width, the theme toggle sits at the end', () => {
+    const { getByText, getByTestId } = render(
+      <SiderFooter
+        isMobile
+        isSettings={false}
+        theme='light'
+        siderTooltipProps={tooltip}
+        onSettingsClick={() => {}}
+        onThemeToggle={() => {}}
+        showLogout
+        onLogoutClick={() => {}}
+      />
+    );
+    // jsdom has no layout: with the toggle added, flex-1 on both items made them share (and truncate) the rest of the
+    // row — "退出…" at 1440 and "退…" at 390 in a real browser. The pixel check is in the PR11 sidebar-fix probe.json.
+    for (const label of ['common.settings', 'settings.googleLogout']) {
+      expect(getByText(label).parentElement?.classList.contains('flex-1')).toBe(false);
+    }
+    // box-border keeps it 40px when the mobile class adds 10px side padding (else 60px and the labels truncate at 390)
+    expect([...getByTestId('theme-toggle').classList]).toEqual(
+      expect.arrayContaining(['ms-auto', 'box-border', 'w-40px'])
+    );
   });
 });

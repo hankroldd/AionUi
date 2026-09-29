@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
+import { useInRouterContext, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { BookOpen, Brain, FolderUpload, Tag } from '@icon-park/react';
 import { Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
@@ -324,7 +324,11 @@ export const OfficeTextEditSlot: React.FC = () => {
  * The panel is rendered by the app Layout, outside the conversation route element, so the id comes from matching the
  * location (useParams is empty there — found in a real browser).
  */
-export const PreviewEditSlot: React.FC<{ relativePath?: string }> = ({ relativePath }) => {
+export const PreviewEditSlot: React.FC<{ relativePath?: string }> = (props) =>
+  // useMatch throws outside a Router; upstream's PreviewPanel tests render the panel without one.
+  useInRouterContext() ? <PreviewEditEntry {...props} /> : null;
+
+const PreviewEditEntry: React.FC<{ relativePath?: string }> = ({ relativePath }) => {
   const { i18n: current } = useTranslation();
   const id = useMatch('/conversation/:id')?.params.id;
   if (!id) return null;

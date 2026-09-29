@@ -140,6 +140,10 @@ function bridge(opts: Opts = {}) {
       const code = codes.shift();
       return code ? reply(409, { error: { code, message: 'x' } }) : reply(201, {});
     }
+    // 右下当前版本预览（D138，另见 officeVersionsPreview.dom.test.tsx）：给一页成功的渲染，本文件的按钮与文案不受它干扰
+    if (url.endsWith('/office/html'))
+      return { ...reply(200, null), text: async () => '<html><head></head><body></body></html>' };
+    if (url === '/bridge/v1/edit-sessions') return reply(200, { items: [], next_page: null });
     return reply(404, {});
   });
 }

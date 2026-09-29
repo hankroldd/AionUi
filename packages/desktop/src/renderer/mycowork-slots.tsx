@@ -12,6 +12,7 @@ import { Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
 import { ipcBridge } from '@/common';
 import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
+import MarkdownView from '@/renderer/components/Markdown';
 import { MarkdownViewer } from '@/renderer/pages/conversation/Preview/components/viewers';
 import type { ISessionMcpServer, TChatConversation } from '@/common/config/storage';
 import type { SiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
@@ -247,11 +248,21 @@ export const OfficeCompositionSlot: React.FC = () => {
   );
 };
 
-/** Mount point: route `/office/resources/:resourceId/versions` (MyCowork P12 versions: timeline, compare, restore, publish). */
+/**
+ * Mount point: route `/office/resources/:resourceId/versions` (MyCowork P12 versions: timeline, compare, restore, publish,
+ * read-only preview of the current version). [mycowork] D138: markdown is rendered with AionUi's chat MarkdownView, not the
+ * preview MarkdownViewer, whose selection toolbar offers "add to chat" (would hand Secret text to the AI send box).
+ */
 export const OfficeVersionsSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   const { resourceId = '' } = useParams();
-  return <VersionsPage lang={current.language} resourceId={resourceId} />;
+  return (
+    <VersionsPage
+      lang={current.language}
+      resourceId={resourceId}
+      renderMarkdown={(content) => <MarkdownView>{content}</MarkdownView>}
+    />
+  );
 };
 
 /**

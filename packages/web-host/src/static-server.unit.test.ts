@@ -620,9 +620,28 @@ describe('static-server', () => {
       expect(isBlockedRemoteRequest(u, '192.168.10.7')).toBe(true);
     // 非回环不可解析 → fail-closed
     expect(isBlockedRemoteRequest('/%zz', '192.168.10.7')).toBe(true);
-    // 非回环非敏感 → 放行
-    for (const u of ['/api/auth/status', '/login', '/qr-login?token=x', '/', '/api/conversations'])
+    // 非回环非敏感 → 放行（含合法的百分号编码路径）
+    for (const u of [
+      '/api/auth/status',
+      '/login',
+      '/qr-login?token=x',
+      '/',
+      '/api/conversations',
+      '/api/files/%E4%B8%AD',
+    ])
       expect(isBlockedRemoteRequest(u, '192.168.10.7')).toBe(false);
+  });
+
+  // tripwire（复审 S3）：不把安全性押在后端“只解一层”上。aioncore v0.2.2 直连实测不解码 %2f、
+  // 不合并 //；若升级后多解一层，多重编码的敏感路径仍须被拦。
+  it('isBlockedRemoteRequest 拦截多重编码的敏感路径', () => {
+    for (const u of [
+      '/api/webui%252freset-password',
+      '/api/webui%25252freset-password',
+      '/api%252fauth%252finternal%252fusers',
+      '/api/webui%255creset-password', // %5c → 反斜杠 → /
+    ])
+      expect(isBlockedRemoteRequest(u, '192.168.10.7'), u).toBe(true);
   });
 
   // 端到端：真实 net.Server + mock 后端，从本机非回环 IP 发起（无网卡则跳过）。
@@ -775,6 +794,123 @@ describe('static-server', () => {
     );
     expect(r.statuses).toEqual(['200']);
     expect(seen).toContain('/api/webui/reset-password');
+  });
+
+  // 接线用例（复审 R1）：不依赖非回环网卡。经 127.0.0.1 连接，但把服务端接受的 socket（本地端口 = 公开端口）
+  // 的对端地址打桩成局域网地址——remoteAddress 是不可重定义的 getter，内部取自 _getpeername()，故替换
+  // 该方法。于是连接分流（emit('connection')）、逐请求守卫、upgrade 守卫都按“非回环”走；内部 splice 的
+  // socket 本地端口不同，不受影响。删掉任何一处接线，这组用例变红（CI 无网卡时照样有保护）。
+  describe('非回环接线（打桩对端地址，不依赖网卡）', () => {
+    type PeerProto = { _getpeername: () => { address?: string; family?: string; port?: number } };
+    const proto = net.Socket.prototype as unknown as PeerProto;
+    const origGetPeer = proto._getpeername;
+    afterEach(() => {
+      proto._getpeername = origGetPeer;
+    });
+    const fakeRemote = (publicPort: number): void => {
+      proto._getpeername = function (this: net.Socket) {
+        const real = origGetPeer.call(this);
+        return this.localPort === publicPort ? { ...real, address: '192.168.77.9', family: 'IPv4' } : real;
+      };
+    };
+    const startWith = async (
+      handler: (req: http.IncomingMessage, res: http.ServerResponse) => void
+    ): Promise<StaticServerHandle> => {
+      const backend = await startMockBackend(handler);
+      stopBackend = backend.close;
+      handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0, allowRemote: true });
+      fakeRemote(handle.port);
+      return handle;
+    };
+
+    it('单发敏感请求 403 且不触达后端', async () => {
+      const seen: string[] = [];
+      const h = await startWith((req, res) => {
+        seen.push(req.url!);
+        res.writeHead(200).end('{}');
+      });
+      const r = await collect(
+        '127.0.0.1',
+        h.port,
+        'POST /api/webui/reset-password HTTP/1.1\r\nHost: h\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
+      );
+      expect(r.statuses).toEqual(['403']);
+      expect(r.body).toContain('REMOTE_FORBIDDEN');
+      expect(seen).toEqual([]);
+    });
+
+    it('keep-alive 第二个请求 403（M1）', async () => {
+      const seen: string[] = [];
+      const h = await startWith((req, res) => {
+        seen.push(req.url!);
+        res.writeHead(200).end('{}');
+      });
+      const r = await collect(
+        '127.0.0.1',
+        h.port,
+        'GET /api/auth/status HTTP/1.1\r\nHost: h\r\n\r\n',
+        'POST /api/webui/change-password HTTP/1.1\r\nHost: h\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}'
+      );
+      expect(r.statuses).toEqual(['200', '403']);
+      expect(seen).toEqual(['/api/auth/status']);
+    });
+
+    it('分片发送的超长首行 403（M2）', async () => {
+      const seen: string[] = [];
+      const h = await startWith((req, res) => {
+        seen.push(req.url!);
+        res.writeHead(200).end('{}');
+      });
+      const line = `POST /api/webui/reset-password?x=${'a'.repeat(4200)} HTTP/1.1\r\n`;
+      // 首片 4096 字节内无换行（旧 peek 在此放弃判定），余下分片补齐
+      const r = await collect(
+        '127.0.0.1',
+        h.port,
+        line.slice(0, 4000),
+        line.slice(4000) + 'Host: h\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
+      );
+      expect(r.statuses).toEqual(['403']);
+      expect(seen).toEqual([]);
+    });
+
+    it('upgrade：敏感路径 403、/ws 转发后端 101', async () => {
+      const backend = http.createServer((_req, res) => res.writeHead(404).end());
+      const upgraded: string[] = [];
+      backend.on('upgrade', (req, socket) => {
+        upgraded.push(req.url!);
+        socket.end('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n');
+      });
+      await new Promise<void>((r) => backend.listen(0, '127.0.0.1', () => r()));
+      stopBackend = () => new Promise<void>((r) => backend.close(() => r()));
+      handle = await startStaticServer({
+        staticDir,
+        backendPort: (backend.address() as AddressInfo).port,
+        port: 0,
+        allowRemote: true,
+      });
+      fakeRemote(handle.port);
+      const up = (p: string): string =>
+        `GET ${p} HTTP/1.1\r\nHost: h\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n`;
+      expect((await collect('127.0.0.1', handle.port, up('/api/auth/internal/users'))).statuses).toEqual(['403']);
+      expect((await collect('127.0.0.1', handle.port, up('/ws'))).statuses).toEqual(['101']);
+      expect(upgraded).toEqual(['/ws']);
+    });
+
+    it('正向：普通 /api 到后端、静态页 200', async () => {
+      const seen: string[] = [];
+      const h = await startWith((req, res) => {
+        seen.push(req.url!);
+        res.writeHead(200).end('{}');
+      });
+      expect(
+        (await collect('127.0.0.1', h.port, 'GET /api/auth/status HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n'))
+          .statuses
+      ).toEqual(['200']);
+      expect(
+        (await collect('127.0.0.1', h.port, 'GET / HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n')).statuses
+      ).toEqual(['200']);
+      expect(seen).toEqual(['/api/auth/status']);
+    });
   });
 });
 

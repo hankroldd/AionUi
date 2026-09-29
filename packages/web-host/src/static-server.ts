@@ -194,9 +194,19 @@ export function isSensitivePath(normalizedPath: string): boolean {
 // 非回环请求是否应拒绝：来源非回环，且（路径解析不了 → fail-closed，或命中敏感族）。
 export function isBlockedRemoteRequest(rawUrl: string | undefined, remoteAddress: string | undefined): boolean {
   if (isLoopbackAddr(remoteAddress)) return false;
-  const p = normalizeGuardPath(rawUrl);
+  let p = normalizeGuardPath(rawUrl);
   if (p === null) return true;
-  return isSensitivePath(p);
+  // 多轮解码（复审 S3）：aioncore v0.2.2 实测不解码 %2f、不合并 //（直连后端均 404），但不把安全性押在
+  // 后端“只解一层”上——%252f 等多重编码逐轮再解，任何一轮落入敏感族即拒绝；后续轮解不开说明后端
+  // 也得不到敏感路径，停止；4 轮后仍含转义则 fail-closed。
+  for (let round = 0; round < 3; round++) {
+    if (isSensitivePath(p)) return true;
+    if (!p.includes('%')) return false;
+    const next = normalizeGuardPath(p);
+    if (next === null || next === p) return false;
+    p = next;
+  }
+  return true;
 }
 
 const REMOTE_FORBIDDEN_BODY = '{"error":"REMOTE_FORBIDDEN"}';

@@ -198,6 +198,22 @@ describe('OfficeVersionsSlot — current version preview (D138)', () => {
       expect(deepText(box)).toContain(`［图片：${alt}——预览不加载图片］`);
   });
 
+  it('md code blocks, mermaid included, are shown as plain source: no diagram, no image requests (re-review F3)', async () => {
+    const chart =
+      'flowchart LR\n  A@{ img: "https://example.invalid/m.png", label: "外链形状" }\n  B["<img src=\'https://example.invalid/l.png\'>"]\n  A --> B';
+    bridge({
+      fileName: '流程（虚构）.md',
+      preview: () => page(`# 流程（虚构）\n\n\`\`\`mermaid\n${chart}\n\`\`\`\n\n行内 \`code\``),
+    });
+    render(<OfficeVersionsSlot />);
+    const box = await preview();
+    await waitFor(() => expect(deepHeadings(box)).toContain('流程（虚构）'));
+    await new Promise((r) => setTimeout(r, 300)); // 给 MermaidBlock（若被用到）挂载与异步渲染的时间
+    expect(deepAll(box, '[data-testid^="mermaid-"]')).toEqual([]); // 不经 CodeBlock → MermaidBlock（也就没有“在面板中打开”）
+    expect(deepAll(box, 'img, svg image')).toEqual([]);
+    expect(deepAll(box, 'pre code').map((c) => c.textContent)).toEqual([chart + '\n']);
+  });
+
   it('refresh is disabled while the preview is loading (review F4)', async () => {
     let finish: ((v: unknown) => void) | undefined;
     bridge({ preview: () => new Promise((r) => (finish = r)) });

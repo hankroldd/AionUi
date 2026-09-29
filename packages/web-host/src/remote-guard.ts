@@ -33,7 +33,9 @@ export const UPGRADE_ALLOWED = new Set(['/ws', '/api/stt/stream']);
 
 // 按后端会解释的方式把请求目标归一成小写绝对路径：取绝对形式 URI 的 path、去 query/fragment、
 // 百分号解码一次（%2f→/、%2e→.）、反斜杠转斜杠、去每段的 ;matrix 参数、合并 // 并解析 . 与 ..。
-// 解析不了返回 null（调用方对非回环按拒绝处理，fail-closed）。
+// 不是绝对路径或 URI 解析不了返回 null（调用方对非回环按拒绝处理，fail-closed）。含非法转义（半个
+// %、非 UTF-8 序列）时改用宽松解码：合法转义照常解、非法的原样保留，再交敏感族判定——敏感则拒，
+// 普通 API（如文件名里的 `%zz`）放行交后端处理（复审 S-a）。
 export function normalizeGuardPath(rawUrl: string | undefined): string | null {
   if (!rawUrl) return null;
   let s = rawUrl.trim();
@@ -52,7 +54,14 @@ export function normalizeGuardPath(rawUrl: string | undefined): string | null {
   try {
     decoded = decodeURIComponent(s);
   } catch {
-    return null; // 半个百分号转义等 → 可疑，拒绝
+    decoded = s.replace(/(?:%[0-9a-f]{2})+/gi, (run) => {
+      try {
+        return decodeURIComponent(run);
+      } catch {
+        // 非法序列原样保留，但其中的 ASCII 转义（%00–%7f，如紧挨坏 UTF-8 的 %2f）照样解开，免得藏住斜杠
+        return run.replace(/%[0-7][0-9a-f]/gi, (e) => decodeURIComponent(e));
+      }
+    });
   }
   decoded = decoded.replace(/\\/g, '/');
   const out: string[] = [];

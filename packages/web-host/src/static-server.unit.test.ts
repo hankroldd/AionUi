@@ -567,7 +567,9 @@ describe('static-server', () => {
     expect(normalizeGuardPath('http://x/api/webui/reset-password')).toBe('/api/webui/reset-password'); // 绝对形式
     expect(normalizeGuardPath('/api/auth/internal/../internal/users')).toBe('/api/auth/internal/users');
     expect(normalizeGuardPath('/API/WebUI/Reset-Password')).toBe('/api/webui/reset-password'); // 小写化
-    expect(normalizeGuardPath('/%zz')).toBeNull(); // 坏转义 → 拒绝
+    expect(normalizeGuardPath('/%zz')).toBe('/%zz'); // 非法转义宽松解码：原样保留
+    expect(normalizeGuardPath('/api/files/%E4%B8')).toBe('/api/files/%e4%b8'); // 截断的 UTF-8
+    expect(normalizeGuardPath('/api/webui%2f%E4%B8')).toBe('/api/webui/%e4%b8'); // 坏序列里的 ASCII 转义仍解
     expect(normalizeGuardPath('notapath')).toBeNull();
     expect(normalizeGuardPath(undefined)).toBeNull();
   });
@@ -612,8 +614,8 @@ describe('static-server', () => {
       '/api/auth/internal/../internal/users',
     ])
       expect(isBlockedRemoteRequest(u, '192.168.10.7')).toBe(true);
-    // 非回环不可解析 → fail-closed
-    expect(isBlockedRemoteRequest('/%zz', '192.168.10.7')).toBe(true);
+    // 非回环不可解析（非绝对路径）→ fail-closed
+    expect(isBlockedRemoteRequest('notapath', '192.168.10.7')).toBe(true);
     // 非回环非敏感 → 放行（含合法的百分号编码路径）
     for (const u of [
       '/api/auth/status',
@@ -624,6 +626,23 @@ describe('static-server', () => {
       '/api/files/%E4%B8%AD',
     ])
       expect(isBlockedRemoteRequest(u, '192.168.10.7')).toBe(false);
+  });
+
+  // 复审 S-a：解码失败不再一律拒绝——非法转义的普通 API 放行交后端，非法转义的敏感路径仍拒。
+  it('isBlockedRemoteRequest 非法转义：普通 API 放行', () => {
+    for (const u of ['/api/files/%E4%B8', '/api/files/%zz', '/api/files/50%off', '/%zz'])
+      expect(isBlockedRemoteRequest(u, '192.168.10.7'), u).toBe(false);
+  });
+
+  it('isBlockedRemoteRequest 非法转义：敏感路径仍拒', () => {
+    for (const u of [
+      '/api/webui/reset-password%zz',
+      '/api/webui/reset-password/%E4%B8',
+      '/api/auth/internal/users%zz',
+      '/api/webui%2f%E4%B8', // %2f 紧挨坏 UTF-8
+      '/api%2fwebui%2freset-password%zz',
+    ])
+      expect(isBlockedRemoteRequest(u, '192.168.10.7'), u).toBe(true);
   });
 
   // tripwire（复审 S3）：不把安全性押在后端“只解一层”上。aioncore v0.2.2 直连实测不解码 %2f、

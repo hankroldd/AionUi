@@ -410,7 +410,7 @@ describe('OfficeResourcesSlot', () => {
     await screen.findByRole('heading', { name: '青禾库' });
     fireEvent.click(document.querySelector('.mcw-rc-tagfilter') as HTMLElement);
     fireEvent.click(await screen.findByText('风险', { selector: '.arco-tree-select-popup *' }));
-    await waitFor(() => expect(calls('GET', 'source_id=src_q&page=1&tag_id=tag_c')).toHaveLength(1));
+    await waitFor(() => expect(calls('GET', 'source_id=src_q&tag_id=tag_c&page=1')).toHaveLength(1));
     fireEvent.click(screen.getByRole('button', { name: '存为智能分组' }));
     fireEvent.change(await screen.findByLabelText('分组名'), { target: { value: '青禾里的风险' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));

@@ -1,16 +1,16 @@
 /**
  * [mycowork] ADR-0011: `/office/resources` (MyCowork P05 resource center, PR04 slice d/f; redesign PR11/D123).
  * Only the Bridge boundary is mocked (fetch). Covers: the home view "Recent" merges My imports and every granted knowledge base
- * newest first (sort=updated) and shows type, source, local time, tags and the state in "will AI use it" words (D140; no version
- * count in the list, D141); the left nav switches to one knowledge
+ * newest first (sort=updated) and shows type, source, local time, tags and the state in "will AI use it" words (D145; no version
+ * count in the list, D146); the left nav switches to one knowledge
  * base or My imports; a failing source only shows a local notice, other results stay (02 P05); the search box looks up names/tags
  * across all sources (q=…) and says content search is not available; card/list/table switch, remembered locally and on a saved
  * view; starring creates or updates the "starred" collection and the Starred nav lists it; a tag filters across sources and can be
  * saved as a view; editing tags patches metadata with the read revision (409 → reload + notice); moving a tag to the top level;
  * empty and no-permission states. Round 3 (2026-09-29): collapsible nav groups remembered locally and a keyboard-resizable
  * nav width clamped to 200–360; smart groups (D143) edited / deleted from their "More" menu; a knowledge base filtered by tags,
- * saved as a smart group limited to that base, and "ask with these files" (D139); search lists matching tags (D141);
- * archive-only items show at most two tags plus "+N" and offer "add to a knowledge base" (D140).
+ * saved as a smart group limited to that base, and "ask with these files" (D144); search lists matching tags (D146);
+ * archive-only items show at most two tags plus "+N" and offer "add to a knowledge base" (D145).
  */
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -160,7 +160,7 @@ describe('OfficeResourcesSlot', () => {
       'href',
       '#/office/resources/res_1/versions'
     );
-    expect(screen.queryByText(/个版本/)).toBeNull(); // 版本数在版本与变化页看（D141）
+    expect(screen.queryByText(/个版本/)).toBeNull(); // 版本数在版本与变化页看（D146）
     expect(within(draft).getByText('仅存档')).toBeInTheDocument();
     expect(within(draft).getByText('风险')).toBeInTheDocument();
     expect(screen.queryByText(/T\d\d:\d\d/)).toBeNull(); // 不直出 ISO
@@ -203,7 +203,7 @@ describe('OfficeResourcesSlot', () => {
     expect(await screen.findByRole('heading', { name: '搜索“周报”' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('搜索文件名或标签'), { target: { value: '不存在的词' } });
     expect(await screen.findByText('没有名称或标签匹配的资料')).toBeInTheDocument();
-    // D141：名字匹配的标签列在结果上方（全路径），点一下进入该标签
+    // D146：名字匹配的标签列在结果上方（全路径），点一下进入该标签
     fireEvent.change(screen.getByLabelText('搜索文件名或标签'), { target: { value: '风险' } });
     const hits = await screen.findByTestId('mycowork-hit-tags');
     fireEvent.click(within(hits).getByText('项目 / 风险'));
@@ -383,7 +383,7 @@ describe('OfficeResourcesSlot', () => {
     await waitFor(() => expect(calls('DELETE', '/bridge/v1/saved-views/view_1')).toHaveLength(1));
   });
 
-  it('shows at most two tags plus "+N"; an archive-only item offers "add to a knowledge base" (D140, D141)', async () => {
+  it('shows at most two tags plus "+N"; an archive-only item offers "add to a knowledge base" (D145, D146)', async () => {
     bridge({ tags3: true });
     render(<OfficeResourcesSlot />);
     const draft = (await screen.findByText('工作稿.pptx')).closest(
@@ -397,7 +397,7 @@ describe('OfficeResourcesSlot', () => {
     expect(window.location.hash).toBe('#/office/resources/res_1/versions');
   });
 
-  it('a knowledge base filtered by tags lists base ∩ tags, saves a smart group limited to it, and asks with it (D139)', async () => {
+  it('a knowledge base filtered by tags lists base ∩ tags, saves a smart group limited to it, and asks with it (D144)', async () => {
     bridge();
     render(
       <>

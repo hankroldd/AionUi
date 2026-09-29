@@ -46,7 +46,7 @@ const openEntry = async () => {
   fireEvent.click(screen.getByRole('button', { name: '项目资料范围与提问' }));
   await screen.findByText('项目默认资料范围');
 };
-// Arco keeps a closed modal mounted; its wrapper is display:none once closed (D139：浮层由抽屉改为居中 Modal)
+// Arco keeps a closed modal mounted; its wrapper is display:none once closed (D144：浮层由抽屉改为居中 Modal)
 const drawerOpen = () =>
   (screen.getByText('项目默认资料范围').closest('.arco-modal-wrapper') as HTMLElement | null)?.style.display !== 'none';
 const bindingCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).includes('/binding'));
@@ -75,7 +75,7 @@ describe('ProjectScopeSlot', () => {
       )
     ).toBeInTheDocument();
     fireEvent.click(await screen.findByText('产品知识库'));
-    // 项目默认只存知识库：不出现按标签收窄、挑选文件与智能分组，也不读标签/智能分组（D139）
+    // 项目默认只存知识库：不出现按标签收窄、挑选文件与智能分组，也不读标签/智能分组（D144）
     expect(screen.queryByRole('button', { name: '挑选文件' })).toBeNull();
     expect(fetchMock.mock.calls.some(([u]) => /\/(tags|saved-views)$/.test(String(u)))).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: '设为项目默认' }));

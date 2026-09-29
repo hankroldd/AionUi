@@ -60,7 +60,7 @@ const CONTEXT = {
   withheld: 1,
   superseded: false,
 };
-const SUMMARY = '项目A资料 + 产品库；公网关闭；AI 可引用 8 · 入库中 1 · 暂不可用 2'; // D140 文案
+const SUMMARY = '项目A资料 + 产品库；公网关闭；AI 可引用 8 · 入库中 1 · 暂不可用 2'; // D145 文案
 
 const emit = (m: StreamMessage) => act(() => streamListeners.forEach((fn) => fn(m)));
 
@@ -236,7 +236,7 @@ describe('ConversationScopeSlot', () => {
       expect(calls('POST', '/context-plans')).toHaveLength(2);
     });
 
-    it('restores the tag narrowing from brief.scopes, so an unchanged apply keeps it instead of widening to the whole base (D139)', async () => {
+    it('restores the tag narrowing from brief.scopes, so an unchanged apply keeps it instead of widening to the whole base (D144)', async () => {
       const scopes = [
         { selector: 'knowledge_base', id: 'src_a', tag_ids: ['tag_1'] },
         { selector: 'knowledge_base', id: 'src_b' },

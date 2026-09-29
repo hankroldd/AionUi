@@ -108,7 +108,7 @@ describe('withGuidScope', () => {
     expect(fetchMock.mock.calls[1][0]).toBe('/bridge/v1/context-plans/plan_1/tokens');
   });
 
-  it('sends knowledge-base narrowing (tags, picked files) and smart groups as selectors; zero picked files never becomes the whole base (D139, R010)', async () => {
+  it('sends knowledge-base narrowing (tags, picked files) and smart groups as selectors; zero picked files never becomes the whole base (D144, R010)', async () => {
     setScopeSelection(
       [
         { source_id: 'src_a', name: 'A', tag_ids: ['tag_1'] },
@@ -155,7 +155,7 @@ describe('withGuidScope', () => {
   it('rejects instead of sending with an empty scope', async () => {
     setScopeSelection([{ source_id: 'src_a', name: 'A' }]);
     fetchMock.mockResolvedValueOnce(reply(201, { plan_id: 'plan_1', version: 1, status: 'EMPTY_SCOPE' }));
-    // D139：按标签/挑选收窄后为空也一样拒发，并说明不会退回整个知识库
+    // D144：按标签/挑选收窄后为空也一样拒发，并说明不会退回整个知识库
     await expect(withGuidScope({})).rejects.toThrow(
       '所选范围里没有可用的文件（按标签或挑选收窄后为空时不会退回整个知识库）'
     );

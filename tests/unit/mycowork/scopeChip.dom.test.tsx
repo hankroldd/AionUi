@@ -1,7 +1,7 @@
 /**
- * [mycowork] ADR-0011: scope chip + centered picker dialog from @mycowork/ui (MyCowork packages/ui; D139 dialog since 2026-09-29).
+ * [mycowork] ADR-0011: scope chip + centered picker dialog from @mycowork/ui (MyCowork packages/ui; D144 dialog since 2026-09-29).
  * Only the Bridge boundary (fetch) is mocked. Covers counts copy, apply, cancel-keeps-selection,
- * the unauthenticated / unavailable / no-source states (MyCowork PR03 spec §6 items 3, 11), and D139 narrowing:
+ * the unauthenticated / unavailable / no-source states (MyCowork PR03 spec §6 items 3, 11), and D144 narrowing:
  * search box filters knowledge bases, a knowledge base narrowed by tags shows the match count (0 = says it never falls back
  * to the whole base), picking files keeps only the checked ones, smart groups can be chosen.
  */
@@ -189,7 +189,7 @@ describe('ScopeChip', () => {
     expect(screen.getByText('项目A资料')).toBeInTheDocument();
   });
 
-  it('a knowledge base narrowed by tags shows the match count and sends only those files (D139)', async () => {
+  it('a knowledge base narrowed by tags shows the match count and sends only those files (D144)', async () => {
     route();
     setScopeSelection([{ source_id: 'src_a', name: '产品知识库', tag_ids: ['tag_rival'] }]);
     render(<ScopeChip lang='zh-CN' />);

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
@@ -42,10 +42,21 @@ type MarkdownViewProps = {
   onLocalFileLink?: (path: string, reference?: LocalFileLinkReference) => void | Promise<void>;
   /** Enable raw HTML rendering in markdown content. Use with caution — only for trusted sources. */
   allowHtml?: boolean;
+  /** [mycowork] Per-element renderer overrides merged over the defaults (e.g. `img`); pass a stable object. */
+  components?: Components;
 };
 
 const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
-  ({ hiddenCodeCopyButton, codeStyle, className, onRef, onLocalFileLink, allowHtml, children: childrenProp }) => {
+  ({
+    hiddenCodeCopyButton,
+    codeStyle,
+    className,
+    onRef,
+    onLocalFileLink,
+    allowHtml,
+    components: overrides,
+    children: childrenProp,
+  }) => {
     const { t } = useTranslation();
     const preview = useOptionalPreviewContext();
 
@@ -121,8 +132,9 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
           }
           return <img {...imgProps} alt={imgProps.alt || ''} />;
         },
+        ...overrides,
       }),
-      [codeStyle, hiddenCodeCopyButton, handleLinkClick, onLocalFileLink]
+      [codeStyle, hiddenCodeCopyButton, handleLinkClick, onLocalFileLink, overrides]
     );
 
     const rehypePlugins = useMemo(() => (allowHtml ? [rehypeRaw, rehypeKatex] : [rehypeKatex]), [allowHtml]);

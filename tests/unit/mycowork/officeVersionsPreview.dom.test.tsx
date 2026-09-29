@@ -6,7 +6,9 @@
  * format cannot be previewed); md goes through the renderer passed by the slot and never the preview MarkdownViewer (whose
  * selection toolbar offers "add to chat"), txt is shown as-is, other formats are explained without a request; an open online-edit
  * session shows "editing"; a new current version re-renders the preview; a Secret resource is previewed only through the
- * signed-in Bridge read routes — nothing goes to MCP, AionUi APIs or the conversation.
+ * signed-in Bridge read routes — nothing goes to MCP, AionUi APIs or the conversation. Review fixes: markdown images are never
+ * loaded (placeholder instead: a remote image would reveal the reader, a path would be read from this machine) and refresh is
+ * disabled while a preview is loading.
  */
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -80,6 +82,10 @@ const deepText = (el: Element): string =>
   [el.shadowRoot ? deepText(el.shadowRoot as unknown as Element) : '', ...Array.from(el.children).map(deepText)].join(
     ' '
   ) + (el.children.length === 0 ? (el.textContent ?? '') : '');
+const deepAll = (el: Element | ShadowRoot, sel: string): Element[] => [
+  ...Array.from(el.querySelectorAll(sel)),
+  ...Array.from(el.querySelectorAll('*')).flatMap((c) => (c.shadowRoot ? deepAll(c.shadowRoot, sel) : [])),
+];
 const deepHeadings = (el: Element | ShadowRoot): string[] => [
   ...Array.from(el.querySelectorAll('h1')).map((h) => h.textContent ?? ''),
   ...Array.from(el.querySelectorAll('*')).flatMap((c) => (c.shadowRoot ? deepHeadings(c.shadowRoot) : [])),
@@ -173,6 +179,35 @@ describe('OfficeVersionsSlot — current version preview (D138)', () => {
     render(<OfficeVersionsSlot />);
     expect(await within(await preview()).findByText(/暂不支持预览 \.pdf 文件/)).toBeInTheDocument();
     expect(urls().filter((u) => u.includes('/office/html') || u.endsWith('/preview'))).toEqual([]);
+  });
+
+  it('md images are never loaded: remote, local-path and inline ones all show a placeholder (review F3)', async () => {
+    const png = 'data:image/png;base64,iVBORw0KGgo=';
+    bridge({
+      fileName: '配图（虚构）.md',
+      preview: () =>
+        page(
+          `# 配图（虚构）\n\n![外链图](https://example.invalid/t.png)\n\n![本机图](/etc/x.png)\n\n![相对图](img/a.png)\n\n![内嵌图](${png})`
+        ),
+    });
+    render(<OfficeVersionsSlot />);
+    const box = await preview();
+    await waitFor(() => expect(deepHeadings(box)).toContain('配图（虚构）'));
+    expect(deepAll(box, 'img')).toEqual([]); // 外链不请求；路径不交给 LocalImageView 读本机文件（data: 已被 urlTransform 去掉）
+    for (const alt of ['外链图', '本机图', '相对图', '内嵌图'])
+      expect(deepText(box)).toContain(`［图片：${alt}——预览不加载图片］`);
+  });
+
+  it('refresh is disabled while the preview is loading (review F4)', async () => {
+    let finish: ((v: unknown) => void) | undefined;
+    bridge({ preview: () => new Promise((r) => (finish = r)) });
+    render(<OfficeVersionsSlot />);
+    const box = await preview();
+    const refresh = await within(box).findByRole('button', { name: '刷新预览' });
+    await waitFor(() => expect(refresh).toBeDisabled());
+    finish?.(page('<html><head></head><body>第一页（虚构）</body></html>'));
+    await waitFor(() => expect(box.querySelector('iframe')).not.toBeNull());
+    expect(within(box).getByRole('button', { name: '刷新预览' })).toBeEnabled();
   });
 
   it('marks an open online-edit session as "editing" and re-renders the preview when the current version changes', async () => {

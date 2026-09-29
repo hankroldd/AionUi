@@ -270,7 +270,9 @@ export const OfficeCompositionSlot: React.FC = () => {
 /**
  * Mount point: route `/office/resources/:resourceId/versions` (MyCowork P12 versions: timeline, compare, restore, publish,
  * read-only preview of the current version). [mycowork] D138: markdown is rendered with AionUi's chat MarkdownView, not the
- * preview MarkdownViewer, whose selection toolbar offers "add to chat" (would hand Secret text to the AI send box).
+ * preview MarkdownViewer, whose selection toolbar offers "add to chat" (a dead button outside the chat page, MyCowork A59).
+ * The page hands over element overrides: markdown images are not loaded (a remote image would reveal the
+ * reader's IP/time to its host; a path would be read from this machine by LocalImageView).
  */
 export const OfficeVersionsSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
@@ -279,7 +281,7 @@ export const OfficeVersionsSlot: React.FC = () => {
     <VersionsPage
       lang={current.language}
       resourceId={resourceId}
-      renderMarkdown={(content) => <MarkdownView>{content}</MarkdownView>}
+      renderMarkdown={(content, overrides) => <MarkdownView components={overrides}>{content}</MarkdownView>}
     />
   );
 };

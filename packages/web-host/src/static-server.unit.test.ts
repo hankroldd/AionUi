@@ -4,7 +4,15 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { isBlockedWatchRequest, startStaticServer, type StaticServerHandle } from './static-server.js';
+import {
+  isBlockedWatchRequest,
+  isRemoteResetPassword,
+  startStaticServer,
+  type StaticServerHandle,
+} from './static-server.js';
+
+// 首行以 \n 结尾，模拟到齐的 HTTP 请求行（isRemoteResetPassword 按 \n 判定首行边界）。
+const line = (s: string): Buffer => Buffer.from(`${s}\n`);
 
 async function mkRendererFixture(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ws-static-'));
@@ -544,5 +552,71 @@ describe('static-server', () => {
     expect(isBlockedWatchRequest('POST', '/api/conversations')).toBe(false);
     expect(isBlockedWatchRequest('GET', '/api/office-watch-proxy/1')).toBe(false);
     expect(isBlockedWatchRequest('PUT', '/api/office-watch-proxy/1/api/selection')).toBe(true);
+  });
+
+  // [mycowork] 安全（A67/D150）：非回环来源不得触达无鉴权的 reset-password。
+  it('isRemoteResetPassword blocks reset-password from a non-loopback client', () => {
+    for (const l of [
+      'POST /api/webui/reset-password HTTP/1.1\r',
+      'POST /api/webui/reset-password/ HTTP/1.1\r',
+      'POST /api/webui/reset-password?x=1 HTTP/1.0\r',
+      'GET /api/Webui/Reset-Password HTTP/1.1\r', // 大小写与方法都默认拒绝
+    ])
+      expect(isRemoteResetPassword(line(l), '192.168.10.7')).toBe(true);
+  });
+
+  it('isRemoteResetPassword allows reset-password from loopback (resetpass path 1)', () => {
+    const l = line('POST /api/webui/reset-password HTTP/1.1\r');
+    for (const addr of ['127.0.0.1', '127.0.0.5', '::1', '::ffff:127.0.0.1'])
+      expect(isRemoteResetPassword(l, addr)).toBe(false);
+  });
+
+  it('isRemoteResetPassword leaves other routes and partial buffers alone', () => {
+    expect(isRemoteResetPassword(line('POST /login HTTP/1.1\r'), '192.168.10.7')).toBe(false);
+    expect(isRemoteResetPassword(line('GET /api/auth/status HTTP/1.1\r'), '10.0.0.9')).toBe(false);
+    // reset-password 作为其它路径的前缀不误伤（如 .../reset-password-log）
+    expect(isRemoteResetPassword(line('POST /api/webui/reset-password-log HTTP/1.1\r'), '10.0.0.9')).toBe(false);
+    // 首行未到齐（无换行）→ 需要更多字节，尚不判定
+    expect(isRemoteResetPassword(Buffer.from('POST /api/webui/reset-password HT'), '192.168.10.7')).toBe(false);
+  });
+
+  // 正向：allowRemote 下，来自本机回环的 reset-password 仍被代理转发到后端（正常找回口令流程不受影响）。
+  it('[mycowork] loopback reset-password is still proxied to backend under allowRemote', async () => {
+    const net = await import('node:net');
+    let sawReset = false;
+    const backend = await startMockBackend((req, res) => {
+      if (req.url === '/api/webui/reset-password' && req.method === 'POST') {
+        sawReset = true;
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end('{"success":true,"data":{"new_password":"x"}}');
+        return;
+      }
+      res.writeHead(404).end();
+    });
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0, allowRemote: true });
+
+    const status: string = await new Promise((resolve, reject) => {
+      const sock = net.connect({ host: '127.0.0.1', port: handle!.port }, () => {
+        sock.write(
+          `POST /api/webui/reset-password HTTP/1.1\r\nHost: 127.0.0.1:${handle!.port}\r\nContent-Length: 0\r\n\r\n`
+        );
+      });
+      let buf = Buffer.alloc(0);
+      sock.on('data', (d) => {
+        buf = Buffer.concat([buf, d]);
+        if (buf.indexOf('\r\n\r\n') >= 0) {
+          sock.destroy();
+          resolve(buf.slice(0, buf.indexOf(0x0a)).toString('ascii').trim());
+        }
+      });
+      sock.on('error', reject);
+      setTimeout(() => {
+        sock.destroy();
+        reject(new Error('timeout'));
+      }, 3000).unref();
+    });
+    expect(status).toMatch(/HTTP\/1\.1 200/);
+    expect(sawReset).toBe(true);
   });
 });

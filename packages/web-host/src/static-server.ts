@@ -121,6 +121,35 @@ export function isBlockedWatchRequest(method: string, url: string): boolean {
   return !(method === 'POST' && WATCH_SELECTION.test(url));
 }
 
+// [mycowork] 安全（A67/D150）：aioncore 的 POST /api/webui/reset-password 无需登录即返回新的明文管理员密码，
+// 供首次安装/找回口令用。经反向代理放行时，若 WebUI 对局域网开放（allowRemote），任何能访问端口的人都能不登录
+// 重置管理员密码并接管——aioncore 侧看到的来源恒为 127.0.0.1，无法在后端按来源鉴别。合法调用者要么直连后端端口、
+// 绕过本代理（首启种子口令：scripts/webui.ts、web-cli、webuiBridge.ts；resetpass.ts 路径 2 自起后端），要么经代理但
+// 来自本机回环（resetpass.ts 路径 1）。因此在代理的 TCP 层按真实来源地址默认拒绝非回环对该路径的访问。
+const RESET_PASSWORD_LINE = /^[A-Za-z]+\s+\/api\/webui\/reset-password(?:[/?]\S*)?\s+HTTP\/1\.[01]\r?$/i;
+
+function isLoopbackAddr(addr: string | undefined): boolean {
+  if (!addr) return false;
+  // 0.0.0.0 绑定下回环客户端显示 127.0.0.0/8；双栈/映射形态防御性一并纳入。
+  return addr.startsWith('127.') || addr === '::1' || addr.startsWith('::ffff:127.');
+}
+
+// 从首行判断这是否是一次来自非回环客户端的 reset-password 请求（应拒绝）。buf 无换行（首行未到齐）时返回 false。
+export function isRemoteResetPassword(buf: Buffer, remoteAddress: string | undefined): boolean {
+  const newlineIdx = buf.indexOf(0x0a);
+  if (newlineIdx < 0) return false;
+  const firstLine = buf.slice(0, newlineIdx).toString('ascii');
+  if (!RESET_PASSWORD_LINE.test(firstLine)) return false;
+  return !isLoopbackAddr(remoteAddress);
+}
+
+function writeResetPasswordForbidden(client: Socket): void {
+  const body = '{"error":"RESET_PASSWORD_LOCAL_ONLY"}';
+  client.end(
+    `HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`
+  );
+}
+
 function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort: number): void {
   forward(req, res, new URL(`http://127.0.0.1:${backendPort}`), req.headers, { error: 'BACKEND_UNREACHABLE' });
 }
@@ -305,6 +334,12 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       const decision = peekWsRoute(peeked);
       if (decision === null && peeked.length < PEEK_LIMIT_BYTES) return;
       cleanup();
+      // [mycowork] 安全（A67/D150）：非回环来源不得经代理触达 reset-password（无鉴权、返回明文口令）。
+      // 仅在对外开放时检查，纯回环部署（默认）字节不变；合法调用者直连后端或来自本机回环，不受影响。
+      if (allowRemote && isRemoteResetPassword(peeked, client.remoteAddress)) {
+        writeResetPasswordForbidden(client);
+        return;
+      }
       const target = decision === true ? opts.backendPort : internalPort;
       spliceToTcpEndpoint(client, target, peeked);
     };

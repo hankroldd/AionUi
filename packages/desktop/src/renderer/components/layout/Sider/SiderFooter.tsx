@@ -54,7 +54,6 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
       style={{ lineHeight: 0 }}
     />
   );
-  const showThemeToggle = isSettings && !collapsed;
   const themeTooltip = theme === 'dark' ? t('settings.lightMode') : t('settings.darkMode');
 
   return (
@@ -104,28 +103,27 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
             </div>
           </Tooltip>
         )}
-        {/* Theme toggle — lightweight icon button, only while inside Settings page (not in collapsed mode) */}
-        {showThemeToggle && (
-          <Tooltip {...siderTooltipProps} content={themeTooltip} position='right'>
-            <div
-              onClick={onThemeToggle}
-              data-testid='theme-toggle'
-              className={classNames(
-                'h-32px w-40px shrink-0 flex items-center justify-center cursor-pointer rd-0.5rem transition-colors text-t-secondary hover:bg-fill-2 hover:text-t-primary active:bg-fill-3',
-                isMobile && 'sider-footer-btn-mobile'
+        {/* [mycowork] Theme toggle on every page and in the collapsed rail (upstream: Settings page, expanded only) */}
+        <Tooltip {...siderTooltipProps} content={themeTooltip} position='right'>
+          <div
+            onClick={onThemeToggle}
+            data-testid='theme-toggle'
+            className={classNames(
+              'h-32px shrink-0 flex items-center justify-center cursor-pointer rd-0.5rem transition-colors text-t-secondary hover:bg-fill-2 hover:text-t-primary active:bg-fill-3',
+              collapsed ? 'w-full' : 'w-40px',
+              isMobile && 'sider-footer-btn-mobile'
+            )}
+            aria-label={themeTooltip}
+          >
+            <span className='w-28px h-28px flex items-center justify-center shrink-0'>
+              {theme === 'dark' ? (
+                <SunOne theme='outline' size='18' fill='currentColor' className='block leading-none' />
+              ) : (
+                <Moon theme='outline' size='18' fill='currentColor' className='block leading-none' />
               )}
-              aria-label={themeTooltip}
-            >
-              <span className='w-28px h-28px flex items-center justify-center shrink-0'>
-                {theme === 'dark' ? (
-                  <SunOne theme='outline' size='18' fill='currentColor' className='block leading-none' />
-                ) : (
-                  <Moon theme='outline' size='18' fill='currentColor' className='block leading-none' />
-                )}
-              </span>
-            </div>
-          </Tooltip>
-        )}
+            </span>
+          </div>
+        </Tooltip>
       </div>
     </div>
   );

@@ -34,7 +34,10 @@ export const getSiderTooltipProps = (enabled = false): SiderTooltipProps => {
     disabled,
     unmountOnExit: true,
     popupHoverStay: false,
-    popupVisible: disabled ? false : undefined,
-    getPopupContainer: getSiderPopupContainer,
+    // [mycowork] the collapsed rail (enabled) needs a working hover tooltip: a present `popupVisible: undefined` makes
+    // Arco treat it as controlled and reset hover visibility every render, and a popup mounted inside the 64px sider
+    // is clamped over the icon and wraps. So when enabled: no popupVisible, default (body) container; the class above
+    // keeps cleanupSiderTooltips() working. Disabled keeps upstream's force-hide inside the sider.
+    ...(disabled ? { popupVisible: false, getPopupContainer: getSiderPopupContainer } : {}),
   };
 };

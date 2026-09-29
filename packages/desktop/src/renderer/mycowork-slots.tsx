@@ -162,32 +162,62 @@ export const OfficeMemorySlot: React.FC = () => {
   return <MemoryPage lang={current.language} />;
 };
 
-/** Sidebar nav entry for a MyCowork page, styled like the Scheduled entry next to it. */
+/**
+ * Sidebar nav entry for a MyCowork page: the same markup as AionUi's SiderScheduledEntry right above it, so collapsed
+ * shows only the centred 20px icon (name in the tooltip) and expanded puts the 16px icon in the same 22px box.
+ */
 const OfficeNavEntry: React.FC<{
   path: string;
   label: string;
-  icon: React.ReactElement;
+  Icon: typeof Tag;
   isMobile: boolean;
   collapsed: boolean;
   siderTooltipProps: SiderTooltipProps;
-}> = ({ path, label, icon, isMobile, collapsed, siderTooltipProps }) => {
+}> = ({ path, label, Icon, isMobile, collapsed, siderTooltipProps }) => {
   const navigate = useNavigate();
   const active = useLocation().pathname.startsWith(path);
+  const state = active ? 'bg-fill-3' : 'hover:bg-fill-3 active:bg-fill-4';
   return (
     <Tooltip {...siderTooltipProps} content={label} position='right'>
       <div
         role='link'
         aria-label={label}
-        className={classNames(
-          'box-border h-34px w-full flex items-center gap-8px rd-8px cursor-pointer shrink-0 transition-colors text-t-primary',
-          collapsed ? 'justify-center' : 'justify-start ps-10px pe-8px',
-          isMobile && 'sider-action-btn-mobile',
-          active ? 'bg-fill-3' : 'hover:bg-fill-3 active:bg-fill-4'
-        )}
+        className={
+          collapsed
+            ? classNames(
+                'w-full h-34px flex items-center justify-center cursor-pointer transition-colors rd-8px text-t-primary',
+                state
+              )
+            : classNames(
+                'box-border group h-34px w-full flex items-center justify-start gap-8px ps-10px pe-8px rd-0.5rem cursor-pointer shrink-0 transition-all text-t-primary',
+                isMobile && 'sider-action-btn-mobile',
+                state
+              )
+        }
         onClick={() => void navigate(path)}
       >
-        {icon}
-        {!collapsed && <span className='collapsed-hidden text-14px font-[500] leading-24px'>{label}</span>}
+        {collapsed ? (
+          <Icon
+            theme='outline'
+            size='20'
+            fill='currentColor'
+            className='block leading-none shrink-0'
+            style={{ lineHeight: 0 }}
+          />
+        ) : (
+          <>
+            <span className='size-22px flex items-center justify-center shrink-0 text-t-primary'>
+              <Icon
+                theme='outline'
+                size='16'
+                fill='currentColor'
+                className='block leading-none'
+                style={{ lineHeight: 0 }}
+              />
+            </span>
+            <span className='collapsed-hidden text-t-primary text-14px font-[500] leading-24px'>{label}</span>
+          </>
+        )}
       </div>
     </Tooltip>
   );
@@ -200,27 +230,16 @@ export const OfficeImportsSiderSlot: React.FC<{
   siderTooltipProps: SiderTooltipProps;
 }> = (props) => {
   const { i18n: current } = useTranslation();
-  const size = props.collapsed ? '20' : '16';
   return (
     <>
       <OfficeNavEntry
         {...props}
         path='/office/imports'
         label={importText(current.language).title}
-        icon={<FolderUpload theme='outline' size={size} fill='currentColor' className='block leading-none' />}
+        Icon={FolderUpload}
       />
-      <OfficeNavEntry
-        {...props}
-        path='/office/resources'
-        label={resourceText(current.language).title}
-        icon={<Tag theme='outline' size={size} fill='currentColor' className='block leading-none' />}
-      />
-      <OfficeNavEntry
-        {...props}
-        path='/office/memory'
-        label={memoryText(current.language).title}
-        icon={<Brain theme='outline' size={size} fill='currentColor' className='block leading-none' />}
-      />
+      <OfficeNavEntry {...props} path='/office/resources' label={resourceText(current.language).title} Icon={Tag} />
+      <OfficeNavEntry {...props} path='/office/memory' label={memoryText(current.language).title} Icon={Brain} />
     </>
   );
 };

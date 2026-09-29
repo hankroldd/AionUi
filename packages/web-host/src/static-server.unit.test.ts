@@ -5,14 +5,8 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
-import {
-  isBlockedRemoteRequest,
-  isBlockedWatchRequest,
-  isSensitivePath,
-  normalizeGuardPath,
-  startStaticServer,
-  type StaticServerHandle,
-} from './static-server.js';
+import { isBlockedRemoteRequest, isSensitivePath, normalizeGuardPath } from './remote-guard.js';
+import { isBlockedWatchRequest, startStaticServer, type StaticServerHandle } from './static-server.js';
 
 // [mycowork] 安全（A67/D150）端到端用例需要从非回环地址发起（否则守卫按回环放行）。取本机第一个
 // 非回环 IPv4；无则跳过这些用例（在无网卡的 CI 上），纯函数用例仍全跑。

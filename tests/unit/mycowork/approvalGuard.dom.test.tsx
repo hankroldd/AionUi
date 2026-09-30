@@ -106,6 +106,32 @@ describe('D115 批准卡', () => {
     expect(optionValues()).toEqual(['proceed_once', 'cancel']);
   });
 
+  it.each([
+    ['memory_suggest', ['bridge']],
+    ['mcp__mycowork_bridge_memory_suggest', OTHER],
+  ])(
+    '[mycowork] A85：%s 卡片即使会话未识别为 MyCowork（Bridge 以别名挂载）也不给“始终允许”（点了会按 mcp 类连带放行写工具）',
+    (tool, servers) => {
+      render(inSession(servers, <MessagePermission message={card(tool, 'mcp')} />));
+      expect(optionValues()).toEqual(['proceed_once', 'cancel']);
+    }
+  );
+
+  it.each([
+    ['search', 'mcp'],
+    ['read', 'mcp'],
+    ['memory_suggest', 'mcp'],
+    ['ExecCommand', 'exec'],
+  ])('[mycowork] A85：取不到会话信息时 %s（%s 类）卡片按 MyCowork 会话处理，不给“始终允许”', (tool, category) => {
+    render(<MessagePermission message={card(tool, category)} />);
+    expect(optionValues()).toEqual(['proceed_once', 'cancel']);
+  });
+
+  it('[mycowork] A85：已知的空 MCP 列表不算“取不到会话信息”，mcp 卡片照常给“始终允许”', () => {
+    render(inSession([], <MessagePermission message={card('create_issue', 'mcp')} />));
+    expect(optionValues()).toEqual(['proceed_once', 'proceed_always', 'cancel']);
+  });
+
   it('MyCowork 会话里其他 mcp 卡片也不给（aionrs 始终允许按类别记住，会连带放行写工具）', () => {
     render(inSession(MYCOWORK, <MessagePermission message={card('other_tool', 'mcp')} />));
     expect(optionValues()).toEqual(['proceed_once', 'cancel']);

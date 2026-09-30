@@ -84,7 +84,15 @@ describe('[mycowork] D115 ACP 批准卡（Claude Code）', () => {
     const other = render(inSession(OTHER, <MessageAcpPermission message={card('Bash')} />));
     expect(optionValues()).toEqual(['allow', 'allow_always', 'reject']);
     other.unmount();
-    render(inSession(undefined, <MessageAcpPermission message={card('mcp__github__create_issue')} />));
+    render(inSession([], <MessageAcpPermission message={card('mcp__github__create_issue')} />));
     expect(optionValues()).toEqual(['allow', 'allow_always', 'reject']);
+  });
+
+  it('[mycowork] A85：取不到会话信息时 Bash 与 MCP 卡片不给 allow_always（与 aionrs 卡片同一判定，宁可多藏）', () => {
+    const { unmount } = render(<MessageAcpPermission message={card('Bash')} />);
+    expect(optionValues()).toEqual(['allow', 'reject']);
+    unmount();
+    render(<MessageAcpPermission message={card('mcp__mycowork_bridge__memory_suggest')} />);
+    expect(optionValues()).toEqual(['allow', 'reject']);
   });
 });

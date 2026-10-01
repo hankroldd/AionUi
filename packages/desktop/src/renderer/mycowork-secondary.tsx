@@ -13,6 +13,10 @@ import { useLocation } from 'react-router-dom';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import ConversationSearchPopover from '@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover';
 
+export const MYCOWORK_SPACE_SIDER_ID = 'mycowork-space-sider';
+/** 空间列表及旧入口共用二级栏，版本页仍保持独立布局。 */
+export const isMyCoworkSpaceRoute = (path: string): boolean => /^\/office\/(space|resources)\/?$/.test(path);
+
 const COLLAPSE_KEY = 'mycowork:sider-collapsed';
 
 /** 桌面仅保存非敏感布尔偏好；浏览器拒绝存储时本轮仍可操作。 */

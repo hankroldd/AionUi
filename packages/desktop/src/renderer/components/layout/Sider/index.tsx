@@ -1,5 +1,5 @@
 import MyCoworkRail from '@/renderer/mycowork-rail';
-import MyCoworkSecondaryHeader from '@/renderer/mycowork-secondary';
+import MyCoworkSecondaryHeader, { isMyCoworkSpaceRoute, MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-secondary';
 import classNames from 'classnames';
 import React, { Suspense, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -30,6 +30,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const [isBatchMode, setIsBatchMode] = useState(false);
   const isSettings = pathname.startsWith('/settings');
   const isOffice = pathname.startsWith('/office/');
+  const isSpace = isMyCoworkSpaceRoute(pathname);
 
   const handleNewChat = () => {
     cleanupSiderTooltips();
@@ -84,7 +85,9 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
       {!isSettings && !isOffice && <MyCoworkSecondaryHeader onConversationSelect={handleConversationSelect} />}
       {/* Main content area */}
       <div className='flex-1 min-h-0 overflow-hidden'>
-        {isOffice ? null : isSettings ? (
+        {isSpace ? (
+          <div id={MYCOWORK_SPACE_SIDER_ID} className='size-full' />
+        ) : isOffice ? null : isSettings ? (
           <Suspense fallback={<div className='size-full' />}>
             <SettingsSider collapsed={collapsed} tooltipEnabled={tooltipEnabled} />
           </Suspense>

@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ScopeChip } from '@mycowork/ui';
 import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
+import { LayoutContext } from '@/renderer/hooks/context/LayoutContext';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({ useLocation: () => ({ state: null, pathname: '/' }) }));
@@ -69,6 +70,7 @@ const bodyOf = (method: string, part: string, i = 0) => JSON.parse(String(calls(
 
 type Opts = {
   patchStatus?: number;
+  createTagStatus?: number;
   empty?: boolean;
   sourceStatus?: number;
   starred?: string[];
@@ -100,6 +102,8 @@ function bridge(opts: Opts = {}) {
       return reply(200, {
         tags: opts.tags3 ? [...TAGS, { ...TAGS[0], tag_id: 'tag_x', name: '第三个', revision: 1 }] : TAGS,
       });
+    if (url === '/bridge/v1/tags' && method === 'POST' && opts.createTagStatus)
+      return reply(opts.createTagStatus, { error: { code: 'NAME_CONFLICT', message: 'x' } });
     if (url === '/bridge/v1/saved-views' && method === 'GET') return reply(200, { views: opts.views ?? [] });
     if (url === '/bridge/v1/collections' && method === 'GET')
       return reply(200, {
@@ -322,7 +326,7 @@ describe('OfficeResourcesSlot', () => {
     expect(bodyOf('PATCH', '/bridge/v1/tags/tag_c')).toEqual({ expected_revision: 3, parent_id: null });
   });
 
-  it('nav groups collapse and stay collapsed; the nav width is keyboard-resizable within 200–360 and remembered', async () => {
+  it('nav groups stay collapsed; old internal width is ignored because the native sidebar owns resizing', async () => {
     bridge();
     const first = render(<OfficeResourcesSlot />);
     await screen.findByText('周报.md');
@@ -332,20 +336,65 @@ describe('OfficeResourcesSlot', () => {
     await waitFor(() =>
       expect(JSON.parse(String(localStorage.getItem('mycowork.resources.nav'))).open).not.toContain('tags')
     );
-    const sep = screen.getByRole('separator', { name: '拖动或用方向键调整导航宽度' });
-    expect(sep).toHaveAttribute('aria-valuenow', '232');
-    for (let i = 0; i < 20; i++) fireEvent.keyDown(sep, { key: 'ArrowRight' });
-    expect(sep).toHaveAttribute('aria-valuenow', '360');
-    for (let i = 0; i < 20; i++) fireEvent.keyDown(sep, { key: 'ArrowLeft' });
-    expect(sep).toHaveAttribute('aria-valuenow', '200');
+    expect(screen.queryByRole('separator')).toBeNull();
+    localStorage.setItem('mycowork.resources.nav', JSON.stringify({ width: 200, open: ['sources', 'views'] }));
     first.unmount();
     render(<OfficeResourcesSlot />);
     await screen.findByText('周报.md');
-    expect(screen.getByRole('separator', { name: '拖动或用方向键调整导航宽度' })).toHaveAttribute(
-      'aria-valuenow',
-      '200'
-    );
+    expect(screen.queryByRole('separator')).toBeNull();
     expect(tagsHeader()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('portal navigation shares the main query and closes only the mobile drawer after choosing results', async () => {
+    bridge();
+    const collapse = vi.fn();
+    const { container } = render(
+      <LayoutContext.Provider value={{ isMobile: true, siderCollapsed: false, setSiderCollapsed: collapse }}>
+        <aside id='mycowork-space-sider' />
+        <div onClick={() => collapse(true)}>
+          <OfficeResourcesSlot />
+        </div>
+      </LayoutContext.Provider>
+    );
+    await screen.findByText('周报.md');
+    const host = container.querySelector('#mycowork-space-sider') as HTMLElement;
+    expect(within(host).getByTestId('mycowork-resource-nav')).toBeInTheDocument();
+    expect(within(screen.getByTestId('mycowork-resources')).queryByTestId('mycowork-resource-nav')).toBeNull();
+    fireEvent.click(within(host).getByText('知识库', { selector: '.arco-collapse-item-header *' }));
+    expect(collapse).not.toHaveBeenCalled();
+    fireEvent.click(within(host).getByText('知识库', { selector: '.arco-collapse-item-header *' }));
+    fireEvent.click(within(host).getByRole('button', { name: '搜索空间' }));
+    expect(collapse).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('搜索文件名或标签'), { target: { value: '周报' } });
+    fireEvent.keyDown(within(dialog).getByLabelText('搜索文件名或标签'), { key: 'Enter', isComposing: true });
+    expect(collapse).not.toHaveBeenCalled();
+    await waitFor(() => expect(calls('GET', `q=${encodeURIComponent('周报')}`)).toHaveLength(2));
+    expect(within(screen.getByTestId('mycowork-resources')).getByLabelText('搜索文件名或标签')).toHaveValue('周报');
+    fireEvent.click(within(dialog).getByRole('button', { name: '查看结果' }));
+    expect(collapse).toHaveBeenCalledWith(true);
+    fireEvent.click(within(host).getByTestId('mycowork-nav-imports'));
+    await waitFor(() => expect(calls('GET', 'origin=imports&page=1')).toHaveLength(1));
+    expect(within(screen.getByTestId('mycowork-resources')).getByLabelText('搜索文件名或标签')).toHaveValue('');
+    expect(screen.queryByRole('button', { name: '全部' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '回收站' })).toBeNull();
+  });
+
+  it('the new menu opens existing tag creation; a conflict keeps the dialog and draft', async () => {
+    bridge({ createTagStatus: 409 });
+    render(<OfficeResourcesSlot />);
+    await screen.findByText('周报.md');
+    const nav = screen.getByTestId('mycowork-resource-nav');
+    fireEvent.click(within(nav).getByRole('button', { name: '新建' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '新建标签' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('新标签名'), { target: { value: '重复标签' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '新建' }));
+    await waitFor(() => expect(calls('POST', '/bridge/v1/tags')).toHaveLength(1));
+    expect(bodyOf('POST', '/bridge/v1/tags')).toEqual({ name: '重复标签' });
+    expect(within(dialog).getByLabelText('新标签名')).toHaveValue('重复标签');
+    expect(await within(dialog).findByText('已有同名标签，换个名字再新建')).toBeVisible();
+    expect(screen.getByRole('dialog')).toBeVisible();
   });
 
   it('a smart group is edited (name and conditions) and deleted from its "More" menu (D143)', async () => {

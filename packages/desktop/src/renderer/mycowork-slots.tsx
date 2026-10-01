@@ -3,12 +3,14 @@
  * Each AionUi insertion point is a 1–2 line call into this file; components and Bridge calls
  * live in MyCowork packages/ui (resolved via the `@mycowork/ui` build alias). Ledger: MyCowork upstream/PATCHES.md.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useInRouterContext, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { BookOpen } from '@icon-park/react';
 import { ipcBridge } from '@/common';
+import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import { MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-secondary';
 import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
 import MarkdownView from '@/renderer/components/Markdown';
 import { MarkdownViewer } from '@/renderer/pages/conversation/Preview/components/viewers';
@@ -145,10 +147,26 @@ export const OfficeImportsSlot: React.FC = () => {
   return <ImportsPage lang={current.language} {...(projectId ? { projectId } : {})} />;
 };
 
-/** Mount point: route `/office/resources` (MyCowork P05 resource center: tags, saved view tabs). */
+/** 空间的数据仍由页面持有，portal 只把同一导航挂入原生二级栏。 */
 export const OfficeResourcesSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
-  return <ResourcesPage lang={current.language} />;
+  const layout = useLayoutContext();
+  const [sidebar, setSidebar] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setSidebar(document.getElementById(MYCOWORK_SPACE_SIDER_ID));
+  }, []);
+  return (
+    <ResourcesPage
+      lang={current.language}
+      navigationContainer={sidebar}
+      {...(layout
+        ? {
+            onCollapse: () => layout.setSiderCollapsed(true),
+            onSelect: () => layout.isMobile && layout.setSiderCollapsed(true),
+          }
+        : {})}
+    />
+  );
 };
 
 /** [mycowork] ADR-0022：知识管理预留页，不连接任何管理 API。 */

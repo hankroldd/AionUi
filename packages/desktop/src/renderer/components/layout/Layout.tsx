@@ -9,7 +9,7 @@ import { TEAM_MODE_ENABLED } from '@/common/config/constants';
 import PwaPullToRefresh from '@/renderer/components/layout/PwaPullToRefresh';
 import Titlebar from '@/renderer/components/layout/Titlebar';
 import MyCoworkRail from '@/renderer/mycowork-rail';
-import { useMyCoworkSecondaryCollapse } from '@/renderer/mycowork-secondary';
+import { isMyCoworkSpaceRoute, useMyCoworkSecondaryCollapse } from '@/renderer/mycowork-secondary';
 import { Layout as ArcoLayout, Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
@@ -137,7 +137,7 @@ const Layout: React.FC<{
   useDesktopTurnNotification();
   const navigate = useNavigate();
   const location = useLocation();
-  const isOfficeRoute = location.pathname.startsWith('/office/');
+  const isOfficeRoute = location.pathname.startsWith('/office/') && !isMyCoworkSpaceRoute(location.pathname);
   const workspaceAvailable =
     location.pathname.startsWith('/conversation/') || (TEAM_MODE_ENABLED && location.pathname.startsWith('/team/'));
   const toggleSider = useCallback(() => {

@@ -126,4 +126,14 @@ describe('Titlebar workspace toggle', () => {
     render(<Titlebar workspaceAvailable={false} />);
     expect(Boolean(screen.queryByTestId('conversation-search'))).toBe(visible);
   });
+
+  it('restores the Space sidebar on desktop without exposing conversation search', () => {
+    sidebar.path = '/office/space';
+    sidebar.collapsed = true;
+    sidebar.toggle = vi.fn();
+    render(<Titlebar workspaceAvailable={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'common.expandMore' }));
+    expect(sidebar.toggle).toHaveBeenCalledWith(false);
+    expect(screen.queryByTestId('conversation-search')).toBeNull();
+  });
 });

@@ -88,6 +88,21 @@ describe('[mycowork] sidebar collapse', () => {
     expect((container.querySelector('.layout-sider') as HTMLElement).style.width).toBe('288px');
   });
 
+  it.each(['/office/space', '/office/resources', '/office/space/'])(
+    'Space %s keeps the native sidebar and resizer available',
+    (path) => {
+      shortcut.pathname = path;
+      const { container } = render(<Layout sider={<SiderStub />} />);
+      const sider = container.querySelector('.layout-sider') as HTMLElement;
+      expect(sider.style.width).toBe('288px');
+      expect(sider.style.visibility).toBe('visible');
+      expect(sider.querySelector('.cursor-col-resize')).not.toBeNull();
+      act(() => shortcut.toggleSider?.());
+      expect(sider.style.width).toBe('0px');
+      expect(sider.style.visibility).toBe('hidden');
+    }
+  );
+
   it.each([
     [237, '0px'],
     [238, '238px'],
@@ -114,14 +129,17 @@ describe('[mycowork] sidebar collapse', () => {
     expect(sider.style.width).toBe('350px');
   });
 
-  it('Office routes hide the unrelated native conversation sidebar', () => {
-    shortcut.pathname = '/office/space';
-    const { container } = render(<Layout sider={<SiderStub />} />);
-    const sider = container.querySelector('.layout-sider') as HTMLElement;
-    expect(sider.style.width).toBe('0px');
-    expect(sider.style.visibility).toBe('hidden');
-    expect(localStorage.getItem('mycowork:sider-collapsed')).toBe('false');
-  });
+  it.each(['/office/memory', '/office/resources/fixture/versions'])(
+    'Office route %s hides unrelated native conversation sidebar',
+    (path) => {
+      shortcut.pathname = path;
+      const { container } = render(<Layout sider={<SiderStub />} />);
+      const sider = container.querySelector('.layout-sider') as HTMLElement;
+      expect(sider.style.width).toBe('0px');
+      expect(sider.style.visibility).toBe('hidden');
+      expect(localStorage.getItem('mycowork:sider-collapsed')).toBe('false');
+    }
+  );
 
   it('mobile sider still collapses to 0 (overlay)', () => {
     const width = window.innerWidth;

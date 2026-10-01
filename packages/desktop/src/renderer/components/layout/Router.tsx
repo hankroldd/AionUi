@@ -121,7 +121,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
           <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
           <Route path='/office/imports' element={<OfficeImportsSlot />} />
-          <Route path='/office/resources' element={<OfficeResourcesSlot />} />
+          <Route path='/office/resources' element={<Navigate to='/office/space' replace />} />
           <Route path='/office/space' element={<OfficeResourcesSlot />} />
           <Route path='/office/knowledge' element={<OfficeKnowledgeSlot />} />
           <Route path='/office/resources/:resourceId/versions' element={<OfficeVersionsSlot />} />

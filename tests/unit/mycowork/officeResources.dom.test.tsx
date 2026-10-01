@@ -71,6 +71,7 @@ const bodyOf = (method: string, part: string, i = 0) => JSON.parse(String(calls(
 type Opts = {
   patchStatus?: number;
   createTagStatus?: number;
+  createTagWait?: Promise<void>;
   tagPatchStatus?: number;
   tagDeleteStatus?: number;
   tagDeleteWait?: Promise<void>;
@@ -107,8 +108,12 @@ function bridge(opts: Opts = {}) {
       return reply(200, {
         tags: opts.tags3 ? [...tags, { ...TAGS[0], tag_id: 'tag_x', name: '第三个', revision: 1 }] : tags,
       });
-    if (url === '/bridge/v1/tags' && method === 'POST' && opts.createTagStatus)
-      return reply(opts.createTagStatus, { error: { code: 'NAME_CONFLICT', message: 'x' } });
+    if (url === '/bridge/v1/tags' && method === 'POST') {
+      await opts.createTagWait;
+      return opts.createTagStatus
+        ? reply(opts.createTagStatus, { error: { code: 'NAME_CONFLICT', message: 'x' } })
+        : reply(201, {});
+    }
     if (url.startsWith('/bridge/v1/tags/') && method === 'PATCH') {
       if (opts.tagPatchStatus)
         return reply(opts.tagPatchStatus, { error: { code: 'REVISION_CONFLICT', message: 'x' } });
@@ -435,6 +440,95 @@ describe('OfficeResourcesSlot', () => {
     expect(screen.getByRole('dialog')).toBeVisible();
   });
 
+  it('the header and sidebar share one tag dialog; composing Enter does not create a tag', async () => {
+    bridge();
+    render(<OfficeResourcesSlot />);
+    await screen.findByText('周报.md');
+    const header = screen.getByTestId('mycowork-resources').querySelector('header') as HTMLElement;
+    expect(within(header).getByRole('heading', { name: '最近' })).toBeInTheDocument();
+    fireEvent.click(within(header).getByRole('button', { name: '新建' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '新建标签' }));
+    const dialog = await screen.findByRole('dialog');
+    const name = within(dialog).getByLabelText('新标签名');
+    fireEvent.change(name, { target: { value: '页头标签' } });
+    fireEvent.keyDown(name, { key: 'Enter', isComposing: true });
+    expect(calls('POST', '/bridge/v1/tags')).toHaveLength(0);
+    fireEvent.keyDown(name, { key: 'Enter', isComposing: false });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(calls('POST', '/bridge/v1/tags')).toHaveLength(1);
+    expect(bodyOf('POST', '/tags')).toEqual({ name: '页头标签' });
+    fireEvent.click(within(screen.getByTestId('mycowork-resource-nav')).getByRole('button', { name: '新建' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '新建标签' }));
+    expect(await screen.findAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByLabelText('新标签名')).toHaveValue('');
+  });
+
+  it('tag creation waits for its response without closing, editing or submitting twice', async () => {
+    let finish!: () => void;
+    bridge({
+      createTagStatus: 409,
+      createTagWait: new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    });
+    render(<OfficeResourcesSlot />);
+    await screen.findByText('周报.md');
+    const header = screen.getByTestId('mycowork-resources').querySelector('header') as HTMLElement;
+    fireEvent.click(within(header).getByRole('button', { name: '新建' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '新建标签' }));
+    const dialog = await screen.findByRole('dialog');
+    const name = within(dialog).getByLabelText('新标签名');
+    fireEvent.change(name, { target: { value: '保留创建草稿' } });
+    const create = within(dialog).getByRole('button', { name: '新建' });
+    fireEvent.click(create);
+    expect(name).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: '取消' })).toBeDisabled();
+    expect(within(dialog).queryByRole('button', { name: 'Close' })).toBeNull();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.click(create);
+    expect(calls('POST', '/bridge/v1/tags')).toHaveLength(1);
+    await act(async () => finish());
+    expect(await within(dialog).findByText('已有同名标签，请换个名字')).toBeVisible();
+    expect(name).toHaveValue('保留创建草稿');
+    expect(name).toBeEnabled();
+  });
+
+  it('tag creation from the mobile portal keeps navigation open while using the dialog', async () => {
+    bridge();
+    const collapse = vi.fn();
+    const { container } = render(
+      <LayoutContext.Provider value={{ isMobile: true, siderCollapsed: false, setSiderCollapsed: collapse }}>
+        <aside id='mycowork-space-sider' />
+        <div onClick={() => collapse(true)}>
+          <OfficeResourcesSlot />
+        </div>
+      </LayoutContext.Provider>
+    );
+    await screen.findByText('周报.md');
+    const host = container.querySelector('#mycowork-space-sider') as HTMLElement;
+    fireEvent.click(within(host).getByRole('button', { name: '新建' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '新建标签' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByLabelText('新标签名'));
+    fireEvent.change(within(dialog).getByLabelText('新标签名'), { target: { value: '手机创建' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '新建' }));
+    await waitFor(() => expect(calls('POST', '/bridge/v1/tags')).toHaveLength(1));
+    expect(collapse).not.toHaveBeenCalled();
+  });
+
+  it('header search keeps an IME-cancelling Escape and clears an ordinary Escape', async () => {
+    bridge();
+    render(<OfficeResourcesSlot />);
+    await screen.findByText('周报.md');
+    const header = screen.getByTestId('mycowork-resources').querySelector('header') as HTMLElement;
+    const input = within(header).getByLabelText('搜索文件名或标签');
+    fireEvent.change(input, { target: { value: '组合输入' } });
+    fireEvent.keyDown(input, { key: 'Escape', isComposing: true });
+    expect(input).toHaveValue('组合输入');
+    fireEvent.keyDown(input, { key: 'Escape', isComposing: false });
+    expect(input).toHaveValue('');
+  });
+
   it('a smart group keeps condition editing and uses management for two-step deletion (D143)', async () => {
     bridge({
       views: [
@@ -686,6 +780,10 @@ describe('OfficeResourcesSlot', () => {
     expect(await screen.findByText('最近没有变化的资料')).toBeInTheDocument();
     const links = screen.getAllByRole('link', { name: /导入资料/ });
     expect(links.every((a) => a.getAttribute('href') === '#/office/imports')).toBe(true);
-    expect(links.length).toBe(2); // 标题区主操作 + 空状态引导
+    expect(links).toHaveLength(1); // 空状态保留直接引导，页头统一用新建菜单
+    const header = screen.getByTestId('mycowork-resources').querySelector('header') as HTMLElement;
+    fireEvent.click(within(header).getByRole('button', { name: '新建' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '上传文件' }));
+    expect(window.location.hash).toBe('#/office/imports');
   });
 });

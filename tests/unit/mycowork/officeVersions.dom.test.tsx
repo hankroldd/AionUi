@@ -187,6 +187,8 @@ describe('OfficeVersionsSlot', () => {
     await waitFor(() => expect(calls('GET', '/changes?')).toHaveLength(1));
     expect(calls('GET', '/changes?')[0]?.[0]).toContain('from=rev_bbbbbbbb&to=rev_cccccccc');
     expect(await screen.findByText('修改 1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '返回空间' }));
+    expect(window.location.hash).toBe('#/office/space');
   });
 
   it('compares the default pair: partial notice, view original, counts, grouped changes, folded uncovered items', async () => {

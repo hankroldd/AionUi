@@ -57,6 +57,7 @@ describe('MyCowork icon rail', () => {
     state.selectTheme.mockResolvedValue(undefined);
   });
   afterEach(() => {
+    vi.useRealTimers();
     cleanup();
     vi.unstubAllGlobals();
   });
@@ -77,6 +78,20 @@ describe('MyCowork icon rail', () => {
     view.unmount();
     mount('/scheduled/job1');
     expect(screen.getByRole('button', { name: '定时任务' }).getAttribute('aria-current')).toBe('page');
+  });
+
+  it('mobile rail keeps accessible labels and menus without hover tooltips covering the Space header', async () => {
+    vi.useFakeTimers();
+    mount('/office/space', true);
+    const trigger = screen.getByRole('button', { name: '账户菜单' });
+    fireEvent.mouseEnter(trigger);
+    trigger.focus();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    vi.useRealTimers();
+    await account();
+    expect(screen.getByRole('menu', { name: '账户菜单' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '空间' })).toHaveAttribute('aria-current', 'page');
   });
   it('More has only the two requested routes, with keyboard escape returning focus', async () => {
     mount();

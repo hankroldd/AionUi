@@ -87,7 +87,7 @@ function RailPopup(props: RailPopupProps): React.ReactElement {
     >
       <span className={`mcw-rail-control${props.account ? ' is-account' : ''}`}>
         <Tooltip
-          disabled={visible}
+          disabled={visible || props.mobile}
           content={props.label}
           position={props.mobile ? 'bottom' : 'right'}
           className='mcw-rail-tooltip'
@@ -298,7 +298,13 @@ export default function MyCoworkRail({ mobile = false }: { mobile?: boolean }): 
   return (
     <nav aria-label={text.nav} className={`mcw-rail${mobile ? ' mcw-rail-mobile' : ''}`}>
       {entries.map(({ label, route, active, Icon }) => (
-        <Tooltip key={route} content={label} position={mobile ? 'bottom' : 'right'} className='mcw-rail-tooltip'>
+        <Tooltip
+          key={route}
+          disabled={mobile}
+          content={label}
+          position={mobile ? 'bottom' : 'right'}
+          className='mcw-rail-tooltip'
+        >
           <Button
             type='text'
             htmlType='button'

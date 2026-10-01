@@ -399,8 +399,10 @@ describe('OfficeResourcesSlot', () => {
         expected_metadata_revision: 4,
         tags: { add: ['tag_p'], remove: [] },
       });
-      if (patchStatus)
+      if (patchStatus) {
         expect(await screen.findByText('已被其他地方修改，已重新读取，请再操作一次')).toBeInTheDocument();
+        expect(screen.getByRole('dialog', { name: '“工作稿.pptx”的标签' })).toBeVisible();
+      }
       unmount();
     }
   });

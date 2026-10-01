@@ -70,6 +70,7 @@ vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({
   usePreviewContext: () => ({ closePreview: () => {} }),
 }));
 
+vi.mock('@/renderer/mycowork-rail', () => ({ default: () => <nav data-testid='rail-mount' /> }));
 import Layout from '@renderer/components/layout/Layout';
 
 const renderLayout = () => render(<Layout sider={<div>sider</div>} />);

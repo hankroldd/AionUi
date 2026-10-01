@@ -147,7 +147,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   // mobile keeps the default weight so icons stay legible at larger sizes.
   const desktopIconStroke = layout?.isMobile ? undefined : 2.5;
   // 统一在标题栏左侧展示主侧栏开关 / Always expose sidebar toggle on titlebar left side
-  const showSiderToggle = Boolean(layout?.setSiderCollapsed) && !(layout?.isMobile && isSettingsRoute);
+  const showSiderToggle = Boolean(layout?.setSiderCollapsed);
   const showBackToChatButton = Boolean(layout?.isMobile && isSettingsRoute);
   const siderTooltip = layout?.siderCollapsed
     ? t('common.expandMore', { defaultValue: 'Expand sidebar' })

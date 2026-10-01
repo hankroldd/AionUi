@@ -1,14 +1,19 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const platform = vi.hoisted(() => ({ desktop: true, mac: false }));
+const sidebar = vi.hoisted(() => ({
+  mobile: false,
+  path: '/conversation/test',
+  toggle: undefined as ((value: boolean) => void) | undefined,
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 vi.mock('react-router-dom', () => ({
-  useLocation: () => ({ pathname: '/conversation/test', search: '', hash: '' }),
+  useLocation: () => ({ pathname: sidebar.path, search: '', hash: '' }),
   useNavigate: () => vi.fn(),
 }));
 vi.mock('@/common', () => ({
@@ -21,7 +26,7 @@ vi.mock('@/renderer/components/layout/WindowControls', () => ({
   default: () => <div data-testid='window-controls' />,
 }));
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
-  useLayoutContext: () => ({ isMobile: false }),
+  useLayoutContext: () => ({ isMobile: sidebar.mobile, siderCollapsed: true, setSiderCollapsed: sidebar.toggle }),
 }));
 vi.mock('@/renderer/hooks/context/NavigationHistoryContext', () => ({
   useNavigationHistory: () => null,
@@ -42,6 +47,9 @@ import { WORKSPACE_STATE_EVENT } from '@/renderer/utils/workspace/workspaceEvent
 
 describe('Titlebar workspace toggle', () => {
   beforeEach(() => {
+    sidebar.mobile = false;
+    sidebar.path = '/conversation/test';
+    sidebar.toggle = undefined;
     platform.desktop = true;
     platform.mac = false;
   });
@@ -86,5 +94,13 @@ describe('Titlebar workspace toggle', () => {
 
     expect(screen.queryByRole('button', { name: 'common.expandMore' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'common.collapse' })).not.toBeInTheDocument();
+  });
+  it('keeps the navigation drawer available on mobile settings pages', () => {
+    sidebar.mobile = true;
+    sidebar.path = '/settings/agent';
+    sidebar.toggle = vi.fn();
+    render(<Titlebar workspaceAvailable={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'common.expandMore' }));
+    expect(sidebar.toggle).toHaveBeenCalledWith(false);
   });
 });

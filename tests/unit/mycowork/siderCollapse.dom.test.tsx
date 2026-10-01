@@ -1,9 +1,8 @@
 /**
- * [mycowork] Sidebar collapse / theme toggle / MyCowork entries (MyCowork PR11, owner report 2026-09-29).
- * Covers: the collapsed desktop sider keeps a 64px icon rail (AionUi v1.x behaviour) instead of 0; the MyCowork nav
- * entries use the same markup as AionUi's Scheduled entry in both states (collapsed = centred icon only, expanded =
- * icon in the same 22px box, so icons line up); hovering a collapsed item shows its name; the theme toggle is in the
- * footer outside Settings and when collapsed without truncating Settings / Log out; mobile still collapses to 0.
+ * 文件：tests/unit/mycowork/siderCollapse.dom.test.tsx
+ * 职责：旧二级栏折叠、独立图标栏挂载与原生 fallback 页脚的隔离回归。
+ * 边界：Layout 中的 rail 使用挂载替身；账户菜单真实行为在 officeRail 与浏览器证据验证。
+ * 关联：PR11 W4-1；D139 的二级栏宽度由 W4-2 继续替换。
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -51,15 +50,13 @@ vi.mock('@renderer/pages/conversation/Preview/context/PreviewContext', () => ({
   usePreviewContext: () => ({ closePreview: () => {} }),
 }));
 
+vi.mock('@/renderer/mycowork-rail', () => ({ default: () => <nav data-testid='rail-mount' /> }));
 import Layout from '@renderer/components/layout/Layout';
 import SiderFooter from '@renderer/components/layout/Sider/SiderFooter';
-import { SiderScheduledEntry } from '@renderer/components/layout/Sider/SiderNav';
-import { OfficeImportsSiderSlot } from '@/renderer/mycowork-slots';
 import { getSiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
 
 const SiderStub: React.FC = () => null;
 const tooltip = { disabled: true } as const;
-const sortedClasses = (el: Element | null | undefined) => [...(el?.classList ?? [])].toSorted();
 
 describe('[mycowork] sidebar collapse', () => {
   beforeAll(() => {
@@ -92,32 +89,10 @@ describe('[mycowork] sidebar collapse', () => {
     }
   });
 
-  it.each([false, true])('MyCowork entries use the native entry markup (collapsed=%s)', (collapsed) => {
-    const native = render(
-      <SiderScheduledEntry
-        isMobile={false}
-        isActive={false}
-        collapsed={collapsed}
-        siderTooltipProps={tooltip}
-        onClick={() => {}}
-      />
-    ).container;
-    const ours = render(
-      <OfficeImportsSiderSlot isMobile={false} collapsed={collapsed} siderTooltipProps={tooltip} />
-    ).container;
-    const nativeIcon = native.querySelector('svg');
-    const rows = ours.querySelectorAll('[role="link"]');
-    expect(rows).toHaveLength(3);
-    for (const row of rows) {
-      const icon = row.querySelector('svg');
-      expect(sortedClasses(row)).toEqual(sortedClasses(native.firstElementChild));
-      // icon-park wraps the svg in span.i-icon; the box around that wrapper must be the native one
-      expect(sortedClasses(icon?.closest('.i-icon')?.parentElement)).toEqual(
-        sortedClasses(nativeIcon?.closest('.i-icon')?.parentElement)
-      );
-      expect(icon?.getAttribute('width')).toBe(nativeIcon?.getAttribute('width'));
-      expect(row.textContent).toBe(collapsed ? '' : row.getAttribute('aria-label'));
-    }
+  it('keeps the new primary rail mounted after the secondary sider collapses', () => {
+    render(<Layout sider={<SiderStub />} />);
+    act(() => shortcut.toggleSider?.());
+    expect(screen.getByTestId('rail-mount')).toBeTruthy();
   });
 
   it('hovering an item of the collapsed rail shows its name', async () => {
@@ -134,7 +109,7 @@ describe('[mycowork] sidebar collapse', () => {
     expect(screen.getByText('资源中心').closest('.layout-sider')).toBeNull();
   });
 
-  it.each([false, true])('theme toggle is in the footer outside Settings (collapsed=%s)', (collapsed) => {
+  it.each([false, true])('native fallback footer retains its isolated theme control (collapsed=%s)', (collapsed) => {
     const { getByTestId } = render(
       <SiderFooter
         isMobile={false}

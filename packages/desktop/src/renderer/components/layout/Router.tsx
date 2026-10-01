@@ -9,6 +9,7 @@ import {
   OfficeCompositionSlot,
   OfficeEditSlot,
   OfficeImportsSlot,
+  OfficeKnowledgeSlot,
   OfficeMemorySlot,
   OfficeResourcesSlot,
   OfficeTextEditSlot,
@@ -121,6 +122,8 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
           <Route path='/office/imports' element={<OfficeImportsSlot />} />
           <Route path='/office/resources' element={<OfficeResourcesSlot />} />
+          <Route path='/office/space' element={<OfficeResourcesSlot />} />
+          <Route path='/office/knowledge' element={<OfficeKnowledgeSlot />} />
           <Route path='/office/resources/:resourceId/versions' element={<OfficeVersionsSlot />} />
           <Route path='/office/memory' element={<OfficeMemorySlot />} />
           <Route path='/office/compositions/:decisionId' element={<OfficeCompositionSlot />} />

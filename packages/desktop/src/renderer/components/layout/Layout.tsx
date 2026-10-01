@@ -8,6 +8,7 @@ import { ipcBridge } from '@/common';
 import { TEAM_MODE_ENABLED } from '@/common/config/constants';
 import PwaPullToRefresh from '@/renderer/components/layout/PwaPullToRefresh';
 import Titlebar from '@/renderer/components/layout/Titlebar';
+import MyCoworkRail from '@/renderer/mycowork-rail';
 import { Layout as ArcoLayout, Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
@@ -405,6 +406,7 @@ const Layout: React.FC<{
           )}
 
           <ArcoLayout className={'size-full layout flex-1 min-h-0'}>
+            {!isMobile && <MyCoworkRail />}
             <ArcoLayout.Sider
               collapsedWidth={isMobile ? 0 : DESKTOP_COLLAPSED_WIDTH}
               collapsed={collapsed}

@@ -1,15 +1,12 @@
-import { OfficeImportsSiderSlot } from '@/renderer/mycowork-slots';
+import MyCoworkRail from '@/renderer/mycowork-rail';
 import classNames from 'classnames';
-import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { usePreviewContext } from '@renderer/pages/conversation/Preview/context/PreviewContext';
 import { cleanupSiderTooltips, getSiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
-import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { blurActiveElement } from '@renderer/utils/ui/focus';
-import { useThemeContext } from '@renderer/hooks/context/ThemeContext';
-import { SiderToolbar, SiderSearchEntry, SiderScheduledEntry, SiderAssistantEntry } from './SiderNav';
-import SiderFooter from './SiderFooter';
+import { SiderToolbar, SiderSearchEntry, SiderAssistantEntry } from './SiderNav';
 import TeamSiderSection from './TeamSiderSection';
 import siderStyles from './Sider.module.css';
 
@@ -25,23 +22,12 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const location = useLocation();
-  const { pathname, search, hash } = location;
+  const { pathname } = location;
 
   const navigate = useNavigate();
-  const { closePreview, clearPreviewForScope } = usePreviewContext();
-  const { logout, status } = useAuth();
-  const { theme, setTheme } = useThemeContext();
+  const { closePreview } = usePreviewContext();
   const [isBatchMode, setIsBatchMode] = useState(false);
   const isSettings = pathname.startsWith('/settings');
-  const lastNonSettingsPathRef = useRef('/guid');
-  const showLogout =
-    typeof window !== 'undefined' && !(window as { electronAPI?: unknown }).electronAPI && status === 'authenticated';
-
-  useEffect(() => {
-    if (!pathname.startsWith('/settings')) {
-      lastNonSettingsPathRef.current = `${pathname}${search}${hash}`;
-    }
-  }, [pathname, search, hash]);
 
   const handleNewChat = () => {
     cleanupSiderTooltips();
@@ -51,24 +37,6 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     Promise.resolve(navigate('/guid', { state: { resetAssistant: true } })).catch((error) => {
       console.error('Navigation failed:', error);
     });
-    if (onSessionClick) {
-      onSessionClick();
-    }
-  };
-
-  const handleSettingsClick = () => {
-    cleanupSiderTooltips();
-    blurActiveElement();
-    if (isSettings) {
-      const target = lastNonSettingsPathRef.current || '/guid';
-      Promise.resolve(navigate(target)).catch((error) => {
-        console.error('Navigation failed:', error);
-      });
-    } else {
-      Promise.resolve(navigate('/settings/agent')).catch((error) => {
-        console.error('Navigation failed:', error);
-      });
-    }
     if (onSessionClick) {
       onSessionClick();
     }
@@ -84,19 +52,6 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     setIsBatchMode(false);
   };
 
-  const handleScheduledClick = () => {
-    cleanupSiderTooltips();
-    blurActiveElement();
-    closePreview();
-    setIsBatchMode(false);
-    Promise.resolve(navigate('/scheduled')).catch((error) => {
-      console.error('Navigation failed:', error);
-    });
-    if (onSessionClick) {
-      onSessionClick();
-    }
-  };
-
   const handleAssistantClick = () => {
     cleanupSiderTooltips();
     blurActiveElement();
@@ -109,57 +64,6 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
       onSessionClick();
     }
   };
-
-  const handleQuickThemeToggle = () => {
-    void setTheme(theme === 'dark' ? 'light' : 'dark');
-  };
-
-  const handleLogout = useCallback(async () => {
-    cleanupSiderTooltips();
-    blurActiveElement();
-    // Hide the panel now so the UI responds immediately; the tabs themselves are
-    // discarded after logout resolves, below.
-    closePreview();
-    try {
-      await logout();
-    } catch (error) {
-      console.error('Logout failed:', error);
-      return; // logout 失败时不执行后续操作
-    }
-    // Discard this account's tabs from memory.
-    //
-    // `clearAuthCache` (inside logout) already deletes the stored `preview-ui:`
-    // keys, but PreviewProvider is mounted at the app root and does not unmount on
-    // logout, so its state survives. The persist effect depends on [tabs,
-    // activeTabId, isOpen] and is still live — so the next change of any of those
-    // would write this account's tabs straight back to disk, undoing the very
-    // cleanup that ran moments earlier and showing them to whoever logs in next.
-    //
-    // Done after `await logout()` rather than before: discarding first would throw
-    // the tabs away even on a path that left the user signed in. `logout()` handles
-    // its own request failure and clears auth in a `finally`, so reaching this line
-    // means the account really is signed out.
-    clearPreviewForScope();
-    if (onSessionClick) {
-      onSessionClick();
-    }
-  }, [closePreview, clearPreviewForScope, logout, onSessionClick]);
-
-  useEffect(() => {
-    if (!showLogout) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'l') {
-        event.preventDefault();
-        handleLogout();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [handleLogout, showLogout]);
 
   const tooltipEnabled = collapsed && !isMobile;
   const siderTooltipProps = getSiderTooltipProps(tooltipEnabled);
@@ -174,6 +78,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
 
   return (
     <div className='size-full flex flex-col'>
+      {isMobile && <MyCoworkRail mobile />}
       {/* Main content area */}
       <div className='flex-1 min-h-0 overflow-hidden'>
         {isSettings ? (
@@ -209,15 +114,6 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               siderTooltipProps={siderTooltipProps}
               onClick={handleAssistantClick}
             />
-            {/* Scheduled tasks nav entry - fixed above scroll */}
-            <SiderScheduledEntry
-              isMobile={isMobile}
-              isActive={pathname === '/scheduled'}
-              collapsed={collapsed}
-              siderTooltipProps={siderTooltipProps}
-              onClick={handleScheduledClick}
-            />
-            <OfficeImportsSiderSlot isMobile={isMobile} collapsed={collapsed} siderTooltipProps={siderTooltipProps} />
             {/* Divider between fixed top nav and scrollable content area */}
             <div
               className={classNames(
@@ -246,18 +142,6 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
           </div>
         )}
       </div>
-      {/* Footer */}
-      <SiderFooter
-        isMobile={isMobile}
-        isSettings={isSettings}
-        collapsed={collapsed}
-        theme={theme}
-        siderTooltipProps={siderTooltipProps}
-        onSettingsClick={handleSettingsClick}
-        onThemeToggle={handleQuickThemeToggle}
-        showLogout={showLogout}
-        onLogoutClick={handleLogout}
-      />
     </div>
   );
 };

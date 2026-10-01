@@ -7,19 +7,17 @@ import React, { useEffect, useState } from 'react';
 import i18n from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useInRouterContext, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
-import { BookOpen, Brain, FolderUpload, Tag } from '@icon-park/react';
-import { Tooltip } from '@arco-design/web-react';
-import classNames from 'classnames';
+import { BookOpen } from '@icon-park/react';
 import { ipcBridge } from '@/common';
 import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
 import MarkdownView from '@/renderer/components/Markdown';
 import { MarkdownViewer } from '@/renderer/pages/conversation/Preview/components/viewers';
 import type { ISessionMcpServer, TChatConversation } from '@/common/config/storage';
-import type { SiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
 import {
   askDropChoice,
   CompositionPage,
   ImportsPage,
+  KnowledgePage,
   MemoryPage,
   ResourcesPage,
   VersionsPage,
@@ -30,9 +28,6 @@ import {
   ScopeChip,
   ScopeStrip,
   bindScopedConversation,
-  importText,
-  memoryText,
-  resourceText,
   prepareScopedSession,
 } from '@mycowork/ui';
 
@@ -156,92 +151,16 @@ export const OfficeResourcesSlot: React.FC = () => {
   return <ResourcesPage lang={current.language} />;
 };
 
+/** [mycowork] ADR-0022：知识管理预留页，不连接任何管理 API。 */
+export const OfficeKnowledgeSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  return <KnowledgePage lang={current.language} />;
+};
+
 /** Mount point: route `/office/memory` (MyCowork P11 memory: review, accept/reject/disable, pause precipitation). */
 export const OfficeMemorySlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   return <MemoryPage lang={current.language} />;
-};
-
-/**
- * Sidebar nav entry for a MyCowork page: the same markup as AionUi's SiderScheduledEntry right above it, so collapsed
- * shows only the centred 20px icon (name in the tooltip) and expanded puts the 16px icon in the same 22px box.
- */
-const OfficeNavEntry: React.FC<{
-  path: string;
-  label: string;
-  Icon: typeof Tag;
-  isMobile: boolean;
-  collapsed: boolean;
-  siderTooltipProps: SiderTooltipProps;
-}> = ({ path, label, Icon, isMobile, collapsed, siderTooltipProps }) => {
-  const navigate = useNavigate();
-  const active = useLocation().pathname.startsWith(path);
-  const state = active ? 'bg-fill-3' : 'hover:bg-fill-3 active:bg-fill-4';
-  return (
-    <Tooltip {...siderTooltipProps} content={label} position='right'>
-      <div
-        role='link'
-        aria-label={label}
-        className={
-          collapsed
-            ? classNames(
-                'w-full h-34px flex items-center justify-center cursor-pointer transition-colors rd-8px text-t-primary',
-                state
-              )
-            : classNames(
-                'box-border group h-34px w-full flex items-center justify-start gap-8px ps-10px pe-8px rd-0.5rem cursor-pointer shrink-0 transition-all text-t-primary',
-                isMobile && 'sider-action-btn-mobile',
-                state
-              )
-        }
-        onClick={() => void navigate(path)}
-      >
-        {collapsed ? (
-          <Icon
-            theme='outline'
-            size='20'
-            fill='currentColor'
-            className='block leading-none shrink-0'
-            style={{ lineHeight: 0 }}
-          />
-        ) : (
-          <>
-            <span className='size-22px flex items-center justify-center shrink-0 text-t-primary'>
-              <Icon
-                theme='outline'
-                size='16'
-                fill='currentColor'
-                className='block leading-none'
-                style={{ lineHeight: 0 }}
-              />
-            </span>
-            <span className='collapsed-hidden text-t-primary text-14px font-[500] leading-24px'>{label}</span>
-          </>
-        )}
-      </div>
-    </Tooltip>
-  );
-};
-
-/** Mount point: sidebar nav entries to the MyCowork import queue, resource center and memory page. */
-export const OfficeImportsSiderSlot: React.FC<{
-  isMobile: boolean;
-  collapsed: boolean;
-  siderTooltipProps: SiderTooltipProps;
-}> = (props) => {
-  const { i18n: current } = useTranslation();
-  return (
-    <>
-      <OfficeNavEntry
-        {...props}
-        path='/office/imports'
-        label={importText(current.language).title}
-        Icon={FolderUpload}
-      />
-      <OfficeNavEntry {...props} path='/office/resources' label={resourceText(current.language).title} Icon={Tag} />
-      <OfficeNavEntry {...props} path='/office/memory' label={memoryText(current.language).title} Icon={Brain} />
-    </>
-  );
 };
 
 /**

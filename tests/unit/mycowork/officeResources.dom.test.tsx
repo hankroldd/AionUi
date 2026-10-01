@@ -4,7 +4,7 @@
  * newest first (sort=updated) and shows type, source, local time, tags and the state in "will AI use it" words (D145; no version
  * count in the list, D146); the left nav switches to one knowledge
  * base or My imports; a failing source only shows a local notice, other results stay (02 P05); the search box looks up names/tags
- * across all sources (q=…) and says content search is not available; card/list/table switch, remembered locally and on a saved
+ * across all sources (q=…) and says content search is not available; grid/list switch, remembered locally and on a saved
  * view; starring creates or updates the "starred" collection and the Starred nav lists it; a tag filters across sources and can be
  * saved as a view; editing tags patches metadata with the read revision (409 → reload + notice); moving a tag to the top level;
  * empty and no-permission states. Round 3 (2026-09-29): collapsible nav groups remembered locally and a keyboard-resizable
@@ -80,6 +80,7 @@ type Opts = {
   starred?: string[];
   views?: Record<string, unknown>[];
   tags3?: boolean;
+  secretReady?: boolean;
 };
 function bridge(opts: Opts = {}) {
   let tags = structuredClone(TAGS);
@@ -98,7 +99,7 @@ function bridge(opts: Opts = {}) {
       let items = opts.empty
         ? []
         : q.get('source_id') === 'src_q'
-          ? [WEEKLY]
+          ? [{ ...WEEKLY, secret: opts.secretReady ?? false }]
           : [item(opts.tags3 ? { tag_ids: ['tag_c', 'tag_p', 'tag_x'] } : {})];
       if (q.get('collection_id')) items = items.filter((i) => opts.starred?.includes(i.resource_id));
       if (q.get('q')) items = items.filter((i) => i.file_name.includes(q.get('q') as string));
@@ -257,18 +258,63 @@ describe('OfficeResourcesSlot', () => {
     await waitFor(() => expect(calls('GET', 'tag_id=tag_c')).toHaveLength(2));
   });
 
-  it('switches card / list / table and remembers the choice locally', async () => {
+  it('switches grid / list and remembers the choice locally', async () => {
     bridge();
     const { unmount, container } = render(<OfficeResourcesSlot />);
     await screen.findByText('周报.md');
-    fireEvent.click(screen.getByLabelText('卡片'));
+    fireEvent.click(screen.getByLabelText('网格'));
     await waitFor(() => expect(container.querySelector('.mcw-rc-grid')).not.toBeNull());
-    fireEvent.click(screen.getByLabelText('表格'));
-    await waitFor(() => expect(container.querySelector('.arco-table')).not.toBeNull());
+    fireEvent.click(screen.getByLabelText('列表'));
+    await waitFor(() => expect(container.querySelector('.mcw-rc-rows')).not.toBeNull());
     unmount();
     const again = render(<OfficeResourcesSlot />);
     await screen.findByText('周报.md');
-    expect(again.container.querySelector('.arco-table')).not.toBeNull();
+    expect(again.container.querySelector('.mcw-rc-rows')).not.toBeNull();
+  });
+
+  it('a historical table preference is shown as a list without rewriting the preference or view', async () => {
+    localStorage.setItem('mycowork.resources.layout', 'table');
+    bridge({
+      views: [
+        {
+          view_id: 'view_table',
+          name: '旧表格',
+          filter: { tag_ids: ['tag_c'] },
+          layout: 'table',
+          revision: 2,
+          missing_tag_ids: [],
+        },
+      ],
+    });
+    const { container } = render(<OfficeResourcesSlot />);
+    await screen.findByText('周报.md');
+    expect(container.querySelector('.mcw-rc-rows [role="list"]')).not.toBeNull();
+    expect(within(screen.getByLabelText('列表')).getByRole('radio')).toBeChecked();
+    expect(screen.queryByLabelText('表格')).toBeNull();
+    expect(localStorage.getItem('mycowork.resources.layout')).toBe('table');
+    fireEvent.click(screen.getByTestId('mycowork-nav-view-view_table'));
+    await waitFor(() => expect(calls('GET', 'view_id=view_table')).toHaveLength(2));
+    expect(within(screen.getByLabelText('列表')).getByRole('radio')).toBeChecked();
+    expect(calls('PATCH', '/bridge/v1/saved-views/view_table')).toHaveLength(0);
+  });
+
+  it('a Secret file with a ready index is excluded from AI in both layouts', async () => {
+    bridge({ secretReady: true });
+    const { container } = render(<OfficeResourcesSlot />);
+    const row = (await screen.findAllByTestId('mycowork-resource-item')).find((r) =>
+      within(r).queryByRole('link', { name: '周报.md' })
+    )!;
+    expect(within(row).getByText('AI 不引用')).toBeInTheDocument();
+    expect(within(row).queryByText('AI 可引用')).toBeNull();
+    expect(within(row).getByTestId('mycowork-secret-lock')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('网格'));
+    await waitFor(() => expect(container.querySelector('.mcw-rc-grid')).not.toBeNull());
+    const card = screen
+      .getAllByTestId('mycowork-resource-item')
+      .find((r) => within(r).queryByRole('link', { name: '周报.md' }))!;
+    expect(within(card).getByText('AI 不引用')).toBeInTheDocument();
+    expect(within(card).queryByText('AI 可引用')).toBeNull();
+    expect(calls('PATCH', '/metadata')).toHaveLength(0);
   });
 
   it('a saved view remembers its own layout on the Bridge', async () => {

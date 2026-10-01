@@ -1,4 +1,5 @@
 import MyCoworkRail from '@/renderer/mycowork-rail';
+import MyCoworkSecondaryHeader from '@/renderer/mycowork-secondary';
 import classNames from 'classnames';
 import React, { Suspense, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -6,7 +7,7 @@ import { usePreviewContext } from '@renderer/pages/conversation/Preview/context/
 import { cleanupSiderTooltips, getSiderTooltipProps } from '@renderer/utils/ui/siderTooltip';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { blurActiveElement } from '@renderer/utils/ui/focus';
-import { SiderToolbar, SiderSearchEntry, SiderAssistantEntry } from './SiderNav';
+import { SiderToolbar, SiderAssistantEntry } from './SiderNav';
 import TeamSiderSection from './TeamSiderSection';
 import siderStyles from './Sider.module.css';
 
@@ -28,6 +29,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const { closePreview } = usePreviewContext();
   const [isBatchMode, setIsBatchMode] = useState(false);
   const isSettings = pathname.startsWith('/settings');
+  const isOffice = pathname.startsWith('/office/');
 
   const handleNewChat = () => {
     cleanupSiderTooltips();
@@ -77,11 +79,12 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   };
 
   return (
-    <div className='size-full flex flex-col'>
+    <div className='size-full flex flex-col mcw-secondary-content'>
       {isMobile && <MyCoworkRail mobile />}
+      {!isSettings && !isOffice && <MyCoworkSecondaryHeader onConversationSelect={handleConversationSelect} />}
       {/* Main content area */}
       <div className='flex-1 min-h-0 overflow-hidden'>
-        {isSettings ? (
+        {isOffice ? null : isSettings ? (
           <Suspense fallback={<div className='size-full' />}>
             <SettingsSider collapsed={collapsed} tooltipEnabled={tooltipEnabled} />
           </Suspense>
@@ -95,18 +98,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               onNewChat={handleNewChat}
               onToggleBatchMode={() => setIsBatchMode((prev) => !prev)}
             />
-            {/* Search entry — desktop moves this into the titlebar toolbar;
-                mobile keeps it here in the sidebar. */}
-            {isMobile && (
-              <SiderSearchEntry
-                isMobile={isMobile}
-                collapsed={collapsed}
-                siderTooltipProps={siderTooltipProps}
-                onConversationSelect={handleConversationSelect}
-                onSessionClick={onSessionClick}
-              />
-            )}
-            {/* Assistant nav entry - fixed above Scheduled */}
+            {/* 原生助手与会话/项目行为保持不变 */}
             <SiderAssistantEntry
               isMobile={isMobile}
               isActive={pathname.startsWith('/assistants')}

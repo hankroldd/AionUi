@@ -12,6 +12,7 @@ import WindowControls from '../WindowControls';
 import { WORKSPACE_STATE_EVENT, dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
 import type { WorkspaceStateDetail } from '@renderer/utils/workspace/workspaceEvents';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import { isMyCoworkHomeRoute } from '@/renderer/mycowork-secondary';
 import { useNavigationHistory } from '@/renderer/hooks/context/NavigationHistoryContext';
 import { useFeedback } from '@/renderer/hooks/context/FeedbackContext';
 import { resolveFeedbackModule } from '@/renderer/services/feedback/resolveFeedbackModule';
@@ -147,7 +148,8 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   // mobile keeps the default weight so icons stay legible at larger sizes.
   const desktopIconStroke = layout?.isMobile ? undefined : 2.5;
   // 统一在标题栏左侧展示主侧栏开关 / Always expose sidebar toggle on titlebar left side
-  const showSiderToggle = Boolean(layout?.setSiderCollapsed);
+  const showSiderToggle =
+    Boolean(layout?.setSiderCollapsed) && (layout?.isMobile || !location.pathname.startsWith('/office/'));
   const showBackToChatButton = Boolean(layout?.isMobile && isSettingsRoute);
   const siderTooltip = layout?.siderCollapsed
     ? t('common.expandMore', { defaultValue: 'Expand sidebar' })
@@ -157,10 +159,8 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const showHistoryNav = Boolean(navigationHistory) && !layout?.isMobile;
   const historyBackTooltip = t('common.historyBack', { defaultValue: 'Back' });
   const historyForwardTooltip = t('common.forward', { defaultValue: 'Forward' });
-  // Conversation search moved from the sidebar into the titlebar toolbar
-  // (between the sidebar toggle and the back/forward nav). Desktop only —
-  // mobile keeps search inside the sidebar.
-  const showSearchButton = !layout?.isMobile;
+  // ADR-0022：首页搜索在二级栏头部；收起后保留标题栏入口，其他页不搜会话。
+  const showSearchButton = !layout?.isMobile && layout?.siderCollapsed && isMyCoworkHomeRoute(location.pathname);
   const searchTooltip = t('conversation.historySearch.tooltip', { defaultValue: 'Search conversations' });
 
   const handleSiderToggle = () => {

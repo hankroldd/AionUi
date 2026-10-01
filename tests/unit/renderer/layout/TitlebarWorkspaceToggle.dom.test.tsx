@@ -7,6 +7,7 @@ const sidebar = vi.hoisted(() => ({
   mobile: false,
   path: '/conversation/test',
   toggle: undefined as ((value: boolean) => void) | undefined,
+  collapsed: true,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -20,13 +21,19 @@ vi.mock('@/common', () => ({
   ipcBridge: { conversation: { get: { invoke: vi.fn() } } },
 }));
 vi.mock('@/common/config/constants', () => ({ TEAM_MODE_ENABLED: false }));
-vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover', () => ({ default: () => null }));
+vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover', () => ({
+  default: () => <span data-testid='conversation-search' />,
+}));
 vi.mock('@/renderer/components/layout/Titlebar/MobileConversationBrand', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/WindowControls', () => ({
   default: () => <div data-testid='window-controls' />,
 }));
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
-  useLayoutContext: () => ({ isMobile: sidebar.mobile, siderCollapsed: true, setSiderCollapsed: sidebar.toggle }),
+  useLayoutContext: () => ({
+    isMobile: sidebar.mobile,
+    siderCollapsed: sidebar.collapsed,
+    setSiderCollapsed: sidebar.toggle,
+  }),
 }));
 vi.mock('@/renderer/hooks/context/NavigationHistoryContext', () => ({
   useNavigationHistory: () => null,
@@ -50,6 +57,7 @@ describe('Titlebar workspace toggle', () => {
     sidebar.mobile = false;
     sidebar.path = '/conversation/test';
     sidebar.toggle = undefined;
+    sidebar.collapsed = true;
     platform.desktop = true;
     platform.mac = false;
   });
@@ -102,5 +110,20 @@ describe('Titlebar workspace toggle', () => {
     render(<Titlebar workspaceAvailable={false} />);
     fireEvent.click(screen.getByRole('button', { name: 'common.expandMore' }));
     expect(sidebar.toggle).toHaveBeenCalledWith(false);
+  });
+
+  it.each([
+    ['/guid', true, true],
+    ['/conversation/test', false, false],
+    ['/office/space', true, false],
+    ['/office/memory', true, false],
+    ['/scheduled', true, false],
+    ['/scheduled/job-1', true, false],
+    ['/settings/agent', true, false],
+  ])('titlebar conversation search scope: %s collapsed=%s', (path, collapsed, visible) => {
+    sidebar.path = path;
+    sidebar.collapsed = collapsed;
+    render(<Titlebar workspaceAvailable={false} />);
+    expect(Boolean(screen.queryByTestId('conversation-search'))).toBe(visible);
   });
 });

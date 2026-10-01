@@ -1,24 +1,24 @@
 /**
  * 文件：tests/unit/mycowork/siderCollapse.dom.test.tsx
- * 职责：旧二级栏折叠、独立图标栏挂载与原生 fallback 页脚的隔离回归。
+ * 职责：二级栏实际宽度/收起持久化、图标栏挂载与原生 fallback 页脚隔离回归。
  * 边界：Layout 中的 rail 使用挂载替身；账户菜单真实行为在 officeRail 与浏览器证据验证。
- * 关联：PR11 W4-1；D139 的二级栏宽度由 W4-2 继续替换。
+ * 关联：PR11 W4-1/W4-2；ADR-0022。
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Tooltip } from '@arco-design/web-react';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 
-const shortcut = vi.hoisted(() => ({ toggleSider: undefined as undefined | (() => void) }));
+const shortcut = vi.hoisted(() => ({ toggleSider: undefined as undefined | (() => void), pathname: '/guid' }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'zh-CN' } }),
 }));
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
-  useLocation: () => ({ pathname: '/guid', search: '', hash: '' }),
+  useLocation: () => ({ pathname: shortcut.pathname, search: '', hash: '' }),
   useNavigationType: () => 'POP',
   useMatch: () => null,
   useParams: () => ({}),
@@ -59,6 +59,11 @@ const SiderStub: React.FC = () => null;
 const tooltip = { disabled: true } as const;
 
 describe('[mycowork] sidebar collapse', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    shortcut.pathname = '/guid';
+    vi.stubGlobal('PointerEvent', MouseEvent);
+  });
   beforeAll(() => {
     window.matchMedia = ((query: string) => ({
       matches: false,
@@ -68,12 +73,54 @@ describe('[mycowork] sidebar collapse', () => {
     })) as never;
   });
 
-  it('collapsed desktop sider keeps a 64px icon rail', () => {
+  it('collapsed secondary sider uses zero width and remains hidden from keyboard navigation', () => {
     const { container } = render(<Layout sider={<SiderStub />} />);
     act(() => shortcut.toggleSider?.());
     const sider = container.querySelector('.layout-sider') as HTMLElement;
     expect(sider.className).toContain('collapsed');
-    expect(sider.style.width).toBe('64px');
+    expect(sider.style.width).toBe('0px');
+    expect(sider.style.visibility).toBe('hidden');
+  });
+
+  it('starts with 288px and ignores widths below the new minimum', () => {
+    localStorage.setItem('sider-width-px', '220');
+    const { container } = render(<Layout sider={<SiderStub />} />);
+    expect((container.querySelector('.layout-sider') as HTMLElement).style.width).toBe('288px');
+  });
+
+  it.each([
+    [237, '0px'],
+    [238, '238px'],
+    [239, '239px'],
+    [800, '468px'],
+  ])('real Layout drag to %s observes the sidebar bounds (%s)', (target, expected) => {
+    const { container } = render(<Layout sider={<SiderStub />} />);
+    const handle = container.querySelector('.layout-sider .cursor-col-resize') as HTMLElement;
+    fireEvent.pointerDown(handle, { clientX: 288, button: 0, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: target });
+    expect((container.querySelector('.layout-sider') as HTMLElement).style.width).toBe(expected);
+    expect(localStorage.getItem('mycowork:sider-collapsed')).toBe(String(target < 238));
+  });
+
+  it('refresh preserves collapse and expansion restores the last legal width', () => {
+    localStorage.setItem('sider-width-px', '350');
+    const first = render(<Layout sider={<SiderStub />} />);
+    act(() => shortcut.toggleSider?.());
+    first.unmount();
+    const { container } = render(<Layout sider={<SiderStub />} />);
+    const sider = container.querySelector('.layout-sider') as HTMLElement;
+    expect(sider.style.width).toBe('0px');
+    act(() => shortcut.toggleSider?.());
+    expect(sider.style.width).toBe('350px');
+  });
+
+  it('Office routes hide the unrelated native conversation sidebar', () => {
+    shortcut.pathname = '/office/space';
+    const { container } = render(<Layout sider={<SiderStub />} />);
+    const sider = container.querySelector('.layout-sider') as HTMLElement;
+    expect(sider.style.width).toBe('0px');
+    expect(sider.style.visibility).toBe('hidden');
+    expect(localStorage.getItem('mycowork:sider-collapsed')).toBe('false');
   });
 
   it('mobile sider still collapses to 0 (overlay)', () => {
@@ -93,6 +140,28 @@ describe('[mycowork] sidebar collapse', () => {
     render(<Layout sider={<SiderStub />} />);
     act(() => shortcut.toggleSider?.());
     expect(screen.getByTestId('rail-mount')).toBeTruthy();
+  });
+
+  it('sidebar shortcut follows the current viewport without changing the desktop preference', () => {
+    const width = window.innerWidth;
+    const { container } = render(<Layout sider={<SiderStub />} />);
+    try {
+      act(() => {
+        window.innerWidth = 390;
+        fireEvent.resize(window);
+      });
+      act(() => shortcut.toggleSider?.());
+      const sider = container.querySelector('.layout-sider') as HTMLElement;
+      expect(sider.style.width).not.toBe('0px');
+      expect(localStorage.getItem('mycowork:sider-collapsed')).toBe('false');
+      act(() => {
+        window.innerWidth = width;
+        fireEvent.resize(window);
+      });
+      expect(sider.style.width).toBe('288px');
+    } finally {
+      window.innerWidth = width;
+    }
   });
 
   it('hovering an item of the collapsed rail shows its name', async () => {

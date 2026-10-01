@@ -9,6 +9,7 @@ import { TEAM_MODE_ENABLED } from '@/common/config/constants';
 import PwaPullToRefresh from '@/renderer/components/layout/PwaPullToRefresh';
 import Titlebar from '@/renderer/components/layout/Titlebar';
 import MyCoworkRail from '@/renderer/mycowork-rail';
+import { useMyCoworkSecondaryCollapse } from '@/renderer/mycowork-secondary';
 import { Layout as ArcoLayout, Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
@@ -96,13 +97,11 @@ const useDebug = () => {
 
 const UpdateModal = React.lazy(() => import('@/renderer/components/settings/UpdateModal'));
 
-const DEFAULT_SIDER_WIDTH = 260;
-// [mycowork] collapsed desktop sider keeps a 64px icon rail (AionUi v1.x; v2.1+ collapses to 0). The sider items'
-// collapsed branches (centred icon + tooltip) are still upstream code.
-const DESKTOP_COLLAPSED_WIDTH = 64;
-// 桌面侧栏连续可调：下限 200；低于此值拖拽即吸附收起（消灭旧 130 死区）。
-// 上限 = 窗口宽 50%（动态随窗口）。
-const SIDER_MIN_WIDTH = 200;
+const DEFAULT_SIDER_WIDTH = 288;
+// ADR-0022：固定图标栏独立常驻，二级栏收起后宽度为 0。
+const DESKTOP_COLLAPSED_WIDTH = 0;
+const SIDER_MIN_WIDTH = 238;
+const SIDER_MAX_WIDTH = 468;
 const MOBILE_SIDER_WIDTH_RATIO = 0.67;
 const MOBILE_SIDER_MIN_WIDTH = 260;
 const MOBILE_SIDER_MAX_WIDTH = 420;
@@ -126,8 +125,8 @@ const Layout: React.FC<{
   sider: React.ReactNode;
   onSessionClick?: () => void;
 }> = ({ sider, onSessionClick: _onSessionClick }) => {
-  const [collapsed, setCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(detectMobileViewportOrTouch);
+  const { collapsed, setCollapsed } = useMyCoworkSecondaryCollapse(isMobile);
   const [viewportWidth, setViewportWidth] = useState<number>(() =>
     typeof window === 'undefined' ? 390 : window.innerWidth
   );
@@ -138,11 +137,12 @@ const Layout: React.FC<{
   useDesktopTurnNotification();
   const navigate = useNavigate();
   const location = useLocation();
+  const isOfficeRoute = location.pathname.startsWith('/office/');
   const workspaceAvailable =
     location.pathname.startsWith('/conversation/') || (TEAM_MODE_ENABLED && location.pathname.startsWith('/team/'));
   const toggleSider = useCallback(() => {
     setCollapsed((previous) => !previous);
-  }, []);
+  }, [setCollapsed]);
   useConversationShortcuts({ navigate, toggleSider });
   // Expose navigate to code running outside the Router tree (e.g. the globally
   // mounted FeedbackReportModal's "via chat" action).
@@ -151,12 +151,8 @@ const Layout: React.FC<{
     return () => setGlobalNavigate(null);
   }, [navigate]);
   const { t } = useTranslation();
-  // The "AionUi" wordmark acts as Home / Back-to-Chat, but only from settings routes.
-  // In non-settings routes the user is already "home", so it is a no-op (and not actionable).
+  // 原生字标只保留在设置页，返回上次非设置路径；首页使用新的二级栏头部。
   const isSettingsRoute = location.pathname.startsWith('/settings');
-  // Only wired to the wordmark in the isSettingsRoute branch below, so the
-  // "no-op outside settings" contract is enforced structurally — no internal
-  // route guard needed (the chat-route wordmark is a plain, inert div).
   const handleBrandHome = useCallback(() => {
     // Mirror Titlebar's handleBackToChat convention: return to the last non-settings path.
     let target: string | null = null;
@@ -259,16 +255,12 @@ const Layout: React.FC<{
     }
   }, [location.pathname, workspaceAvailable, closePreviewOnRouteChange]);
 
-  const collapsedRef = useRef(collapsed);
-
-  // 桌面侧栏连续可调宽 + 记忆宽度 + 收起吸附。复用 useResizableSplit
-  // 的 pointer/rAF 拖拽管线：拖到 <200 吸附收起（onCollapsedChange→collapsed），
-  // ≥200 跟手且写盘，双击分隔线恢复 260。上限动态跟随窗口 50%。移动端不使用。
+  // ADR-0022：复用原生 pointer/rAF 与最后合法宽度持久化，拖过 238 即收起。
   const { splitRatio: desktopSiderWidth, createDragHandle: createSiderDragHandle } = useResizableSplit({
     unit: 'px',
     defaultWidth: DEFAULT_SIDER_WIDTH,
     minWidth: SIDER_MIN_WIDTH,
-    maxWidth: Math.max(SIDER_MIN_WIDTH, Math.round(viewportWidth * 0.5)),
+    maxWidth: SIDER_MAX_WIDTH,
     storageKey: 'sider-width-px',
     collapseThreshold: SIDER_MIN_WIDTH,
     collapsedWidth: DESKTOP_COLLAPSED_WIDTH,
@@ -291,14 +283,6 @@ const Layout: React.FC<{
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  // 进入移动端后立即折叠 / Collapse immediately when switching to mobile
-  useEffect(() => {
-    if (!isMobile || collapsedRef.current) {
-      return;
-    }
-    setCollapsed(true);
-  }, [isMobile]);
 
   // 清理侧栏 Tooltip 残留节点，避免移动端路由切换后浮层卡在左上角
   useEffect(() => {
@@ -377,9 +361,6 @@ const Layout: React.FC<{
         Math.min(MOBILE_SIDER_MAX_WIDTH, Math.round(viewportWidth * MOBILE_SIDER_WIDTH_RATIO))
       )
     : desktopSiderWidth;
-  useEffect(() => {
-    collapsedRef.current = collapsed;
-  }, [collapsed]);
 
   const siderStyle = isMobile
     ? {
@@ -389,10 +370,12 @@ const Layout: React.FC<{
         transform: collapsed ? 'translateX(-100%)' : 'translateX(0)',
         transition: 'none',
         pointerEvents: collapsed ? ('none' as const) : ('auto' as const),
+        visibility: collapsed ? ('hidden' as const) : ('visible' as const),
       }
     : {
         position: 'relative' as const,
         overflow: 'visible' as const,
+        visibility: collapsed || isOfficeRoute ? ('hidden' as const) : ('visible' as const),
       };
 
   return (
@@ -408,53 +391,53 @@ const Layout: React.FC<{
           <ArcoLayout className={'size-full layout flex-1 min-h-0'}>
             {!isMobile && <MyCoworkRail />}
             <ArcoLayout.Sider
-              collapsedWidth={isMobile ? 0 : DESKTOP_COLLAPSED_WIDTH}
-              collapsed={collapsed}
+              collapsedWidth={DESKTOP_COLLAPSED_WIDTH}
+              collapsed={collapsed || (!isMobile && isOfficeRoute)}
               width={siderWidth}
-              className={classNames('!bg-2 layout-sider', {
+              className={classNames('!bg-2 layout-sider mcw-secondary', {
                 collapsed: collapsed,
               })}
               style={siderStyle}
             >
-              <ArcoLayout.Header
-                className={classNames(
-                  'flex items-center justify-start pt-8px pb-8px ps-18px pe-16px gap-12px layout-sider-header',
-                  isMobile && 'layout-sider-header--mobile',
-                  {
-                    'cursor-pointer group ': collapsed,
-                  }
-                )}
-              >
-                <div
-                  className={classNames('bg-black shrink-0 size-32px relative rd-0.5rem', {
-                    '!size-24px': collapsed,
-                  })}
-                  onClick={onClick}
+              {isSettingsRoute && (
+                <ArcoLayout.Header
+                  className={classNames(
+                    'flex items-center justify-start pt-8px pb-8px ps-18px pe-16px gap-12px layout-sider-header',
+                    isMobile && 'layout-sider-header--mobile',
+                    {
+                      'cursor-pointer group ': collapsed,
+                    }
+                  )}
                 >
-                  <svg
-                    className={classNames('w-5.5 h-5.5 absolute inset-0 m-auto', {
-                      'scale-140': !collapsed,
+                  <div
+                    className={classNames('bg-black shrink-0 size-32px relative rd-0.5rem', {
+                      '!size-24px': collapsed,
                     })}
-                    viewBox='0 0 80 80'
-                    fill='none'
+                    onClick={onClick}
                   >
-                    <path
-                      key='logo-path-1'
-                      d='M40 20 Q38 22 25 40 Q23 42 26 42 L30 42 Q32 40 40 30 Q48 40 50 42 L54 42 Q57 42 55 40 Q42 22 40 20'
-                      fill='white'
-                    ></path>
-                    <circle key='logo-circle' cx='40' cy='46' r='3' fill='white'></circle>
-                    <path
-                      key='logo-path-2'
-                      d='M18 50 Q40 70 62 50'
-                      stroke='white'
-                      strokeWidth='3.5'
+                    <svg
+                      className={classNames('w-5.5 h-5.5 absolute inset-0 m-auto', {
+                        'scale-140': !collapsed,
+                      })}
+                      viewBox='0 0 80 80'
                       fill='none'
-                      strokeLinecap='round'
-                    ></path>
-                  </svg>
-                </div>
-                {isSettingsRoute ? (
+                    >
+                      <path
+                        key='logo-path-1'
+                        d='M40 20 Q38 22 25 40 Q23 42 26 42 L30 42 Q32 40 40 30 Q48 40 50 42 L54 42 Q57 42 55 40 Q42 22 40 20'
+                        fill='white'
+                      ></path>
+                      <circle key='logo-circle' cx='40' cy='46' r='3' fill='white'></circle>
+                      <path
+                        key='logo-path-2'
+                        d='M18 50 Q40 70 62 50'
+                        stroke='white'
+                        strokeWidth='3.5'
+                        fill='none'
+                        strokeLinecap='round'
+                      ></path>
+                    </svg>
+                  </div>
                   <Tooltip content={t('common.back', { defaultValue: 'Back to Chat' })} position='bottom'>
                     <div
                       className='text-16px text-t-primary collapsed-hidden font-semibold cursor-pointer'
@@ -472,22 +455,20 @@ const Layout: React.FC<{
                       AionUi
                     </div>
                   </Tooltip>
-                ) : (
-                  <div className='text-16px text-t-primary collapsed-hidden font-semibold'>AionUi</div>
-                )}
-                {isMobile && !collapsed && (
-                  <button
-                    type='button'
-                    className='app-titlebar__button app-titlebar__button--mobile'
-                    onClick={() => setCollapsed(true)}
-                    title='Collapse sidebar'
-                    aria-label='Collapse sidebar'
-                  >
-                    <SidebarIcon size={18} strokeWidth={2.5} />
-                  </button>
-                )}
-                {/* 侧栏折叠改由标题栏统一控制 / Sidebar folding handled by Titlebar toggle */}
-              </ArcoLayout.Header>
+                  {isMobile && !collapsed && (
+                    <button
+                      type='button'
+                      className='app-titlebar__button app-titlebar__button--mobile'
+                      onClick={() => setCollapsed(true)}
+                      title='Collapse sidebar'
+                      aria-label='Collapse sidebar'
+                    >
+                      <SidebarIcon size={18} strokeWidth={2.5} />
+                    </button>
+                  )}
+                  {/* 侧栏折叠改由标题栏统一控制 / Sidebar folding handled by Titlebar toggle */}
+                </ArcoLayout.Header>
+              )}
               <ArcoLayout.Content className='pt-0 px-8px pb-0 layout-sider-content'>
                 {React.isValidElement(sider)
                   ? React.cloneElement(sider, {
@@ -500,6 +481,8 @@ const Layout: React.FC<{
                   : sider}
               </ArcoLayout.Content>
               {!isMobile &&
+                !collapsed &&
+                !isOfficeRoute &&
                 createSiderDragHandle({
                   className: 'z-20',
                   style: { right: '-4px', width: '8px' },

@@ -98,6 +98,7 @@ describe('Layout sider brand Home button', () => {
     shortcutMocks.params = undefined;
     featureMocks.teamModeEnabled = false;
     sessionStorage.clear();
+    localStorage.clear();
     currentPathname = '/guid';
   });
 
@@ -154,22 +155,21 @@ describe('Layout sider brand Home button', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it('renders the wordmark as a non-actionable element in a non-settings route', () => {
+  it('leaves the native wordmark out of the new home secondary header', () => {
     currentPathname = '/guid';
     renderLayout();
 
     // No actionable role/label in chat routes.
     expect(screen.queryByLabelText(BACK_KEY)).toBeNull();
-    const wordmark = screen.getByText('AionUi');
-    fireEvent.click(wordmark);
+    expect(screen.queryByText('AionUi')).toBeNull();
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it('does not navigate when the wordmark is clicked in a non-settings route', () => {
+  it('does not expose the settings brand action on conversation routes', () => {
     currentPathname = '/conversation/xyz';
     renderLayout();
 
-    fireEvent.click(screen.getByText('AionUi'));
+    expect(screen.queryByLabelText(BACK_KEY)).toBeNull();
     expect(navigate).not.toHaveBeenCalled();
   });
 

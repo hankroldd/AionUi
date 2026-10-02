@@ -109,7 +109,7 @@ describe('OfficeMemorySlot', () => {
       expected_revision: 2,
       text: '先写结论再写过程',
     });
-    fireEvent.click(screen.getByRole('tab', { name: '已生效' }));
+    fireEvent.click(screen.getByRole('button', { name: '已生效' }));
     expect(await screen.findByText('图表用蓝色')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '停用' }));
     await waitFor(() => expect(calls('POST', '/memory-items/mem_2/actions')).toHaveLength(1));
@@ -130,7 +130,7 @@ describe('OfficeMemorySlot', () => {
     bridge();
     render(<OfficeMemorySlot />);
     await screen.findByText('二期验收定在十月（虚构）');
-    fireEvent.click(screen.getByRole('tab', { name: '已拒绝' }));
+    fireEvent.click(screen.getByRole('button', { name: '已拒绝' }));
     expect(await screen.findByText('这一栏还没有条目')).toBeInTheDocument();
     expect(screen.getByText(/该入口随后续切片提供/)).toBeInTheDocument();
   });

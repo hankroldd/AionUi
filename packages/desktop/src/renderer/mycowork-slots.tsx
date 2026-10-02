@@ -10,7 +10,7 @@ import { useInRouterContext, useLocation, useMatch, useNavigate, useParams } fro
 import { BookOpen } from '@icon-park/react';
 import { ipcBridge } from '@/common';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
-import { MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-secondary';
+import { MYCOWORK_MEMORY_SIDER_ID, MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-secondary';
 import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
 import MarkdownView from '@/renderer/components/Markdown';
 import { MarkdownViewer } from '@/renderer/pages/conversation/Preview/components/viewers';
@@ -147,26 +147,29 @@ export const OfficeImportsSlot: React.FC = () => {
   return <ImportsPage lang={current.language} {...(projectId ? { projectId } : {})} />;
 };
 
-/** 空间的数据仍由页面持有，portal 只把同一导航挂入原生二级栏。 */
-export const OfficeResourcesSlot: React.FC = () => {
-  const { i18n: current } = useTranslation();
+/** 页面仍持有数据，两个portal只共享原生容器与手机收起回调。 */
+function useOfficeSidebar(id: string) {
   const layout = useLayoutContext();
   const [sidebar, setSidebar] = useState<HTMLElement | null>(null);
   useLayoutEffect(() => {
-    setSidebar(document.getElementById(MYCOWORK_SPACE_SIDER_ID));
-  }, []);
-  return (
-    <ResourcesPage
-      lang={current.language}
-      navigationContainer={sidebar}
-      {...(layout
-        ? {
-            onCollapse: () => layout.setSiderCollapsed(true),
-            onSelect: () => layout.isMobile && layout.setSiderCollapsed(true),
-          }
-        : {})}
-    />
-  );
+    setSidebar(document.getElementById(id));
+  }, [id]);
+  return {
+    navigationContainer: sidebar,
+    ...(layout
+      ? {
+          onCollapse: () => layout.setSiderCollapsed(true),
+          onSelect: () => layout.isMobile && layout.setSiderCollapsed(true),
+        }
+      : {}),
+  };
+}
+
+/** 空间的数据仍由页面持有，portal 只把同一导航挂入原生二级栏。 */
+export const OfficeResourcesSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  const navigation = useOfficeSidebar(MYCOWORK_SPACE_SIDER_ID);
+  return <ResourcesPage lang={current.language} {...navigation} />;
 };
 
 /** [mycowork] ADR-0022：知识管理预留页，不连接任何管理 API。 */
@@ -178,7 +181,8 @@ export const OfficeKnowledgeSlot: React.FC = () => {
 /** Mount point: route `/office/memory` (MyCowork P11 memory: review, accept/reject/disable, pause precipitation). */
 export const OfficeMemorySlot: React.FC = () => {
   const { i18n: current } = useTranslation();
-  return <MemoryPage lang={current.language} />;
+  const navigation = useOfficeSidebar(MYCOWORK_MEMORY_SIDER_ID);
+  return <MemoryPage lang={current.language} {...navigation} />;
 };
 
 /**

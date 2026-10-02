@@ -27,7 +27,7 @@ vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover',
     onConversationSelect: () => void;
   }) => renderTrigger({ onClick: onConversationSelect }),
 }));
-import SecondaryHeader, { useMyCoworkSecondaryCollapse } from '@/renderer/mycowork-secondary';
+import SecondaryHeader, { mycoworkSiderId, useMyCoworkSecondaryCollapse } from '@/renderer/mycowork-secondary';
 
 beforeEach(() => {
   localStorage.clear();
@@ -75,6 +75,15 @@ describe('secondary preference', () => {
 });
 
 describe('secondary header', () => {
+  it('only Space and Memory use connected Office sidebar containers', () => {
+    expect(mycoworkSiderId('/office/memory')).toBe('mycowork-memory-sider');
+    expect(mycoworkSiderId('/office/memory/')).toBe('mycowork-memory-sider');
+    expect(mycoworkSiderId('/office/space')).toBe('mycowork-space-sider');
+    expect(mycoworkSiderId('/office/resources')).toBe('mycowork-space-sider');
+    for (const path of ['/office/resources/res_fixture/versions', '/office/imports', '/office/knowledge'])
+      expect(mycoworkSiderId(path)).toBeNull();
+  });
+
   it('Home uses native search selection and the Layout collapse action', () => {
     const selected = vi.fn();
     render(<SecondaryHeader onConversationSelect={selected} />);

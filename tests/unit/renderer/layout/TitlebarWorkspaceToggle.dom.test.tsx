@@ -116,6 +116,7 @@ describe('Titlebar workspace toggle', () => {
     ['/guid', true, true],
     ['/conversation/test', false, false],
     ['/office/space', true, false],
+    ['/office/trash', true, false],
     ['/office/memory', true, false],
     ['/scheduled', true, false],
     ['/scheduled/job-1', true, false],
@@ -127,7 +128,7 @@ describe('Titlebar workspace toggle', () => {
     expect(Boolean(screen.queryByTestId('conversation-search'))).toBe(visible);
   });
 
-  it.each(['/office/space', '/office/memory'])(
+  it.each(['/office/space', '/office/trash', '/office/memory'])(
     'restores the %s sidebar on desktop without exposing conversation search',
     (path) => {
       sidebar.path = path;

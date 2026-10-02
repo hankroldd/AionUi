@@ -80,6 +80,11 @@ describe('MyCowork icon rail', () => {
     expect(screen.getByRole('button', { name: '定时任务' }).getAttribute('aria-current')).toBe('page');
   });
 
+  it.each(['/office/trash', '/office/trash/'])('keeps Space active on %s', (path) => {
+    mount(path);
+    expect(screen.getByRole('button', { name: '空间' })).toHaveAttribute('aria-current', 'page');
+  });
+
   it('mobile rail keeps accessible labels and menus without hover tooltips covering the Space header', async () => {
     vi.useFakeTimers();
     mount('/office/space', true);

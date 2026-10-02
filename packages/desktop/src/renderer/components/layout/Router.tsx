@@ -123,6 +123,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/office/imports' element={<OfficeImportsSlot />} />
           <Route path='/office/resources' element={<Navigate to='/office/space' replace />} />
           <Route path='/office/space' element={<OfficeResourcesSlot />} />
+          <Route path='/office/trash' element={<OfficeResourcesSlot />} />
           <Route path='/office/knowledge' element={<OfficeKnowledgeSlot />} />
           <Route path='/office/resources/:resourceId/versions' element={<OfficeVersionsSlot />} />
           <Route path='/office/memory' element={<OfficeMemorySlot />} />

@@ -284,7 +284,10 @@ export default function MyCoworkRail({ mobile = false }: { mobile?: boolean }): 
   const text = navigationText(i18n.language);
   const actions = useRailActions(mobile, i18n.language);
   const { pathname } = useLocation();
-  const space = pathname.startsWith('/office/space') || pathname.startsWith('/office/resources');
+  const space =
+    pathname.startsWith('/office/space') ||
+    pathname.startsWith('/office/resources') ||
+    /^\/office\/trash\/?$/.test(pathname);
   const scheduled = pathname.startsWith('/scheduled');
   const memory = pathname.startsWith('/office/memory');
   const more = pathname.startsWith('/office/knowledge') || pathname.startsWith('/office/imports');

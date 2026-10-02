@@ -22,7 +22,10 @@ import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
 import { LayoutContext } from '@/renderer/hooks/context/LayoutContext';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
-vi.mock('react-router-dom', () => ({ useLocation: () => ({ state: null, pathname: '/' }) }));
+vi.mock('react-router-dom', () => ({
+  useLocation: () => ({ state: null, pathname: '/' }),
+  useNavigate: () => vi.fn(),
+}));
 
 const fetchMock = vi.fn();
 const reply = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => body });
@@ -468,7 +471,7 @@ describe('OfficeResourcesSlot', () => {
     await waitFor(() => expect(calls('GET', 'origin=imports&page=1')).toHaveLength(1));
     expect(within(screen.getByTestId('mycowork-resources')).getByLabelText('搜索文件名或标签')).toHaveValue('');
     expect(screen.queryByRole('button', { name: '全部' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '回收站' })).toBeNull();
+    expect(within(host).getByRole('button', { name: '回收站' })).toBeInTheDocument();
   });
 
   it('the new menu opens existing tag creation; a conflict keeps the dialog and draft', async () => {

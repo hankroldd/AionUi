@@ -75,11 +75,13 @@ describe('secondary preference', () => {
 });
 
 describe('secondary header', () => {
-  it('only Space and Memory use connected Office sidebar containers', () => {
+  it('only Space, Trash and Memory use connected Office sidebar containers', () => {
     expect(mycoworkSiderId('/office/memory')).toBe('mycowork-memory-sider');
     expect(mycoworkSiderId('/office/memory/')).toBe('mycowork-memory-sider');
     expect(mycoworkSiderId('/office/space')).toBe('mycowork-space-sider');
     expect(mycoworkSiderId('/office/resources')).toBe('mycowork-space-sider');
+    expect(mycoworkSiderId('/office/trash')).toBe('mycowork-space-sider');
+    expect(mycoworkSiderId('/office/trash/')).toBe('mycowork-space-sider');
     for (const path of ['/office/resources/res_fixture/versions', '/office/imports', '/office/knowledge'])
       expect(mycoworkSiderId(path)).toBeNull();
   });

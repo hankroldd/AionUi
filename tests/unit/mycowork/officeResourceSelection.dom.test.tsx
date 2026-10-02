@@ -10,7 +10,10 @@ import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
-vi.mock('react-router-dom', () => ({ useLocation: () => ({ state: null, pathname: '/' }) }));
+vi.mock('react-router-dom', () => ({
+  useLocation: () => ({ state: null, pathname: '/' }),
+  useNavigate: () => vi.fn(),
+}));
 const fetchMock = vi.fn();
 const tag = (id: string, name: string) => ({
   tag_id: id,

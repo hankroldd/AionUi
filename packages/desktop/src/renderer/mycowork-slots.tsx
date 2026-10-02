@@ -169,7 +169,19 @@ function useOfficeSidebar(id: string) {
 export const OfficeResourcesSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   const navigation = useOfficeSidebar(MYCOWORK_SPACE_SIDER_ID);
-  return <ResourcesPage lang={current.language} {...navigation} />;
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const trash = /^\/office\/trash\/?$/.test(pathname);
+  return (
+    <ResourcesPage
+      lang={current.language}
+      {...navigation}
+      trash={trash}
+      onTrashChange={(next) => {
+        if (next !== trash) void navigate(next ? '/office/trash' : '/office/space');
+      }}
+    />
+  );
 };
 
 /** [mycowork] ADR-0022：知识管理预留页，不连接任何管理 API。 */

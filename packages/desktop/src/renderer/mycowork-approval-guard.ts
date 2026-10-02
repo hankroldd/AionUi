@@ -8,10 +8,10 @@
 /** Bridge 会话 MCP 服务名（MyCowork services/bridge/src/context/tokens.ts MCP_SERVER_NAME）。 */
 const BRIDGE_MCP = 'mycowork_bridge';
 /**
- * Bridge 每次都要批准的工具（三个写工具 + PR09 `memory_suggest`，即不在 Bridge 免批准清单里的全部工具）；与别的服务同名时
+ * Bridge 每次都要批准的工具（写工具 + PR09 `memory_suggest`，即不在 Bridge 免批准清单里的全部工具）；与别的服务同名时
  * aionrs 改名为 `mcp__<服务>_<工具>`，故按后缀认。Bridge 新增免批准清单外的工具须同步加到这里（MyCowork A85）。
  */
-const WRITE_TOOL = /(^|_)(office_(edit|register_output|copy_to_workspace)|memory_suggest)$/;
+const WRITE_TOOL = /(^|_)(office_(edit|register_output|copy_to_workspace|fetch_original)|memory_suggest)$/;
 
 /** 会话挂了 Bridge MCP（conversation.extra.mcp_servers 含其服务名）即 MyCowork 会话。 */
 export const isMycoworkSession = (mcpServers?: string[]): boolean => Boolean(mcpServers?.includes(BRIDGE_MCP));

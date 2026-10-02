@@ -90,7 +90,7 @@ const optionValues = () =>
 describe('D115 批准卡', () => {
   beforeEach(() => confirmMock.mockReset().mockResolvedValue(undefined));
 
-  it.each(['office_edit', 'office_register_output', 'office_copy_to_workspace'])(
+  it.each(['office_edit', 'office_register_output', 'office_copy_to_workspace', 'office_fetch_original'])(
     'MyCowork 会话里写工具 %s 的卡片只有“允许一次/拒绝”，允许一次不带 always_allow',
     async (tool) => {
       render(inSession(MYCOWORK, <MessagePermission message={card(tool, 'mcp')} />));
@@ -108,6 +108,8 @@ describe('D115 批准卡', () => {
 
   it.each([
     ['memory_suggest', ['bridge']],
+    ['office_fetch_original', ['bridge']],
+    ['mcp__mycowork_bridge_office_fetch_original', OTHER],
     ['mcp__mycowork_bridge_memory_suggest', OTHER],
   ])(
     '[mycowork] A85：%s 卡片即使会话未识别为 MyCowork（Bridge 以别名挂载）也不给“始终允许”（点了会按 mcp 类连带放行写工具）',

@@ -186,7 +186,8 @@ export const OfficeResourcesSlot: React.FC = () => {
 
 /** 使用当前登录原生GET校验会话归属；不把Bridge登记ID当成权限，也不复用全局标题缓存。 */
 async function resolveOutputConversationName(id: string): Promise<string | undefined> {
-  return (await getConversationOrNull(id))?.name.trim() || undefined;
+  if (!id || id === '.' || id === '..') return undefined;
+  return (await getConversationOrNull(encodeURIComponent(id)))?.name.trim() || undefined;
 }
 
 /** [mycowork] ADR-0022：知识管理预留页，不连接任何管理 API。 */

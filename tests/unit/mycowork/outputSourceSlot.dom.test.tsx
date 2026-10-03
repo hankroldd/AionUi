@@ -1,5 +1,5 @@
 /**
- * 文件：tests/native-output-source.test.tsx
+ * 文件：tests/unit/mycowork/outputSourceSlot.dom.test.tsx
  * 职责：以真实 React DOM 验证原生产物来源入口的身份、重挂与会话标题解析。
  * 边界：仅模拟 Auth、IPC、资源页与重型预览边界；不模拟被测 slot、getter 或错误判定。
  * 关联：PR11 spec §3.3；真实双用户后端鉴权仅源码核查，不属于本测试。
@@ -206,4 +206,48 @@ test('同 id 的标题每次重新原生查询，不复用全局缓存', async (
   expect(boundary.get).toHaveBeenCalledTimes(2);
   expect(boundary.get).toHaveBeenNthCalledWith(1, { id: 'fixture-conversation-a' });
   expect(boundary.get).toHaveBeenNthCalledWith(2, { id: 'fixture-conversation-a' });
+});
+
+test.each([
+  ['../cron/jobs/fixture', '..%2Fcron%2Fjobs%2Ffixture'],
+  ['%2e%2e', '%252e%252e'],
+  ['name?query#fragment', 'name%3Fquery%23fragment'],
+  ['fixture/child', 'fixture%2Fchild'],
+  ['/cron/jobs/fixture', '%2Fcron%2Fjobs%2Ffixture'],
+  ['fixture/虚构', 'fixture%2F%E8%99%9A%E6%9E%84'],
+])('来源 id %j 作为编码后的单一路径段传给原生 getter', async (id, encoded) => {
+  boundary.get.mockResolvedValue({ name: '虚构来源标题' });
+  const props = await renderSlot();
+  await expect(props.resolveConversationName(id)).resolves.toBe('虚构来源标题');
+  expect(boundary.get).toHaveBeenCalledExactlyOnceWith({ id: encoded });
+  const forwarded = boundary.get.mock.calls[0]![0] as { id: string };
+  // 固定 adapter 的路径字符串经 URL 规范化后仍是详情单段；本断言没有发送 HTTP。
+  const url = new URL(`/api/conversations/${forwarded.id}`, 'https://fixture.invalid');
+  expect(url.pathname).toBe(`/api/conversations/${encoded}`);
+  expect(url.search).toBe('');
+  expect(url.hash).toBe('');
+  const segment = url.pathname.slice('/api/conversations/'.length);
+  expect(segment).not.toContain('/');
+  expect(decodeURIComponent(segment)).toBe(id);
+});
+
+test.each(['', '.', '..'])('空值或 URL 点段 %j 不调用原生 getter 且不提供标题', async (id) => {
+  boundary.get.mockResolvedValue({ name: '虚构不应读取标题' });
+  const props = await renderSlot();
+  await expect(props.resolveConversationName(id)).resolves.toBeUndefined();
+  expect(boundary.get).not.toHaveBeenCalled();
+});
+
+test('编码后的来源 id 查到空标题时仍返回 fallback', async () => {
+  boundary.get.mockResolvedValue({ name: '  \n' });
+  const props = await renderSlot();
+  await expect(props.resolveConversationName('fixture/name?query#fragment')).resolves.toBeUndefined();
+  expect(boundary.get).toHaveBeenCalledExactlyOnceWith({ id: 'fixture%2Fname%3Fquery%23fragment' });
+});
+
+test('无效 UTF 代理项导致 resolver 拒绝且不调用原生 getter', async () => {
+  boundary.get.mockResolvedValue({ name: '虚构不应读取标题' });
+  const props = await renderSlot();
+  await expect(props.resolveConversationName('\uD800')).rejects.toBeInstanceOf(URIError);
+  expect(boundary.get).not.toHaveBeenCalled();
 });

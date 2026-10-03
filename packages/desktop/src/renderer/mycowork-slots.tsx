@@ -10,6 +10,8 @@ import { useInRouterContext, useLocation, useMatch, useNavigate, useParams } fro
 import { BookOpen } from '@icon-park/react';
 import { ipcBridge } from '@/common';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { MYCOWORK_MEMORY_SIDER_ID, MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-secondary';
 import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
 import MarkdownView from '@/renderer/components/Markdown';
@@ -169,8 +171,23 @@ function useOfficeSidebar(id: string) {
 export const OfficeResourcesSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   const navigation = useOfficeSidebar(MYCOWORK_SPACE_SIDER_ID);
-  return <ResourcesPage lang={current.language} {...navigation} />;
+  const { user, status } = useAuth();
+  const ownerKey = status === 'authenticated' ? (user?.id ?? 'local') : undefined;
+  return (
+    <ResourcesPage
+      key={`${status}:${user?.id ?? ''}`}
+      lang={current.language}
+      {...navigation}
+      ownerKey={ownerKey}
+      resolveConversationName={resolveOutputConversationName}
+    />
+  );
 };
+
+/** 使用当前登录原生GET校验会话归属；不把Bridge登记ID当成权限，也不复用全局标题缓存。 */
+async function resolveOutputConversationName(id: string): Promise<string | undefined> {
+  return (await getConversationOrNull(id))?.name.trim() || undefined;
+}
 
 /** [mycowork] ADR-0022：知识管理预留页，不连接任何管理 API。 */
 export const OfficeKnowledgeSlot: React.FC = () => {

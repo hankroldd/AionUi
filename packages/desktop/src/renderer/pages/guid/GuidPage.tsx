@@ -530,10 +530,12 @@ const GuidPage: React.FC = () => {
     if (draftOwnerRef.current !== guidOwnerKey) skipNextClearRef.current = false;
     draftOwnerRef.current = guidOwnerKey;
     const prefillState = location.state as GuidNavigationState | null;
-    const prefillPrompt = prefillState?.prefillPrompt;
     const prefillFiles = prefillState?.prefillFiles;
-    const scopeIntent = prefillState?.mycoworkScopeDraft as { ownerKey: string } | undefined;
+    const scopeIntent = prefillState?.mycoworkScopeDraft as { ownerKey: string; question?: string } | undefined;
     const preserveScope = scopeIntent?.ownerKey === guidOwnerKey && guidOwnerKey !== undefined;
+    // Keep resource questions in the owned scope bundle; its consumer performs the only replace.
+    const scopeQuestion = preserveScope ? scopeIntent.question : undefined;
+    const prefillPrompt = scopeIntent ? scopeQuestion : prefillState?.prefillPrompt;
     if (scopeIntent && !preserveScope) skipNextClearRef.current = false;
     const preserveCurrentDraft = Boolean(
       prefillState?.preservePrefillDraft || skipNextClearRef.current || preserveScope
@@ -542,7 +544,7 @@ const GuidPage: React.FC = () => {
       // Consume prompt + optional attachments (e.g. bug-report screenshots) once.
       consumedPrefillKeyRef.current = location.key;
       skipNextClearRef.current = true;
-      if (prefillState.preservePrefillDraft) {
+      if (scopeQuestion || prefillState?.preservePrefillDraft) {
         guidInput.setInput((draft) => appendPromptToDraft(draft, prefillPrompt));
       } else {
         guidInput.setInput(prefillPrompt);
@@ -579,7 +581,7 @@ const GuidPage: React.FC = () => {
   // Strip it after consumption so browser history or a remount cannot replay it.
   useEffect(() => {
     const prefillState = location.state as GuidNavigationState | null;
-    if (!prefillState?.preservePrefillDraft || !prefillState.prefillPrompt) return;
+    if (prefillState?.mycoworkScopeDraft || !prefillState?.preservePrefillDraft || !prefillState.prefillPrompt) return;
 
     const {
       prefillPrompt: _prefillPrompt,

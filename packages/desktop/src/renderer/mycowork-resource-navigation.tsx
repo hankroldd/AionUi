@@ -16,12 +16,16 @@ export type ResourceWorkOrigin = {
   workspace?: string;
   originConversationId?: string;
 };
-type ResourceScopeIntent = { ownerKey: string; selection: ScopeDraft };
+type ResourceScopeIntent = { ownerKey: string; selection: ScopeDraft; question?: string };
 type ResourceNavigationState = {
   mycoworkResourceOrigin?: ResourceWorkOrigin;
   mycoworkScopeDraft?: ResourceScopeIntent;
   mycoworkProjectId?: string;
   workspace?: string;
+  prefillPrompt?: string;
+  prefillFiles?: string[];
+  preservePrefillDraft?: boolean;
+  focusPrefill?: boolean;
 };
 
 /** Capture only the work context belonging to the currently mounted route and actor. */
@@ -65,7 +69,16 @@ export function useGuidResourceSelection(ownerKey: string | undefined) {
   }
   useEffect(() => {
     if (!state?.mycoworkScopeDraft) return;
-    const { mycoworkScopeDraft: _scope, mycoworkProjectId: _project, workspace: _workspace, ...rest } = state;
+    const {
+      mycoworkScopeDraft: _scope,
+      mycoworkProjectId: _project,
+      workspace: _workspace,
+      prefillPrompt: _prompt,
+      prefillFiles: _files,
+      preservePrefillDraft: _preserve,
+      focusPrefill: _focus,
+      ...rest
+    } = state;
     replacing.current = true;
     void navigate(`${location.pathname}${location.search}${location.hash}`, {
       replace: true,
@@ -126,7 +139,7 @@ export function useResourceQuestionNavigation(ownerKey: string | undefined) {
     []
   );
   return useCallback(
-    async (draft: ScopeDraft, signal: AbortSignal): Promise<void> => {
+    async (draft: ScopeDraft, signal: AbortSignal, question?: string): Promise<void> => {
       if (!ownerKey) throw new BridgeError('failed');
       const origin = (location.state as ResourceNavigationState | null)?.mycoworkResourceOrigin;
       if (origin && origin.ownerKey !== ownerKey) throw new BridgeError('failed');
@@ -139,6 +152,7 @@ export function useResourceQuestionNavigation(ownerKey: string | undefined) {
           mycoworkScopeDraft: {
             ownerKey,
             selection: { ...selection, ...(work.projectId ? { projectId: work.projectId } : {}) },
+            ...(question ? { question } : {}),
           },
           ...(work.workspace ? { workspace: work.workspace } : {}),
         },

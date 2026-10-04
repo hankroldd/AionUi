@@ -190,7 +190,7 @@ it('appends to a still-mounted draft while retaining its attachment and the cont
   expect(getScope()).toMatchObject(selected);
 });
 
-it('StrictMode and state-clearing replace consume a question once without replacing strict scope with project defaults', async () => {
+it('StrictMode and state-clearing replace consume a question once and retain its required file selection', async () => {
   const view = render(tree(owned(), true));
   await waitFor(() => expect(route().state).toBeNull());
   view.rerender(tree(owned(), true));

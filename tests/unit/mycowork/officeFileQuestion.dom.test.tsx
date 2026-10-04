@@ -147,7 +147,7 @@ it('hides the unavailable question entry when Host did not provide a navigation 
 });
 
 it.each(['secret', 'bridge-only', 'catalog-failed', 'source-revoked'])(
-  'refuses %s without reading a broader plan or borrowing publication target sources',
+  'refuses %s with an explicit reason instead of borrowing publication target sources',
   async (reason) => {
     if (reason === 'secret') files[0].secret = true;
     if (reason === 'bridge-only')

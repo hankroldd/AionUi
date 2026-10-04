@@ -18,6 +18,7 @@ const item = (over: object) => ({
   resource_id: 'res_1',
   file_name: '工作稿.pptx',
   source_id: null,
+  origin: 'imports',
   purpose: 'working',
   state: 'stored',
   tag_ids: [],

@@ -138,7 +138,19 @@ function bridge(opts: Opts = {}) {
         : reply(201, {});
     if (url === '/bridge/v1/publications' && method === 'POST') {
       const code = codes.shift();
-      return code ? reply(409, { error: { code, message: 'x' } }) : reply(201, {});
+      if (code) return reply(409, { error: { code, message: 'x' } });
+      const request = JSON.parse(String(init?.body));
+      return reply(201, {
+        publication_id: 'pub_fixture',
+        resource_id: 'res_1',
+        revision_id: request.revision_id,
+        target: request.target,
+        status: request.target.kind === 'archive' ? 'published' : 'queued',
+        error: null,
+        accepted_at: '2025-03-02T01:00:00Z',
+        published_at: request.target.kind === 'archive' ? '2025-03-02T01:00:00Z' : null,
+        created_at: '2025-03-02T01:00:00Z',
+      });
     }
     // 右下当前版本预览（D138，另见 officeVersionsPreview.dom.test.tsx）：给一页成功的渲染，本文件的按钮与文案不受它干扰
     if (url.endsWith('/office/html'))
@@ -151,7 +163,7 @@ const loaded = async () => screen.findByText('v3');
 const openMenu = (v: string) => fireEvent.click(screen.getByRole('button', { name: `更多操作 ${v}` }));
 const publishToKb = async () => {
   fireEvent.click(screen.getByRole('button', { name: '发布到知识库' }));
-  const dialog = await screen.findByRole('dialog');
+  const dialog = await screen.findByRole('dialog', { name: '发布到知识库' });
   fireEvent.click(within(dialog).getByLabelText('选择知识库'));
   fireEvent.click(await screen.findByText('青禾库'));
   fireEvent.change(within(dialog).getByLabelText('库里的文件名'), { target: { value: '汇报（虚构）.pptx' } });
@@ -343,7 +355,7 @@ describe('OfficeVersionsSlot', () => {
     expect(await screen.findByText(/除了所改的对象还有别的变化/)).toBeInTheDocument();
     expect(bodyOf('POST', '/bridge/v1/publications').confirm_out_of_scope).toBeUndefined();
     fireEvent.click(screen.getByRole('button', { name: '仍要发布' }));
-    expect(await screen.findByText(/含演讲者备注或批注/)).toBeInTheDocument();
+    expect(await screen.findByText(/^这个版本含演讲者备注或批注/)).toBeInTheDocument();
     expect(bodyOf('POST', '/bridge/v1/publications', 1).confirm_out_of_scope).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: '仍要发布' }));
     await waitFor(() => expect(calls('POST', '/bridge/v1/publications')).toHaveLength(3));

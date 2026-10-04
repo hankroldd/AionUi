@@ -175,9 +175,9 @@ afterEach(() => {
 describe('space selection and batch tags', () => {
   it('saved-view layout updates retain selection and advance the view revision without reloading resources', async () => {
     render(<OfficeResourcesSlot />);
-    await screen.findByRole('link', { name: 'A.md' });
+    await screen.findByRole('button', { name: 'A.md' });
     fireEvent.click(screen.getByTestId('mycowork-nav-view-view_batch'));
-    await waitFor(() => expect(screen.queryByRole('link', { name: 'B.md' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'B.md' })).toBeNull());
     pick('A.md');
     const reads = () => fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/bridge/v1/resources?')).length;
     const before = reads();
@@ -193,9 +193,9 @@ describe('space selection and batch tags', () => {
   it('selects only this visible page, preserves layout switches, and clears query changes without resurrecting IDs', async () => {
     total = 60;
     render(<OfficeResourcesSlot />);
-    await screen.findByRole('link', { name: 'A.md' });
+    await screen.findByRole('button', { name: 'A.md' });
     fireEvent.click(screen.getByTestId('mycowork-nav-source-src_kb'));
-    await waitFor(() => expect(screen.queryByRole('link', { name: '导入.md' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('button', { name: '导入.md' })).toBeNull());
     expect(screen.getByText('用这些资料提问')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox', { name: '选择本页' }));
     expect(screen.getByText('已选 2 项')).toBeInTheDocument();
@@ -217,18 +217,18 @@ describe('space selection and batch tags', () => {
   it('changing page clears a selected file rather than selecting the next page or whole knowledge base', async () => {
     total = 60;
     render(<OfficeResourcesSlot />);
-    await screen.findByRole('link', { name: 'A.md' });
+    await screen.findByRole('button', { name: 'A.md' });
     fireEvent.click(screen.getByTestId('mycowork-nav-source-src_kb'));
-    await waitFor(() => expect(screen.queryByRole('link', { name: '导入.md' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('button', { name: '导入.md' })).toBeNull());
     pick('A.md');
     fireEvent.click(screen.getByText('2', { selector: '.arco-pagination-item' }));
-    await screen.findByRole('link', { name: 'C.md' });
+    await screen.findByRole('button', { name: 'C.md' });
     expect(screen.queryByRole('region', { name: '所选资料的操作' })).toBeNull();
     expect(screen.getByRole('checkbox', { name: '选择 C.md' })).not.toBeChecked();
   });
   it('previews changes for exactly the selected IDs and cancel makes no metadata writes', async () => {
     render(<OfficeResourcesSlot />);
-    await screen.findByRole('link', { name: 'A.md' });
+    await screen.findByRole('button', { name: 'A.md' });
     const dialog = await openBulk();
     await choose(dialog);
     expect(within(dialog).getByText('原标签 → 原标签 · 新标签')).toBeInTheDocument();
@@ -240,7 +240,7 @@ describe('space selection and batch tags', () => {
   });
   it('keeps successful results and a conflicted draft, reloads only failed items, and retries their preview revision', async () => {
     render(<OfficeResourcesSlot />);
-    await screen.findByRole('link', { name: 'A.md' });
+    await screen.findByRole('button', { name: 'A.md' });
     const dialog = await openBulk();
     await choose(dialog);
     metadata.res_b.metadata_revision += 1;
@@ -266,7 +266,7 @@ describe('space selection and batch tags', () => {
   });
   it('removes the chosen tag only from selected files and preserves unrelated tags', async () => {
     render(<OfficeResourcesSlot />);
-    await screen.findByRole('link', { name: '导入.md' });
+    await screen.findByRole('button', { name: '导入.md' });
     const dialog = await openBulk(['导入.md']);
     fireEvent.click(within(dialog).getByLabelText('移除标签'));
     await choose(dialog, '原标签');
@@ -280,7 +280,7 @@ describe('space selection and batch tags', () => {
   it('a metadata read404 prevents writes without dropping the selected file and can be reread', async () => {
     blockedRead = 'res_b';
     render(<OfficeResourcesSlot />);
-    await screen.findByRole('link', { name: 'A.md' });
+    await screen.findByRole('button', { name: 'A.md' });
     const dialog = await openBulk();
     await choose(dialog);
     expect(within(dialog).getByRole('button', { name: '应用预览' })).toBeDisabled();
@@ -299,7 +299,7 @@ describe('space selection and batch tags', () => {
       release = r;
     });
     render(<OfficeResourcesSlot />);
-    await screen.findByRole('link', { name: 'A.md' });
+    await screen.findByRole('button', { name: 'A.md' });
     const dialog = await openBulk();
     await choose(dialog);
     const wrapper = document.querySelector('.arco-modal-wrapper')!;

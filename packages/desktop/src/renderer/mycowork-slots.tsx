@@ -229,6 +229,7 @@ export const OfficeResourcesSlot: React.FC = () => {
       ownerKey={ownerKey}
       resolveConversationName={resolveOutputConversationName}
       onAskScope={onAskScope}
+      renderMarkdown={(content, overrides) => <MarkdownView components={overrides}>{content}</MarkdownView>}
     />
   );
 };

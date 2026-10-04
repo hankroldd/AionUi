@@ -210,7 +210,7 @@ describe('OfficeResourcesSlot', () => {
     bridge();
     render(<OfficeResourcesSlot />);
     const rows = await screen.findAllByTestId('mycowork-resource-item');
-    expect(rows.map((r) => within(r).getByRole('link', { name: /\.(md|pptx)$/ }).textContent)).toEqual([
+    expect(rows.map((r) => within(r).getByRole('button', { name: /^(周报\.md|工作稿\.pptx)$/ }).textContent)).toEqual([
       '周报.md',
       '工作稿.pptx',
     ]);
@@ -221,10 +221,7 @@ describe('OfficeResourcesSlot', () => {
     expect(within(weekly).getAllByText('今天 10:13').length).toBeGreaterThan(0);
     expect(within(weekly).getByText('AI 可引用')).toBeInTheDocument();
     expect(within(draft).getByText('导入')).toBeInTheDocument();
-    expect(within(draft).getByRole('link', { name: '工作稿.pptx' })).toHaveAttribute(
-      'href',
-      '#/office/resources/res_1/versions'
-    );
+    expect(within(draft).getByRole('button', { name: '工作稿.pptx' })).toHaveAttribute('type', 'button');
     expect(screen.queryByText(/个版本/)).toBeNull(); // 版本数在版本与变化页看（D146）
     expect(within(draft).getByText('存档（AI 不引用）').closest('[data-state]')).toHaveAttribute(
       'data-state',
@@ -324,7 +321,7 @@ describe('OfficeResourcesSlot', () => {
     bridge({ secretReady: true });
     const { container } = render(<OfficeResourcesSlot />);
     const row = (await screen.findAllByTestId('mycowork-resource-item')).find((r) =>
-      within(r).queryByRole('link', { name: '周报.md' })
+      within(r).queryByRole('button', { name: '周报.md' })
     )!;
     expect(within(row).getByText('AI 不引用')).toBeInTheDocument();
     expect(within(row).queryByText('AI 可引用')).toBeNull();
@@ -333,7 +330,7 @@ describe('OfficeResourcesSlot', () => {
     await waitFor(() => expect(container.querySelector('.mcw-rc-grid')).not.toBeNull());
     const card = screen
       .getAllByTestId('mycowork-resource-item')
-      .find((r) => within(r).queryByRole('link', { name: '周报.md' }))!;
+      .find((r) => within(r).queryByRole('button', { name: '周报.md' }))!;
     expect(within(card).getByText('AI 不引用')).toBeInTheDocument();
     expect(within(card).queryByText('AI 可引用')).toBeNull();
     expect(calls('PATCH', '/metadata')).toHaveLength(0);

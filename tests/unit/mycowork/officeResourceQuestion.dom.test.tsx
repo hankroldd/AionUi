@@ -55,7 +55,7 @@ const ask = () =>
   });
 const readCalls = (path: string) => fetchMock.mock.calls.filter(([url]) => String(url).split('?')[0] === path).length;
 async function ready(name = 'A.md') {
-  await screen.findByRole('link', { name, exact: true });
+  await screen.findByRole('button', { name, exact: true });
 }
 function fixtures() {
   fetchMock.mockImplementation(async (url: string) => {

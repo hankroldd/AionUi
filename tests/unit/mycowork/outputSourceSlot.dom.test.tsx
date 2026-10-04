@@ -66,12 +66,18 @@ vi.mock('@mycowork/ui', async () => {
       const [draft, setDraft] = useState('初始状态');
       useEffect(() => {
         boundary.mounts += 1;
-        return () => { boundary.unmounts += 1; };
+        return () => {
+          boundary.unmounts += 1;
+        };
       }, []);
-      return createElement('button', {
-        'data-owner': props.ownerKey ?? '',
-        onClick: () => setDraft('账户甲旧状态'),
-      }, draft);
+      return createElement(
+        'button',
+        {
+          'data-owner': props.ownerKey ?? '',
+          onClick: () => setDraft('账户甲旧状态'),
+        },
+        draft
+      );
     },
   };
 });
@@ -160,7 +166,9 @@ test('真实 getter 向当前原生 IPC 传入准确 id 并 trim 成功标题', 
 
 test('结构化 404 NOT_FOUND 由真实 getter 返回 null，resolver 不提供标题', async () => {
   const error = new BackendHttpError({
-    method: 'GET', path: '/api/conversations/fixture-missing', status: 404,
+    method: 'GET',
+    path: '/api/conversations/fixture-missing',
+    status: 404,
     body: { success: false, code: 'NOT_FOUND', error: '虚构会话不可见' },
   });
   boundary.get.mockRejectedValue(error);
@@ -177,7 +185,9 @@ test.each(['', '  \n\t '])('空白原生会话标题 %j 不提供标题', async 
 
 test('原生 API 失败保留拒绝，让资源页 hook 决定遮蔽', async () => {
   const error = new BackendHttpError({
-    method: 'GET', path: '/api/conversations/fixture-failed', status: 503,
+    method: 'GET',
+    path: '/api/conversations/fixture-failed',
+    status: 503,
     body: { success: false, code: 'UNAVAILABLE', error: '虚构后端故障' },
   });
   boundary.get.mockRejectedValue(error);
@@ -187,7 +197,9 @@ test('原生 API 失败保留拒绝，让资源页 hook 决定遮蔽', async () 
 
 test('404 的非 NOT_FOUND 错误仍拒绝，避免吞掉原生 API 故障', async () => {
   const error = new BackendHttpError({
-    method: 'GET', path: '/api/conversations/fixture-failed', status: 404,
+    method: 'GET',
+    path: '/api/conversations/fixture-failed',
+    status: 404,
     body: { success: false, code: 'ROUTE_MISSING', error: '虚构接口不可用' },
   });
   boundary.get.mockRejectedValue(error);

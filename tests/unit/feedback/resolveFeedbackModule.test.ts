@@ -14,6 +14,20 @@ import { describe, it, expect } from 'vitest';
 import { resolveFeedbackModule } from '@/renderer/services/feedback/resolveFeedbackModule';
 import { FEEDBACK_MODULES } from '@/common/types/feedbackDiagnostics';
 
+// [mycowork] Custom office pages have no native feedback tag; keep manual selection.
+// List exact pages so a new unmapped route still fails the completeness check.
+const mycoworkModuleLessPages = [
+  '/office/imports',
+  '/office/resources',
+  '/office/space',
+  '/office/knowledge',
+  '/office/resources/sample-id/versions',
+  '/office/memory',
+  '/office/compositions/sample-id',
+  '/office/edit/sample-id',
+  '/office/edit-text/sample-id',
+];
+
 describe('resolveFeedbackModule', () => {
   it.each([
     ['/conversation/abc-123', 'conversation-session'],
@@ -43,6 +57,7 @@ describe('resolveFeedbackModule', () => {
     expect(resolveFeedbackModule('/guid')).toBeUndefined();
     expect(resolveFeedbackModule('/login')).toBeUndefined();
     expect(resolveFeedbackModule('/')).toBeUndefined();
+    for (const route of mycoworkModuleLessPages) expect(resolveFeedbackModule(route)).toBeUndefined();
   });
 
   it('does not match prefixes across path-segment boundaries', () => {
@@ -58,7 +73,7 @@ describe('resolveFeedbackModule', () => {
     );
     // Pages where preselecting a module makes no sense (multi-purpose or
     // pre-auth surfaces where the user picks the module themselves).
-    const moduleLess = new Set(['/guid', '/login', '/test/components']);
+    const moduleLess = new Set(['/guid', '/login', '/test/components', ...mycoworkModuleLessPages]);
     const paths = [...routerSrc.matchAll(/path='([^*'][^']*)'/g)].map((m) => m[1]);
     expect(paths.length).toBeGreaterThan(10);
     for (const routePath of paths) {

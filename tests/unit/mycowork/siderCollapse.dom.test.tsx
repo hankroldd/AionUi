@@ -88,8 +88,8 @@ describe('[mycowork] sidebar collapse', () => {
     expect((container.querySelector('.layout-sider') as HTMLElement).style.width).toBe('288px');
   });
 
-  it.each(['/office/space', '/office/resources', '/office/space/'])(
-    'Space %s keeps the native sidebar and resizer available',
+  it.each(['/office/space', '/office/resources', '/office/space/', '/office/memory'])(
+    'Workspace route %s keeps the native sidebar and resizer available',
     (path) => {
       shortcut.pathname = path;
       const { container } = render(<Layout sider={<SiderStub />} />);
@@ -129,7 +129,7 @@ describe('[mycowork] sidebar collapse', () => {
     expect(sider.style.width).toBe('350px');
   });
 
-  it.each(['/office/memory', '/office/resources/fixture/versions'])(
+  it.each(['/office/resources/fixture/versions'])(
     'Office route %s hides unrelated native conversation sidebar',
     (path) => {
       shortcut.pathname = path;

@@ -5,7 +5,7 @@
  * instead of being cut off; content is centred with a 1024px max width. The versions page timeline scrolls on its own.
  * jsdom has no layout, so this checks the styles that make scrolling possible and that long content sits inside the scroller;
  * the real-browser scroll check is in MyCowork verification/PR11/*-ui-redesign.
- * Only the Bridge boundary is mocked (fetch).
+ * Bridge HTTP and the authenticated actor are fixtures; native slots and page styles stay real.
  */
 
 import { render, screen, within } from '@testing-library/react';
@@ -22,6 +22,9 @@ import {
 } from '@/renderer/mycowork-slots';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({ status: 'authenticated', user: { id: 'fixture-owner' } }),
+}));
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ resourceId: 'res_1', sessionId: 'eds_1', decisionId: 'tdec_1' }),
   useLocation: () => ({ state: null, pathname: '/' }),
@@ -35,6 +38,7 @@ const resource = (i: number) => ({
   resource_id: `res_${i}`,
   file_name: `长列表资料${i}.pptx`,
   source_id: null,
+  origin: 'imports',
   state: 'stored',
   tag_ids: [],
   secret: false,

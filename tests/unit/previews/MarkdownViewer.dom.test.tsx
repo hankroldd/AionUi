@@ -87,7 +87,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@arco-design/web-react', () => ({
+vi.mock('@arco-design/web-react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@arco-design/web-react')>()),
   Button: ({
     children,
     icon,
@@ -104,7 +105,8 @@ vi.mock('@arco-design/web-react', () => ({
   Tooltip: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('@icon-park/react', () => ({
+vi.mock('@icon-park/react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@icon-park/react')>()),
   Copy: () => <span data-testid='copy-icon' />,
 }));
 

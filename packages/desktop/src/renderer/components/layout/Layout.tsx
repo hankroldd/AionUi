@@ -33,7 +33,7 @@ const EXPLORER_AUTO_COLLAPSE_PX = 1100;
 import { dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
 import { MIN_PREVIEW_PANEL_PX } from '@renderer/pages/conversation/utils/layoutCalc';
 import { PreviewPanel } from '@renderer/pages/conversation/Preview';
-import { LayoutContext } from '@renderer/hooks/context/LayoutContext';
+import { LayoutContext, type GuidWorkContext } from '@renderer/hooks/context/LayoutContext';
 import { NavigationHistoryProvider } from '@renderer/hooks/context/NavigationHistoryContext';
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
 import { useNotificationClick } from '@renderer/hooks/system/notification/useNotificationClick';
@@ -126,6 +126,7 @@ const Layout: React.FC<{
   onSessionClick?: () => void;
 }> = ({ sider, onSessionClick: _onSessionClick }) => {
   const [isMobile, setIsMobile] = useState(detectMobileViewportOrTouch);
+  const [guidWork, setGuidWork] = useState<GuidWorkContext | null>(null);
   const { collapsed, setCollapsed } = useMyCoworkSecondaryCollapse(isMobile);
   const [viewportWidth, setViewportWidth] = useState<number>(() =>
     typeof window === 'undefined' ? 390 : window.innerWidth
@@ -379,7 +380,9 @@ const Layout: React.FC<{
       };
 
   return (
-    <LayoutContext.Provider value={{ isMobile, siderCollapsed: collapsed, setSiderCollapsed: setCollapsed }}>
+    <LayoutContext.Provider
+      value={{ isMobile, siderCollapsed: collapsed, setSiderCollapsed: setCollapsed, guidWork, setGuidWork }}
+    >
       <NavigationHistoryProvider>
         <div className='app-shell flex flex-col size-full min-h-0'>
           <Titlebar workspaceAvailable={workspaceAvailable} />

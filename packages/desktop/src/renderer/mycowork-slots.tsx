@@ -13,6 +13,11 @@ import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { MYCOWORK_MEMORY_SIDER_ID, MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-secondary';
+import {
+  useGuidResourceSelection,
+  useGuidWorkspace,
+  useResourceQuestionNavigation,
+} from '@/renderer/mycowork-resource-navigation';
 import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
 import MarkdownView from '@/renderer/components/Markdown';
 import { MarkdownViewer } from '@/renderer/pages/conversation/Preview/components/viewers';
@@ -31,7 +36,10 @@ import {
   ProjectScopeEntry,
   ScopeChip,
   ScopeStrip,
+  BridgeError,
   bindScopedConversation,
+  bridgeFailureText,
+  discardScopedSession,
   prepareScopedSession,
 } from '@mycowork/ui';
 
@@ -40,11 +48,22 @@ import {
  * project's "ask about this project" (router state `mycoworkProjectId`), the chip starts from that project's
  * default sources (MyCowork 01 §5); without it, behaviour is unchanged.
  */
-export const GuidScopeSlot: React.FC = () => {
+export const GuidScopeSlot: React.FC<{ workspace?: string }> = ({ workspace }) => {
   const { i18n: current } = useTranslation();
+  const { user, status } = useAuth();
+  const ownerKey = status === 'authenticated' ? (user?.id ?? 'local') : undefined;
   const state = useLocation().state as { mycoworkProjectId?: unknown } | null;
   const projectId = typeof state?.mycoworkProjectId === 'string' ? state.mycoworkProjectId : undefined;
-  return <ScopeChip lang={current.language} projectId={projectId} />;
+  const { initialScope, scopeKey, ownsTransfer } = useGuidResourceSelection(ownerKey);
+  useGuidWorkspace(ownerKey, ownsTransfer ? workspace : undefined);
+  return (
+    <ScopeChip
+      key={`${scopeKey}:${ownerKey ?? ''}`}
+      lang={current.language}
+      projectId={projectId}
+      initialScope={initialScope}
+    />
+  );
 };
 
 /**
@@ -106,7 +125,17 @@ type CreateExtra = {
   workspace?: string;
   custom_workspace?: boolean;
   selected_session_mcp_servers?: ISessionMcpServer[];
+  default_files?: string[];
 };
+
+export type GuidSendPreparation = { isCurrent: () => boolean; isScopeCurrent?: () => boolean; planId?: string };
+
+/** A stale send may only discard its own prepared plan, never another actor's pending plan. */
+export function assertGuidSendCurrent(preparation: GuidSendPreparation): void {
+  if (preparation.isCurrent() && (preparation.isScopeCurrent?.() ?? true)) return;
+  if (preparation.planId) discardScopedSession(preparation.planId);
+  throw new Error(bridgeFailureText(i18n.language, new BridgeError('scope_changed')));
+}
 
 /**
  * Mount point: before conversation.create, if a scope is selected for this turn, add the Bridge-issued
@@ -117,9 +146,23 @@ type CreateExtra = {
  */
 export const withGuidScope = async <T extends CreateExtra>(
   extra: T,
-  overrides?: { permission?: string }
+  overrides?: { permission?: string },
+  preparation?: GuidSendPreparation
 ): Promise<T> => {
-  const scoped = await prepareScopedSession(i18n.language);
+  const scoped = await prepareScopedSession(
+    i18n.language,
+    (extra.default_files?.length ?? 0) > 0,
+    preparation?.isCurrent,
+    preparation
+      ? (isScopeCurrent) => {
+          preparation.isScopeCurrent = isScopeCurrent;
+        }
+      : undefined
+  );
+  if (preparation) {
+    if (scoped) preparation.planId = scoped.plan_id;
+    assertGuidSendCurrent(preparation);
+  }
   if (!scoped) return extra;
   if (overrides && (!overrides.permission || overrides.permission === 'yolo')) overrides.permission = 'default';
   return {
@@ -135,8 +178,12 @@ export const withGuidScope = async <T extends CreateExtra>(
  * Mount point: right after conversation.create succeeds, bind the new conversation to the plan frozen by
  * withGuidScope (PUT /bridge/v1/conversations/{id}/plan). Never throws: a failed bind only warns, the chat goes on.
  */
-export const bindGuidScope = (conversationId: string): Promise<void> =>
-  bindScopedConversation(conversationId, i18n.language);
+export const bindGuidScope = (conversationId: string, preparation?: GuidSendPreparation): Promise<void> =>
+  bindScopedConversation(
+    conversationId,
+    i18n.language,
+    preparation ? () => preparation.isCurrent() && (preparation.isScopeCurrent?.() ?? true) : undefined
+  );
 
 /**
  * Mount point: route `/office/imports` (MyCowork P07 import queue). Router state `mycoworkProjectId` (from a project
@@ -173,6 +220,7 @@ export const OfficeResourcesSlot: React.FC = () => {
   const navigation = useOfficeSidebar(MYCOWORK_SPACE_SIDER_ID);
   const { user, status } = useAuth();
   const ownerKey = status === 'authenticated' ? (user?.id ?? 'local') : undefined;
+  const onAskScope = useResourceQuestionNavigation(ownerKey);
   return (
     <ResourcesPage
       key={`${status}:${user?.id ?? ''}`}
@@ -180,6 +228,7 @@ export const OfficeResourcesSlot: React.FC = () => {
       {...navigation}
       ownerKey={ownerKey}
       resolveConversationName={resolveOutputConversationName}
+      onAskScope={onAskScope}
     />
   );
 };

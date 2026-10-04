@@ -11,12 +11,13 @@ import { toSessionMcpServer } from '@/renderer/hooks/mcp/catalog';
 import { emitter } from '@/renderer/utils/emitter';
 import { updateWorkspaceTime } from '@/renderer/utils/workspace/workspaceHistory';
 import { Message } from '@arco-design/web-react';
-import { useCallback, useRef } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { type TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
-import { bindGuidScope, withGuidScope } from '@/renderer/mycowork-slots';
+import { assertGuidSendCurrent, bindGuidScope, withGuidScope } from '@/renderer/mycowork-slots';
+import type { GuidSendPreparation } from '@/renderer/mycowork-slots';
 
 export type GuidSendDeps = {
   // Input state
@@ -56,6 +57,8 @@ export type GuidSendDeps = {
   navigate: NavigateFunction;
   t: TFunction;
   localeKey: string;
+  ownerKey: string | undefined;
+  locationKey: string;
 };
 
 export type GuidSendResult = {
@@ -97,13 +100,29 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     navigate,
     t,
     localeKey,
+    ownerKey,
+    locationKey,
   } = deps;
   const sendingRef = useRef(false);
+  const origin = useMemo(() => ({ ownerKey, locationKey }), [ownerKey, locationKey]);
+  const lifecycle = useRef<typeof origin | undefined>(origin);
+  lifecycle.current = origin;
+  useLayoutEffect(() => {
+    lifecycle.current = origin;
+    sendingRef.current = false;
+    setLoading(false);
+    return () => {
+      lifecycle.current = undefined;
+    };
+  }, [origin, setLoading]);
+  const isCurrent = useCallback(() => origin.ownerKey !== undefined && lifecycle.current === origin, [origin]);
 
   const handleSend = useCallback(async () => {
     if (!selectedAssistantId) {
       return;
     }
+    const preparation: GuidSendPreparation = { isCurrent };
+    assertGuidSendCurrent(preparation);
 
     const isCustomWorkspace = !!dir;
     const finalWorkspace = dir || '';
@@ -177,6 +196,18 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         return;
       }
       try {
+        const extra = await withGuidScope(
+          {
+            default_files: files.map(chatFileRefPath),
+            workspace: finalWorkspace,
+            custom_workspace: isCustomWorkspace,
+            selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
+            selected_session_mcp_servers: selectedSessionMcpServersToSend,
+          },
+          assistantOverrides,
+          preparation
+        );
+        assertGuidSendCurrent(preparation);
         const conversation = await ipcBridge.conversation.create.invoke({
           name: input,
           model: current_model,
@@ -185,23 +216,15 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
             locale: localeKey,
             conversation_overrides: assistantOverrides,
           },
-          extra: await withGuidScope(
-            {
-              default_files: files.map(chatFileRefPath),
-              workspace: finalWorkspace,
-              custom_workspace: isCustomWorkspace,
-              selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
-              selected_session_mcp_servers: selectedSessionMcpServersToSend,
-            },
-            assistantOverrides // [mycowork] D115：带范围时不以 YOLO 创建
-          ),
+          extra,
         });
-
+        assertGuidSendCurrent(preparation);
         if (!conversation || !conversation.id) {
           Message.error(t('conversation.createFailed'));
           return;
         }
-        await bindGuidScope(conversation.id);
+        await bindGuidScope(conversation.id, preparation);
+        assertGuidSendCurrent(preparation);
 
         if (isCustomWorkspace) {
           updateWorkspaceTime(finalWorkspace);
@@ -213,6 +236,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
             swrMutate('assistants.list'),
           ]);
         }
+        assertGuidSendCurrent(preparation);
 
         emitter.emit('chat.history.refresh');
 
@@ -229,6 +253,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
 
         await navigate(`/conversation/${conversation.id}`);
       } catch (error: unknown) {
+        assertGuidSendCurrent(preparation);
         console.error('Failed to create Aion CLI conversation:', error);
         throw error;
       }
@@ -236,6 +261,19 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     }
 
     try {
+      const extra = await withGuidScope(
+        {
+          workspace: finalWorkspace,
+          custom_workspace: isCustomWorkspace,
+          default_files: files.map(chatFileRefPath),
+          selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
+          selected_session_mcp_servers:
+            selectedMcpServerIds !== undefined ? selectedSessionMcpServers : selectedSessionMcpServersToSend,
+        },
+        undefined,
+        preparation
+      );
+      assertGuidSendCurrent(preparation);
       const conversation = await ipcBridge.conversation.create.invoke({
         name: input,
         assistant: {
@@ -243,20 +281,15 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           locale: localeKey,
           conversation_overrides: assistantOverrides,
         },
-        extra: await withGuidScope({
-          workspace: finalWorkspace,
-          custom_workspace: isCustomWorkspace,
-          default_files: files.map(chatFileRefPath),
-          selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
-          selected_session_mcp_servers:
-            selectedMcpServerIds !== undefined ? selectedSessionMcpServers : selectedSessionMcpServersToSend,
-        }),
+        extra,
       });
+      assertGuidSendCurrent(preparation);
       if (!conversation || !conversation.id) {
         console.error('Failed to create ACP conversation - conversation object is null or missing id');
         return;
       }
-      await bindGuidScope(conversation.id);
+      await bindGuidScope(conversation.id, preparation);
+      assertGuidSendCurrent(preparation);
 
       if (isCustomWorkspace) {
         updateWorkspaceTime(finalWorkspace);
@@ -268,6 +301,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           swrMutate('assistants.list'),
         ]);
       }
+      assertGuidSendCurrent(preparation);
 
       emitter.emit('chat.history.refresh');
 
@@ -284,6 +318,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
 
       await navigate(`/conversation/${conversation.id}`);
     } catch (error: unknown) {
+      assertGuidSendCurrent(preparation);
       console.error('Failed to create ACP conversation:', error);
       throw error;
     }
@@ -307,6 +342,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     navigate,
     t,
     localeKey,
+    isCurrent,
   ]);
 
   const sendMessageHandler = useCallback(() => {
@@ -315,6 +351,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     setLoading(true);
     handleSend()
       .then(() => {
+        if (!isCurrent()) return;
         setInput('');
         setMentionOpen(false);
         setMentionQuery(null);
@@ -324,10 +361,12 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         setDir('');
       })
       .catch((error) => {
+        if (!isCurrent()) return;
         console.error('Failed to send message:', error);
         Message.error(getConversationCreateErrorMessage(error, t));
       })
       .finally(() => {
+        if (!isCurrent()) return;
         sendingRef.current = false;
         setLoading(false);
       });
@@ -343,6 +382,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     setFiles,
     setDir,
     t,
+    isCurrent,
   ]);
 
   // Calculate button disabled state

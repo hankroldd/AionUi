@@ -2,11 +2,13 @@
  * [mycowork] ADR-0011: Guid page opened from a project ("ask about this project", router state mycoworkProjectId).
  * The chip starts from the project's default sources (GET /bridge/v1/scopes projects[]); sending freezes a plan with
  * working_project_id + the `project` selector; changing the scope applies to this turn only and never PUTs the binding
- * (MyCowork 01 §5, R009). Without a project id the behaviour is unchanged. Only the Bridge boundary (fetch) is mocked.
+ * (MyCowork 01 §5, R009). Without a project id the behaviour is unchanged. Bridge fetch and the authenticated
+ * identity context are substitutes; the real scope store, native slot, router and send preparation run unchanged.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
+import { ScopeChip } from '@mycowork/ui';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { Button } from '@arco-design/web-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +16,9 @@ import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { GuidScopeSlot, withGuidScope } from '@/renderer/mycowork-slots';
 
 vi.mock('@/common', () => ({ ipcBridge: {} }));
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({ status: 'authenticated', user: { id: 'fixture-u1' } }),
+}));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('i18next', () => ({ default: { language: 'zh-CN' } }));
 
@@ -191,5 +196,27 @@ describe('Guid scope chip entered from a project', () => {
     expect(screen.getByRole('button', { name: '资料范围：未选择' })).toBeInTheDocument();
     await expect(withGuidScope({})).resolves.toEqual({});
     expect(planBodies()).toEqual([]);
+  });
+
+  it('entering a normal project after an explicit file intent clears its required-file marker', async () => {
+    bridge(() => reply(200, catalog([{ project_id: 'proj-1', source_ids: ['src_b'] }])));
+    const { rerender } = render(
+      <ScopeChip
+        lang='zh-CN'
+        initialScope={{
+          items: [{ source_id: 'src_a', name: '产品知识库', resource_ids: ['res_1'] }],
+          views: [],
+          requiredResourceIds: ['res_1'],
+        }}
+      />
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    rerender(<ScopeChip lang='zh-CN' projectId='proj-1' />);
+    await screen.findByRole('button', { name: '资料范围（项目默认）：项目A资料' });
+    await withGuidScope({});
+    expect(planBodies()).toEqual([
+      { working_project_id: 'proj-1', scopes: [{ selector: 'project', id: 'proj-1' }], use_project_defaults: false },
+    ]);
+    neverWritesBinding();
   });
 });

@@ -5,10 +5,11 @@
  * Only external boundaries are mocked (Bridge = fetch, aioncore = ipcBridge.conversation.create).
  */
 
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { Message } from '@arco-design/web-react';
-import { setScopeSelection } from '@mycowork/ui';
+import { prepareScopedSession, setScopeSelection } from '@mycowork/ui';
+import { uploadFileRef } from '@/common/types/chatFile';
 import { bindGuidScope, withGuidScope } from '@/renderer/mycowork-slots';
 import { useGuidSend, type GuidSendDeps } from '@/renderer/pages/guid/hooks/useGuidSend';
 
@@ -72,6 +73,8 @@ const deps = (): GuidSendDeps =>
     navigate: vi.fn(() => Promise.resolve()),
     t: vi.fn((key: string) => key),
     localeKey: 'zh-CN',
+    ownerKey: 'fixture-user',
+    locationKey: 'fixture-guid',
   }) as unknown as GuidSendDeps;
 
 describe('withGuidScope', () => {
@@ -196,6 +199,65 @@ describe('withGuidScope', () => {
       );
     await expect(withGuidScope({})).rejects.toThrow('资料范围处理失败（invalid token response）');
   });
+
+  it('freezes every required selected file as evidence with strict scope and web off', async () => {
+    setScopeSelection(
+      [
+        { source_id: 'src_a', name: 'A', resource_ids: ['res_1', 'res_2'] },
+        { source_id: 'src_b', name: 'B', resource_ids: ['res_3'] },
+      ],
+      [],
+      ['res_1', 'res_2', 'res_3']
+    );
+    bridgeOk();
+    await withGuidScope({});
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      use_project_defaults: false,
+      scopes: [
+        { selector: 'knowledge_base', id: 'src_a', resource_ids: ['res_1', 'res_2'] },
+        { selector: 'knowledge_base', id: 'src_b', resource_ids: ['res_3'] },
+      ],
+      refs: ['res_1', 'res_2', 'res_3'].map((resource_id) => ({ resource_id, role: 'evidence' })),
+      policy: { strict: true, web: 'off' },
+    });
+  });
+
+  it('a deliberate reselection clears the old required-file gate and preserves ordinary 500-file scope semantics', async () => {
+    const files = Array.from({ length: 500 }, (_, i) => `res_${i}`);
+    setScopeSelection([{ source_id: 'src_a', name: 'A', resource_ids: ['res_1'] }], [], ['res_1']);
+    setScopeSelection([{ source_id: 'src_b', name: 'B', resource_ids: files }]);
+    bridgeOk();
+    await withGuidScope({});
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      use_project_defaults: false,
+      scopes: [{ selector: 'knowledge_base', id: 'src_b', resource_ids: files }],
+    });
+  });
+
+  it('rejects an empty required-file intent locally instead of returning plain chat', async () => {
+    setScopeSelection([], [], []);
+    await expect(withGuidScope({})).rejects.toThrow('未发送');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects additional materials before freezing a required-file plan and keeps the selected-file intent for retry', async () => {
+    setScopeSelection([{ source_id: 'src_a', name: 'A', resource_ids: ['res_1'] }], [], ['res_1']);
+    bridgeOk();
+    await expect(prepareScopedSession('zh-CN', true)).rejects.toThrow(
+      '请移除未选中的附件后再用这些文件提问；输入已保留'
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    await prepareScopedSession('zh-CN');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).refs).toEqual([{ resource_id: 'res_1', role: 'evidence' }]);
+  });
+
+  it('ordinary scope still permits additional materials without a required-file marker', async () => {
+    setScopeSelection([{ source_id: 'src_a', name: 'A' }]);
+    bridgeOk();
+    await expect(prepareScopedSession('en-US', true)).resolves.toMatchObject({ plan_id: 'plan_1' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).not.toHaveProperty('refs');
+  });
 });
 
 describe('useGuidSend with a selected scope', () => {
@@ -255,4 +317,64 @@ describe('useGuidSend with a selected scope', () => {
     });
     expect(createConversationMock).not.toHaveBeenCalled();
   });
+
+  it('keeps the draft and creates no token or conversation when any required file is rejected', async () => {
+    setScopeSelection([{ source_id: 'src_a', name: 'A', resource_ids: ['res_1'] }], [], ['res_1']);
+    fetchMock.mockResolvedValueOnce(reply(409, { error: { code: 'SCOPE_CONFLICT', message: 'scope changed' } }));
+    const d = deps();
+    const showError = vi.spyOn(Message, 'error').mockImplementation(() => () => {});
+    const { result } = renderHook(() => useGuidSend(d));
+    await act(async () => {
+      result.current.sendMessageHandler();
+    });
+    await waitFor(() =>
+      expect(showError).toHaveBeenCalledWith(expect.stringContaining('未发送：所选资料已发生变化或权限已撤销'))
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(createConversationMock).not.toHaveBeenCalled();
+    expect(d.setInput).not.toHaveBeenCalled();
+    expect(d.setFiles).not.toHaveBeenCalled();
+    expect(d.navigate).not.toHaveBeenCalled();
+    showError.mockRestore();
+  });
+
+  it('creates no conversation and keeps input for an invalid empty selected-file intent', async () => {
+    setScopeSelection([], [], []);
+    const d = deps();
+    const showError = vi.spyOn(Message, 'error').mockImplementation(() => () => {});
+    const { result } = renderHook(() => useGuidSend(d));
+    await act(async () => {
+      result.current.sendMessageHandler();
+    });
+    await waitFor(() => expect(showError).toHaveBeenCalledWith(expect.stringContaining('未发送')));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(createConversationMock).not.toHaveBeenCalled();
+    expect(d.setInput).not.toHaveBeenCalled();
+    expect(d.navigate).not.toHaveBeenCalled();
+    showError.mockRestore();
+  });
+
+  it.each(['claude', 'aionrs'])(
+    '%s keeps extra attachments and refuses a selected-file send before any Bridge call',
+    async (backend) => {
+      setScopeSelection([{ source_id: 'src_a', name: 'A', resource_ids: ['res_1'] }], [], ['res_1']);
+      const d = deps();
+      d.selectedAssistantBackend = backend;
+      d.files = [uploadFileRef('/fixtures/outside-selection.md')];
+      d.current_model = { use_model: 'fixture-model' } as NonNullable<GuidSendDeps['current_model']>;
+      const showError = vi.spyOn(Message, 'error').mockImplementation(() => () => {});
+      const { result } = renderHook(() => useGuidSend(d));
+      await act(async () => {
+        result.current.sendMessageHandler();
+      });
+      await waitFor(() => expect(showError).toHaveBeenCalledWith(expect.stringContaining('请移除未选中的附件')));
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(createConversationMock).not.toHaveBeenCalled();
+      expect(d.setInput).not.toHaveBeenCalled();
+      expect(d.setFiles).not.toHaveBeenCalled();
+      expect(d.files).toEqual([uploadFileRef('/fixtures/outside-selection.md')]);
+      expect(d.navigate).not.toHaveBeenCalled();
+      showError.mockRestore();
+    }
+  );
 });

@@ -207,6 +207,8 @@ const deps = (selectedMode: string): GuidSendDeps =>
     navigate: vi.fn(() => Promise.resolve()),
     t: vi.fn((key: string) => key),
     localeKey: 'zh-CN',
+    ownerKey: 'fixture-user',
+    locationKey: 'fixture-guid',
   }) as unknown as GuidSendDeps;
 const send = async (selectedMode: string) => {
   const { result } = renderHook(() => useGuidSend(deps(selectedMode)));

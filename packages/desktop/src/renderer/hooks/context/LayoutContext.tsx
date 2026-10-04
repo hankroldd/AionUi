@@ -5,10 +5,14 @@
  */
 import React from 'react';
 
+export type GuidWorkContext = { ownerKey: string; workspace: string };
+
 export interface LayoutContextValue {
   isMobile: boolean;
   siderCollapsed: boolean;
   setSiderCollapsed: (value: boolean) => void;
+  guidWork: GuidWorkContext | null;
+  setGuidWork: React.Dispatch<React.SetStateAction<GuidWorkContext | null>>;
 }
 
 export const LayoutContext = React.createContext<LayoutContextValue | null>(null);

@@ -116,7 +116,15 @@ import { LayoutContext } from '@/renderer/hooks/context/LayoutContext';
 // narrow-screen branch (single column + bottom-sheet assistant picker).
 const renderMobile = (ui: React.ReactElement) =>
   render(
-    <LayoutContext.Provider value={{ isMobile: true, siderCollapsed: false, setSiderCollapsed: () => {} }}>
+    <LayoutContext.Provider
+      value={{
+        isMobile: true,
+        siderCollapsed: false,
+        setSiderCollapsed: () => {},
+        guidWork: null,
+        setGuidWork: vi.fn(),
+      }}
+    >
       {ui}
     </LayoutContext.Provider>
   );

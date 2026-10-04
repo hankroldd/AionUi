@@ -1,16 +1,20 @@
 /**
  * [mycowork] 文件：officeResourceSelection.dom.test.tsx
  * 职责：真实空间控件的明确ID选择、批量标签预览与乐观锁/部分失败恢复。
- * 边界：只替换Bridge HTTP；Arco、选择状态与原生Slot均实用，不调用上游或模型。
+ * 边界：只替换Bridge HTTP与登录主体；Arco、真实Router、选择状态与原生Slot实用，不调用模型。
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render as renderDOM, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
-vi.mock('react-router-dom', () => ({ useLocation: () => ({ state: null, pathname: '/' }) }));
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({ status: 'authenticated', user: { id: 'fixture-owner' } }),
+}));
+const render = (ui: React.ReactNode) => renderDOM(<MemoryRouter initialEntries={['/office/space']}>{ui}</MemoryRouter>);
 const fetchMock = vi.fn();
 const tag = (id: string, name: string) => ({
   tag_id: id,
@@ -50,6 +54,7 @@ const file = (id: string, name: string, source: string | null) => ({
   resource_id: id,
   file_name: name,
   source_id: source,
+  origin: source ? 'knowledge_base' : 'imports',
   state: source ? 'ready' : 'stored',
   tag_ids: metadata[id].tag_ids,
   secret: metadata[id].secret,
@@ -79,18 +84,23 @@ function fixture() {
     if (path === '/bridge/v1/collections') return response(200, { collections: [] });
     if (path === '/bridge/v1/resources') {
       const q = new URLSearchParams(String(url).split('?')[1]);
-      let items = q.has('source_id')
-        ? q.get('page') === '2'
-          ? [file('res_c', 'C.md', 'src_kb')]
-          : [file('res_a', 'A.md', 'src_kb'), file('res_b', 'B.md', 'src_kb')]
-        : [file('res_i', '导入.md', null)];
+      let items =
+        q.get('origin') !== 'imports'
+          ? q.get('page') === '2'
+            ? [file('res_c', 'C.md', 'src_kb')]
+            : [
+                file('res_a', 'A.md', 'src_kb'),
+                file('res_b', 'B.md', 'src_kb'),
+                ...(!q.has('source_id') ? [file('res_i', '导入.md', null)] : []),
+              ]
+          : [file('res_i', '导入.md', null)];
       if (q.has('q')) items = items.filter((r) => r.file_name.includes(q.get('q')!));
       if (q.has('view_id')) items = items.filter((r) => r.tag_ids.includes('tag_keep'));
       return response(200, {
         items,
         page: Number(q.get('page') ?? 1),
         page_size: 50,
-        total: q.has('source_id') ? total : items.length,
+        total: q.has('source_id') ? total : total > 50 ? total : items.length,
       });
     }
     const match = path.match(/^\/bridge\/v1\/resources\/(res_[a-z])\/metadata$/);
@@ -189,13 +199,18 @@ describe('space selection and batch tags', () => {
     expect(screen.getByText('用这些资料提问')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox', { name: '选择本页' }));
     expect(screen.getByText('已选 2 项')).toBeInTheDocument();
-    expect(screen.queryByText('用这些资料提问')).toBeNull();
+    expect(
+      within(screen.getByRole('group', { name: '资源筛选与排序' })).queryByRole('button', { name: '用这些资料提问' })
+    ).toBeNull();
+    expect(
+      within(screen.getByRole('region', { name: '所选资料的操作' })).getByRole('button', { name: '用这些资料提问' })
+    ).toBeDisabled();
     fireEvent.click(screen.getByLabelText('网格'));
     expect(screen.getByRole('checkbox', { name: '选择 A.md' })).toBeChecked();
     fireEvent.change(screen.getByRole('textbox', { name: '搜索文件名或标签' }), { target: { value: 'A' } });
     expect(screen.queryByRole('region', { name: '所选资料的操作' })).toBeNull();
     fireEvent.change(screen.getByRole('textbox', { name: '搜索文件名或标签' }), { target: { value: '' } });
-    expect(screen.getByRole('checkbox', { name: '选择 A.md' })).not.toBeChecked();
+    expect(await screen.findByRole('checkbox', { name: '选择 A.md' })).not.toBeChecked();
     expect(screen.getByText('用这些资料提问')).toBeInTheDocument();
     expect(calls('PATCH')).toHaveLength(0);
   });

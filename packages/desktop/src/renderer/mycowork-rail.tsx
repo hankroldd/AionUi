@@ -10,6 +10,7 @@ import { AllApplication, Brain, Home, More, Time, User } from '@icon-park/react'
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { navigationText } from '@mycowork/ui';
+import { useSpaceNavigationState } from '@/renderer/mycowork-resource-navigation';
 import { DARK_THEME_ID, LIGHT_THEME_ID, SYSTEM_THEME_ID } from '@/common/theme/constants';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useFeedback } from '@/renderer/hooks/context/FeedbackContext';
@@ -201,6 +202,7 @@ function useRailActions(mobile: boolean, lang: string) {
   const text = navigationText(lang);
   const navigate = useNavigate();
   const { user, status, logout } = useAuth();
+  const spaceState = useSpaceNavigationState(status === 'authenticated' ? (user?.id ?? 'local') : undefined);
   const { activeId, selectTheme } = useThemeContext();
   const { openFeedback } = useFeedback();
   const layout = useLayoutContext();
@@ -239,7 +241,7 @@ function useRailActions(mobile: boolean, lang: string) {
     cleanupSiderTooltips();
     blurActiveElement();
     if (!route.startsWith('/settings')) closePreview();
-    void navigate(route);
+    void navigate(route, route === '/office/space' ? { state: spaceState() } : undefined);
     if (mobile) layout?.setSiderCollapsed(true);
   };
   return {

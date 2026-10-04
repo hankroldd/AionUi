@@ -11,7 +11,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Same as renderer/main.tsx: Arco's global Message needs the React 19 adapter (tests load the CJS lib build).
 import '@arco-design/web-react/lib/_util/react-19-adapter';
-import { ScopeChip, setScopeSelection } from '@mycowork/ui';
+import { prepareScopedSession, ScopeChip, setScopeSelection } from '@mycowork/ui';
 
 const fetchMock = vi.fn();
 const reply = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => body });
@@ -284,5 +284,83 @@ describe('ScopeChip', () => {
     unmount();
     render(<ScopeChip lang='en-US' />);
     expect(screen.getByRole('button', { name: 'Sources: none' })).toBeInTheDocument();
+  });
+
+  it('installs an explicit file draft ahead of project defaults and keeps it when router project fields are consumed', () => {
+    route();
+    const initialScope = {
+      projectId: 'proj-picked',
+      items: [{ source_id: 'src_a', name: '产品知识库', resource_ids: ['res_1'] }],
+      views: [],
+      requiredResourceIds: ['res_1'],
+    };
+    const { rerender, unmount } = render(
+      <ScopeChip lang='zh-CN' projectId='proj-default' initialScope={initialScope} />
+    );
+    expect(screen.getByRole('button', { name: '资料范围（本轮修改）：产品知识库（挑选 1 份）' })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    rerender(<ScopeChip lang='zh-CN' initialScope={initialScope} />);
+    expect(screen.getByRole('button', { name: '资料范围（本轮修改）：产品知识库（挑选 1 份）' })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    unmount();
+    render(<ScopeChip lang='en-US' />);
+    expect(screen.getByRole('button', { name: 'Sources: none' })).toBeInTheDocument();
+  });
+
+  it('an explicit temporary file draft clears an old project without loading project defaults', () => {
+    route();
+    const initialScope = {
+      items: [{ source_id: 'src_a', name: '产品知识库', resource_ids: ['res_1'] }],
+      views: [],
+      requiredResourceIds: ['res_1'],
+    };
+    render(<ScopeChip lang='zh-CN' projectId='old-project' initialScope={initialScope} />);
+    expect(screen.getByRole('button', { name: '资料范围：产品知识库（挑选 1 份）' })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('selecting every listed file retains the explicit whitelist instead of becoming the whole knowledge base', async () => {
+    route();
+    setScopeSelection([{ source_id: 'src_a', name: '产品知识库', resource_ids: ['res_1'] }]);
+    render(<ScopeChip lang='zh-CN' />);
+    await openDialog();
+    fireEvent.click(await screen.findByRole('button', { name: '全选' }));
+    fireEvent.click(screen.getByRole('button', { name: '应用到本轮' }));
+    expect(await screen.findByRole('button', { name: '资料范围：产品知识库（挑选 2 份）' })).toBeInTheDocument();
+  });
+
+  it('an explicit dialog re-selection clears the required-file gate without the initial intent reinstalling it', async () => {
+    route();
+    render(
+      <ScopeChip
+        lang='zh-CN'
+        initialScope={{
+          items: [{ source_id: 'src_a', name: '产品知识库', resource_ids: ['res_1'] }],
+          views: [],
+          requiredResourceIds: ['res_1'],
+        }}
+      />
+    );
+    await openDialog();
+    fireEvent.click(await screen.findByText('价格带.xlsx'));
+    fireEvent.click(screen.getByRole('button', { name: '应用到本轮' }));
+    await screen.findByRole('button', { name: '资料范围：产品知识库（挑选 2 份）' });
+    fetchMock.mockResolvedValueOnce(reply(201, { plan_id: 'new-plan', status: 'OK' }));
+    fetchMock.mockResolvedValueOnce(
+      reply(201, {
+        workspace: '/fixture/workspace',
+        session_mcp_server: {
+          id: 'bridge',
+          name: 'bridge',
+          transport: { type: 'streamable_http', url: '/fixture/mcp', headers: {} },
+        },
+      })
+    );
+    await expect(prepareScopedSession('zh-CN', true)).resolves.toMatchObject({ plan_id: 'new-plan' });
+    const [, post] = fetchMock.mock.calls.find(([url]) => url === '/bridge/v1/context-plans')!;
+    expect(JSON.parse(post.body)).toEqual({
+      use_project_defaults: false,
+      scopes: [{ selector: 'knowledge_base', id: 'src_a', resource_ids: ['res_1', 'res_2'] }],
+    });
   });
 });

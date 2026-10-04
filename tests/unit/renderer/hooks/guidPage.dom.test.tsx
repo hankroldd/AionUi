@@ -9,6 +9,11 @@ import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LayoutContext } from '@/renderer/hooks/context/LayoutContext';
 
+const guidActor = vi.hoisted(() => ({ id: 'fixture-owner' }));
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({ status: 'authenticated', user: { id: guidActor.id } }),
+}));
+
 const {
   modelSelectionMock,
   agentSelectionMock,
@@ -302,6 +307,7 @@ const guidInputCardProps = {
 
 describe('GuidPage', () => {
   beforeEach(() => {
+    guidActor.id = 'fixture-owner';
     locationMock.state = null;
     locationMock.key = 'guid-location';
     navigateMock.mockReset();
@@ -425,6 +431,57 @@ describe('GuidPage', () => {
     render(<GuidPage />);
 
     expect(navigateMock).toHaveBeenCalledWith('/guid', { replace: true, state: null });
+  });
+
+  it('preserves input and attachments through an owned scope transfer and its consumption replace', () => {
+    locationMock.state = {
+      mycoworkScopeDraft: { ownerKey: 'fixture-owner', selection: { items: [], views: [], requiredResourceIds: [] } },
+      workspace: '/fixture/work',
+    };
+    guidInputMock.setInput.mockClear();
+    guidInputMock.setFiles.mockClear();
+    guidInputMock.setDir.mockClear();
+    const { rerender } = render(<GuidPage />);
+    expect(navigateMock).toHaveBeenCalledWith('/guid', { replace: true, state: null });
+    locationMock.state = null;
+    locationMock.key = 'scope-consumed';
+    rerender(<GuidPage />);
+    expect(guidInputMock.setInput).not.toHaveBeenCalled();
+    expect(guidInputMock.setFiles).not.toHaveBeenCalled();
+    expect(guidInputMock.setDir).not.toHaveBeenCalled();
+    locationMock.key = 'plain-new-task';
+    rerender(<GuidPage />);
+    expect(guidInputMock.setInput).toHaveBeenCalledWith('');
+    expect(guidInputMock.setFiles).toHaveBeenCalledWith([]);
+  });
+
+  it('does not preserve a wrong-owner scope transfer or its workspace', () => {
+    locationMock.state = {
+      mycoworkScopeDraft: { ownerKey: 'other-owner', selection: { items: [], views: [] } },
+      workspace: '/fixture/other',
+    };
+    guidInputMock.setInput.mockClear();
+    guidInputMock.setFiles.mockClear();
+    guidInputMock.setDir.mockClear();
+    render(<GuidPage />);
+    expect(guidInputMock.setInput).toHaveBeenCalledWith('');
+    expect(guidInputMock.setFiles).toHaveBeenCalledWith([]);
+    expect(guidInputMock.setDir).toHaveBeenCalledWith('');
+  });
+
+  it('clears the pending draft-preserving pass if the actor changes before consumption', () => {
+    locationMock.state = {
+      mycoworkScopeDraft: { ownerKey: 'fixture-owner', selection: { items: [], views: [], requiredResourceIds: [] } },
+    };
+    guidInputMock.setInput.mockClear();
+    guidInputMock.setFiles.mockClear();
+    const { rerender } = render(<GuidPage />);
+    guidActor.id = 'new-owner';
+    locationMock.state = null;
+    locationMock.key = 'scope-consumed-new-owner';
+    rerender(<GuidPage />);
+    expect(guidInputMock.setInput).toHaveBeenCalledWith('');
+    expect(guidInputMock.setFiles).toHaveBeenCalledWith([]);
   });
 
   it('keeps a generic conversation heading and omits assistant-detail chrome on the home page', () => {
@@ -554,6 +611,8 @@ describe('GuidPage', () => {
       expect(latestDeps).toMatchObject({
         guidEnabledSkills: undefined,
         guidDisabledBuiltinSkills: undefined,
+        ownerKey: guidActor.id,
+        locationKey: locationMock.key,
       });
     });
   });
@@ -687,7 +746,15 @@ describe('GuidInputCard prefill focus', () => {
 
     const originalDraft = 'Existing Guid draft';
     const { rerender } = render(
-      <LayoutContext.Provider value={{ isMobile: false, siderCollapsed: false, setSiderCollapsed: vi.fn() }}>
+      <LayoutContext.Provider
+        value={{
+          isMobile: false,
+          siderCollapsed: false,
+          setSiderCollapsed: vi.fn(),
+          guidWork: null,
+          setGuidWork: vi.fn(),
+        }}
+      >
         <GuidInputCard {...guidInputCardProps} input={originalDraft} focusRequestKey='desktop-prefill' />
       </LayoutContext.Provider>
     );
@@ -700,7 +767,15 @@ describe('GuidInputCard prefill focus', () => {
     document.body.append(outsideTarget);
     outsideTarget.focus();
     rerender(
-      <LayoutContext.Provider value={{ isMobile: false, siderCollapsed: false, setSiderCollapsed: vi.fn() }}>
+      <LayoutContext.Provider
+        value={{
+          isMobile: false,
+          siderCollapsed: false,
+          setSiderCollapsed: vi.fn(),
+          guidWork: null,
+          setGuidWork: vi.fn(),
+        }}
+      >
         <GuidInputCard {...guidInputCardProps} focusRequestKey='desktop-prefill' />
       </LayoutContext.Provider>
     );
@@ -709,14 +784,30 @@ describe('GuidInputCard prefill focus', () => {
 
     outsideTarget.focus();
     rerender(
-      <LayoutContext.Provider value={{ isMobile: false, siderCollapsed: false, setSiderCollapsed: vi.fn() }}>
+      <LayoutContext.Provider
+        value={{
+          isMobile: false,
+          siderCollapsed: false,
+          setSiderCollapsed: vi.fn(),
+          guidWork: null,
+          setGuidWork: vi.fn(),
+        }}
+      >
         <GuidInputCard {...guidInputCardProps} focusRequestKey='desktop-prefill' />
       </LayoutContext.Provider>
     );
     expect(outsideTarget).toHaveFocus();
 
     rerender(
-      <LayoutContext.Provider value={{ isMobile: false, siderCollapsed: false, setSiderCollapsed: vi.fn() }}>
+      <LayoutContext.Provider
+        value={{
+          isMobile: false,
+          siderCollapsed: false,
+          setSiderCollapsed: vi.fn(),
+          guidWork: null,
+          setGuidWork: vi.fn(),
+        }}
+      >
         <GuidInputCard {...guidInputCardProps} input={`${guidInputCardProps.input}!`} />
       </LayoutContext.Provider>
     );
@@ -730,7 +821,15 @@ describe('GuidInputCard prefill focus', () => {
     >('@/renderer/pages/guid/components/GuidInputCard');
 
     render(
-      <LayoutContext.Provider value={{ isMobile: true, siderCollapsed: false, setSiderCollapsed: vi.fn() }}>
+      <LayoutContext.Provider
+        value={{
+          isMobile: true,
+          siderCollapsed: false,
+          setSiderCollapsed: vi.fn(),
+          guidWork: null,
+          setGuidWork: vi.fn(),
+        }}
+      >
         <GuidInputCard {...guidInputCardProps} focusRequestKey='mobile-prefill' />
       </LayoutContext.Provider>
     );
@@ -747,7 +846,15 @@ describe('GuidInputCard prefill focus', () => {
     outsideTarget.focus();
 
     render(
-      <LayoutContext.Provider value={{ isMobile: false, siderCollapsed: false, setSiderCollapsed: vi.fn() }}>
+      <LayoutContext.Provider
+        value={{
+          isMobile: false,
+          siderCollapsed: false,
+          setSiderCollapsed: vi.fn(),
+          guidWork: null,
+          setGuidWork: vi.fn(),
+        }}
+      >
         <GuidInputCard {...guidInputCardProps} />
       </LayoutContext.Provider>
     );

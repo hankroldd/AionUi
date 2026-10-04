@@ -20,6 +20,7 @@ import AssistantSelectionArea from './components/AssistantSelectionArea';
 import GuidActionRow from './components/GuidActionRow';
 import GuidInputCard from './components/GuidInputCard';
 import { GuidScopeSlot } from '@/renderer/mycowork-slots';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import GuidModelSelector from './components/GuidModelSelector';
 import QuickActionButtons from './components/QuickActionButtons';
 import FeedbackReportModal from '@/renderer/components/settings/SettingsModal/contents/FeedbackReportModal';
@@ -58,6 +59,8 @@ const GuidPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, status } = useAuth();
+  const guidOwnerKey = status === 'authenticated' ? (user?.id ?? 'local') : undefined;
   const guidContainerRef = useRef<HTMLDivElement>(null);
   const { activeBorderColor, inactiveBorderColor, activeShadow } = useInputFocusRing();
 
@@ -284,6 +287,8 @@ const GuidPage: React.FC = () => {
     navigate,
     t,
     localeKey,
+    ownerKey: guidOwnerKey,
+    locationKey: location.key,
   });
 
   // --- Coordinated handlers (depend on multiple hooks) ---
@@ -520,11 +525,19 @@ const GuidPage: React.FC = () => {
   // and would otherwise wipe the freshly seeded input. This flag lets exactly
   // one such follow-up pass skip the clear, preserving the seeded prompt.
   const skipNextClearRef = useRef(false);
+  const draftOwnerRef = useRef(guidOwnerKey);
   useLayoutEffect(() => {
+    if (draftOwnerRef.current !== guidOwnerKey) skipNextClearRef.current = false;
+    draftOwnerRef.current = guidOwnerKey;
     const prefillState = location.state as GuidNavigationState | null;
     const prefillPrompt = prefillState?.prefillPrompt;
     const prefillFiles = prefillState?.prefillFiles;
-    const preserveCurrentDraft = Boolean(prefillState?.preservePrefillDraft || skipNextClearRef.current);
+    const scopeIntent = prefillState?.mycoworkScopeDraft as { ownerKey: string } | undefined;
+    const preserveScope = scopeIntent?.ownerKey === guidOwnerKey && guidOwnerKey !== undefined;
+    if (scopeIntent && !preserveScope) skipNextClearRef.current = false;
+    const preserveCurrentDraft = Boolean(
+      prefillState?.preservePrefillDraft || skipNextClearRef.current || preserveScope
+    );
     if (prefillPrompt && consumedPrefillKeyRef.current !== location.key) {
       // Consume prompt + optional attachments (e.g. bug-report screenshots) once.
       consumedPrefillKeyRef.current = location.key;
@@ -537,19 +550,30 @@ const GuidPage: React.FC = () => {
         // with no source tag; treat them as uploads to preserve prior behavior.
         guidInput.setFiles(prefillFiles && prefillFiles.length > 0 ? prefillFiles.map(uploadFileRef) : []);
       }
-    } else if (skipNextClearRef.current) {
+    } else if (preserveScope || skipNextClearRef.current) {
       // This pass is the state-clearing replace() right after a prefill — keep
       // the seeded input instead of clearing it.
-      skipNextClearRef.current = false;
+      skipNextClearRef.current = preserveScope;
     } else {
       guidInput.setInput('');
       guidInput.setFiles([]);
     }
     guidInput.setLoading(false);
-    if (!preserveCurrentDraft && !(location.state as { workspace?: string } | null)?.workspace) {
+    if (
+      (scopeIntent && !preserveScope) ||
+      (!preserveCurrentDraft && !(location.state as { workspace?: string } | null)?.workspace)
+    ) {
       guidInput.setDir('');
     }
-  }, [guidInput.setDir, guidInput.setFiles, guidInput.setInput, guidInput.setLoading, location.key, location.state]);
+  }, [
+    guidInput.setDir,
+    guidInput.setFiles,
+    guidInput.setInput,
+    guidInput.setLoading,
+    guidOwnerKey,
+    location.key,
+    location.state,
+  ]);
 
   // A draft-preserving prefill is an action, not durable navigation state.
   // Strip it after consumption so browser history or a remount cannot replay it.
@@ -680,7 +704,7 @@ const GuidPage: React.FC = () => {
             onSelectAssistant={handleSelectAssistant}
           />
 
-          <GuidScopeSlot />
+          <GuidScopeSlot workspace={guidInput.dir} />
           <GuidInputCard
             focusRequestKey={navState?.focusPrefill && navState.prefillPrompt ? location.key : undefined}
             input={guidInput.input}

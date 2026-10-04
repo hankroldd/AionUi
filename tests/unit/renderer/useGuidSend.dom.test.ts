@@ -36,7 +36,8 @@ vi.mock('@/renderer/utils/workspace/workspaceHistory', () => ({
   updateWorkspaceTime: vi.fn(),
 }));
 
-vi.mock('@arco-design/web-react', () => ({
+vi.mock('@arco-design/web-react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@arco-design/web-react')>()),
   Message: {
     warning: vi.fn(),
     error: vi.fn(),
@@ -72,6 +73,8 @@ const createDeps = (): GuidSendDeps => ({
   navigate: vi.fn(() => Promise.resolve()) as never,
   t: vi.fn((key: string, options?: { defaultValue?: string }) => options?.defaultValue || key) as never,
   localeKey: 'zh-CN',
+  ownerKey: 'fixture-user',
+  locationKey: 'fixture-guid',
 });
 
 describe('useGuidSend', () => {

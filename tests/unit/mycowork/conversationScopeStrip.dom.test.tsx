@@ -11,6 +11,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Same as renderer/main.tsx: Arco's global Message needs the React 19 adapter (tests load the CJS lib build).
 import '@arco-design/web-react/lib/_util/react-19-adapter';
+import { setScopeSelection } from '@mycowork/ui';
 import { ConversationScopeSlot, withGuidScope } from '@/renderer/mycowork-slots';
 
 type StreamMessage = { type: string; conversation_id: string };
@@ -80,6 +81,19 @@ describe('ConversationScopeSlot', () => {
     expect(fetchMock).toHaveBeenCalledWith('/bridge/v1/conversations/conv%201/context', {
       credentials: 'same-origin',
     });
+  });
+
+  it('accepts the working project returned by the bound plan', async () => {
+    fetchMock.mockResolvedValue(reply(200, { ...CONTEXT, working_project_id: 'task-project' }));
+    render(<ConversationScopeSlot conversation_id='conv 1' />);
+    expect(await screen.findByText(SUMMARY)).toBeInTheDocument();
+  });
+
+  it('rejects a malformed bound-plan project instead of treating it as an absent project', async () => {
+    fetchMock.mockResolvedValue(reply(200, { ...CONTEXT, working_project_id: 123 }));
+    render(<ConversationScopeSlot conversation_id='conv 1' />);
+    expect(await screen.findByText(/资料范围处理失败.*invalid context response/)).toBeInTheDocument();
+    expect(screen.queryByText(SUMMARY)).toBeNull();
   });
 
   it('says "plain chat only" when the conversation has no plan (404)', async () => {
@@ -220,6 +234,7 @@ describe('ConversationScopeSlot', () => {
     });
 
     it('strict narrowing: opens the Guid page, and the next send uses the narrowed plan without freezing another', async () => {
+      setScopeSelection([{ source_id: 'src_a', name: 'A', resource_ids: ['required_old'] }], [], ['required_old']);
       bridge('shrunk');
       await openDrawer();
       fireEvent.click(screen.getByText('产品库'));
@@ -234,6 +249,8 @@ describe('ConversationScopeSlot', () => {
       expect(calls('POST', '/context-plans')).toHaveLength(1); // only the narrowing itself
       await withGuidScope({}); // the narrowed plan is used once: a later send freezes a fresh plan
       expect(calls('POST', '/context-plans')).toHaveLength(2);
+      const [, freshPlan] = calls('POST', '/context-plans')[1];
+      expect(JSON.parse(String(freshPlan?.body))).not.toHaveProperty('refs');
     });
 
     it('restores the tag narrowing from brief.scopes, so an unchanged apply keeps it instead of widening to the whole base (D144)', async () => {

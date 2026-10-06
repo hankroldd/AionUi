@@ -22,6 +22,7 @@
       "@mycowork/ui": ["../../packages/ui/src/index.ts"],
       "@mycowork/contracts": ["../../packages/contracts/src/index.ts"],
       "react": ["./node_modules/@types/react"],
+      "react-dom": ["./node_modules/@types/react-dom"],
       "@arco-design/web-react": ["./node_modules/@arco-design/web-react"],
       "@arco-design/web-react/*": ["./node_modules/@arco-design/web-react/*"]
     }

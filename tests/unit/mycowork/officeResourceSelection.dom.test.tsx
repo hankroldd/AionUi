@@ -1,5 +1,5 @@
 /**
- * [mycowork] 文件：officeResourceSelection.dom.test.tsx
+ * [mycowork] 文件：officeResourceSelection.dom.test.tsx（adapted统一查询fixture）
  * 职责：真实空间控件的明确ID选择、批量标签预览与乐观锁/部分失败恢复。
  * 边界：只替换Bridge HTTP；Arco、选择状态与原生Slot均实用，不调用上游或模型。
  */
@@ -9,6 +9,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
 
+// 空间页按登录账号取“来源对话”名称：这里只替掉 AionUi 的登录上下文，账号固定为已登录
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'u1', username: 'fixture-account' }, status: 'authenticated' }),
+}));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({
   useLocation: () => ({ state: null, pathname: '/' }),
@@ -53,6 +57,7 @@ const file = (id: string, name: string, source: string | null) => ({
   resource_id: id,
   file_name: name,
   source_id: source,
+  origin: source ? 'knowledge_base' : 'imports',
   state: source ? 'ready' : 'stored',
   tag_ids: metadata[id].tag_ids,
   secret: metadata[id].secret,
@@ -82,18 +87,23 @@ function fixture() {
     if (path === '/bridge/v1/collections') return response(200, { collections: [] });
     if (path === '/bridge/v1/resources') {
       const q = new URLSearchParams(String(url).split('?')[1]);
-      let items = q.has('source_id')
-        ? q.get('page') === '2'
-          ? [file('res_c', 'C.md', 'src_kb')]
-          : [file('res_a', 'A.md', 'src_kb'), file('res_b', 'B.md', 'src_kb')]
-        : [file('res_i', '导入.md', null)];
+      let items =
+        q.get('origin') === 'imports'
+          ? [file('res_i', '导入.md', null)]
+          : q.get('page') === '2'
+            ? [file('res_c', 'C.md', 'src_kb')]
+            : [
+                file('res_a', 'A.md', 'src_kb'),
+                file('res_b', 'B.md', 'src_kb'),
+                ...(q.has('source_id') ? [] : [file('res_i', '导入.md', null)]),
+              ];
       if (q.has('q')) items = items.filter((r) => r.file_name.includes(q.get('q')!));
       if (q.has('view_id')) items = items.filter((r) => r.tag_ids.includes('tag_keep'));
       return response(200, {
         items,
         page: Number(q.get('page') ?? 1),
         page_size: 50,
-        total: q.has('source_id') ? total : items.length,
+        total: q.has('source_id') ? total : q.get('origin') === 'all' && !q.has('view_id') ? total + 1 : items.length,
       });
     }
     const match = path.match(/^\/bridge\/v1\/resources\/(res_[a-z])\/metadata$/);
@@ -198,7 +208,7 @@ describe('space selection and batch tags', () => {
     fireEvent.change(screen.getByRole('textbox', { name: '搜索文件名或标签' }), { target: { value: 'A' } });
     expect(screen.queryByRole('region', { name: '所选资料的操作' })).toBeNull();
     fireEvent.change(screen.getByRole('textbox', { name: '搜索文件名或标签' }), { target: { value: '' } });
-    expect(screen.getByRole('checkbox', { name: '选择 A.md' })).not.toBeChecked();
+    expect(await screen.findByRole('checkbox', { name: '选择 A.md' })).not.toBeChecked();
     expect(screen.getByText('用这些资料提问')).toBeInTheDocument();
     expect(calls('PATCH')).toHaveLength(0);
   });

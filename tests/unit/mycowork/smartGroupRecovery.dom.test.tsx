@@ -71,6 +71,7 @@ const item = {
   file_name: '虚构稿.md',
   source_id: null,
   purpose: 'working',
+  origin: 'imports',
   state: 'stored',
   tag_ids: [],
   secret: false,

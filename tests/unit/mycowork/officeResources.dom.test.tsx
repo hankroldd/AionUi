@@ -1,5 +1,6 @@
 /**
- * [mycowork] ADR-0011: `/office/resources` (MyCowork P05 resource center, PR04 slice d/f; redesign PR11/D123).
+ * [mycowork] adapted：PR11 §3.2统一查询合同的旧DOM回归；不是原tests unchanged。
+ * ADR-0011: `/office/resources` (MyCowork P05 resource center, PR04 slice d/f; redesign PR11/D123).
  * Only the Bridge boundary is mocked (fetch). Covers: the home view "Recent" merges My imports and every granted knowledge base
  * newest first (sort=updated) and shows type, source, local time, tags and the state in "will AI use it" words (D145; no version
  * count in the list, D146); the left nav switches to one knowledge
@@ -21,6 +22,10 @@ import { ScopeChip } from '@mycowork/ui';
 import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
 import { LayoutContext } from '@/renderer/hooks/context/LayoutContext';
 
+// 空间页按登录账号取“来源对话”名称：这里只替掉 AionUi 的登录上下文，账号固定为已登录
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'u1', username: 'fixture-account' }, status: 'authenticated' }),
+}));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({
   useLocation: () => ({ state: null, pathname: '/' }),
@@ -49,6 +54,7 @@ const item = (over: object) => ({
   resource_id: 'res_1',
   file_name: '工作稿.pptx',
   source_id: null,
+  origin: 'imports',
   purpose: 'working',
   state: 'stored',
   tag_ids: ['tag_c'],
@@ -62,6 +68,7 @@ const WEEKLY = item({
   resource_id: 'res_q',
   file_name: '周报.md',
   source_id: 'src_q',
+  origin: 'knowledge_base',
   state: 'ready',
   tag_ids: [],
   updated_at: today,
@@ -103,10 +110,21 @@ function bridge(opts: Opts = {}) {
         ? []
         : q.get('source_id') === 'src_q'
           ? [{ ...WEEKLY, secret: opts.secretReady ?? false }]
-          : [item(opts.tags3 ? { tag_ids: ['tag_c', 'tag_p', 'tag_x'] } : {})];
+          : q.get('origin') === 'all' && !opts.sourceStatus
+            ? [
+                { ...WEEKLY, secret: opts.secretReady ?? false },
+                item(opts.tags3 ? { tag_ids: ['tag_c', 'tag_p', 'tag_x'] } : {}),
+              ]
+            : [item(opts.tags3 ? { tag_ids: ['tag_c', 'tag_p', 'tag_x'] } : {})];
       if (q.get('collection_id')) items = items.filter((i) => opts.starred?.includes(i.resource_id));
       if (q.get('q')) items = items.filter((i) => i.file_name.includes(q.get('q') as string));
-      return reply(200, { page: 1, page_size: 50, total: items.length, items });
+      return reply(200, {
+        page: 1,
+        page_size: 50,
+        total: items.length,
+        items,
+        ...(q.get('origin') === 'all' && opts.sourceStatus ? { failed_source_ids: ['src_q'] } : {}),
+      });
     }
     if (url === '/bridge/v1/tags' && method === 'GET')
       return reply(200, {
@@ -192,7 +210,7 @@ describe('OfficeResourcesSlot', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('Recent merges My imports and granted knowledge bases newest first, with type, source, local time, tags and state (no version count)', async () => {
+  it('adapted All uses a single origin=all response with type, origin, KB, time, tags and state', async () => {
     bridge();
     render(<OfficeResourcesSlot />);
     const rows = await screen.findAllByTestId('mycowork-resource-item');
@@ -200,13 +218,13 @@ describe('OfficeResourcesSlot', () => {
       '周报.md',
       '工作稿.pptx',
     ]);
-    expect(calls('GET', 'origin=imports&sort=updated')).toHaveLength(1);
-    expect(calls('GET', 'source_id=src_q&sort=updated')).toHaveLength(1);
+    expect(calls('GET', 'origin=all&sort=updated&page=1')).toHaveLength(1);
+    expect(calls('GET', 'source_id=src_q')).toHaveLength(0);
     const [weekly, draft] = rows as [HTMLElement, HTMLElement];
     expect(within(weekly).getByText('青禾库')).toBeInTheDocument();
     expect(within(weekly).getAllByText('今天 10:13').length).toBeGreaterThan(0);
     expect(within(weekly).getByText('AI 可引用')).toBeInTheDocument();
-    expect(within(draft).getByText('我的导入')).toBeInTheDocument();
+    expect(within(draft).getByText('导入')).toBeInTheDocument();
     expect(within(draft).getByRole('link', { name: '工作稿.pptx' })).toHaveAttribute(
       'href',
       '#/office/resources/res_1/versions'
@@ -222,10 +240,10 @@ describe('OfficeResourcesSlot', () => {
     render(<OfficeResourcesSlot />);
     await screen.findByText('周报.md');
     fireEvent.click(screen.getByTestId('mycowork-nav-source-src_q'));
-    await waitFor(() => expect(calls('GET', 'source_id=src_q&page=1')).toHaveLength(1));
+    await waitFor(() => expect(calls('GET', 'source_id=src_q&sort=updated&page=1')).toHaveLength(1));
     expect(await screen.findByRole('heading', { name: '青禾库' })).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('mycowork-nav-imports'));
-    await waitFor(() => expect(calls('GET', 'origin=imports&page=1')).toHaveLength(1));
+    await waitFor(() => expect(calls('GET', 'origin=imports&sort=updated&page=1')).toHaveLength(1));
     expect(screen.getByTestId('mycowork-nav-imports')).toHaveAttribute('aria-current', 'page');
   });
 
@@ -233,7 +251,7 @@ describe('OfficeResourcesSlot', () => {
     bridge({ sourceStatus: 500 });
     render(<OfficeResourcesSlot />);
     expect(await screen.findByText('工作稿.pptx')).toBeInTheDocument();
-    expect(screen.getByText(/以下来源暂时读不到：青禾库/)).toBeInTheDocument();
+    expect(screen.getByText(/以下知识库暂时读不到：青禾库/)).toBeInTheDocument();
   });
 
   it('a knowledge base without access shows the no-permission state', async () => {
@@ -248,9 +266,9 @@ describe('OfficeResourcesSlot', () => {
     bridge();
     render(<OfficeResourcesSlot />);
     await screen.findByText('周报.md');
-    expect(screen.getByText(/按正文内容跨来源搜索尚未提供/)).toBeInTheDocument();
+    expect(screen.getByText(/不搜索文件正文/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('搜索文件名或标签'), { target: { value: '周报' } });
-    await waitFor(() => expect(calls('GET', `q=${encodeURIComponent('周报')}`)).toHaveLength(2));
+    await waitFor(() => expect(calls('GET', `q=${encodeURIComponent('周报')}`)).toHaveLength(1));
     expect(await screen.findByRole('heading', { name: '搜索“周报”' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('搜索文件名或标签'), { target: { value: '不存在的词' } });
     expect(await screen.findByText('没有名称或标签匹配的资料')).toBeInTheDocument();
@@ -258,7 +276,7 @@ describe('OfficeResourcesSlot', () => {
     fireEvent.change(screen.getByLabelText('搜索文件名或标签'), { target: { value: '风险' } });
     const hits = await screen.findByTestId('mycowork-hit-tags');
     fireEvent.click(within(hits).getByText('项目 / 风险'));
-    await waitFor(() => expect(calls('GET', 'tag_id=tag_c')).toHaveLength(2));
+    await waitFor(() => expect(calls('GET', 'tag_id=tag_c')).toHaveLength(1));
   });
 
   it('switches grid / list and remembers the choice locally', async () => {
@@ -296,7 +314,7 @@ describe('OfficeResourcesSlot', () => {
     expect(screen.queryByLabelText('表格')).toBeNull();
     expect(localStorage.getItem('mycowork.resources.layout')).toBe('table');
     fireEvent.click(screen.getByTestId('mycowork-nav-view-view_table'));
-    await waitFor(() => expect(calls('GET', 'view_id=view_table')).toHaveLength(2));
+    await waitFor(() => expect(calls('GET', 'view_id=view_table')).toHaveLength(1));
     expect(within(screen.getByLabelText('列表')).getByRole('radio')).toBeChecked();
     expect(calls('PATCH', '/bridge/v1/saved-views/view_table')).toHaveLength(0);
   });
@@ -336,7 +354,7 @@ describe('OfficeResourcesSlot', () => {
     const { container } = render(<OfficeResourcesSlot />);
     await screen.findByText('周报.md');
     fireEvent.click(screen.getByTestId('mycowork-nav-view-view_1'));
-    await waitFor(() => expect(calls('GET', 'view_id=view_1')).toHaveLength(2));
+    await waitFor(() => expect(calls('GET', 'view_id=view_1')).toHaveLength(1));
     await waitFor(() => expect(container.querySelector('.mcw-rc-grid')).not.toBeNull());
     fireEvent.click(screen.getByLabelText('列表'));
     await waitFor(() => expect(calls('PATCH', '/bridge/v1/saved-views/view_1')).toHaveLength(1));
@@ -364,7 +382,7 @@ describe('OfficeResourcesSlot', () => {
     await waitFor(() => expect(calls('PATCH', '/bridge/v1/collections/col_s')).toHaveLength(1));
     expect(bodyOf('PATCH', '/collections/col_s')).toEqual({ expected_revision: 2, add: ['res_q'] });
     fireEvent.click(screen.getByTestId('mycowork-nav-starred'));
-    await waitFor(() => expect(calls('GET', 'collection_id=col_s')).toHaveLength(2));
+    await waitFor(() => expect(calls('GET', 'collection_id=col_s')).toHaveLength(1));
     await waitFor(() => expect(screen.getAllByTestId('mycowork-resource-item')).toHaveLength(1));
   });
 
@@ -373,7 +391,7 @@ describe('OfficeResourcesSlot', () => {
     render(<OfficeResourcesSlot />);
     await screen.findByText('周报.md');
     fireEvent.click(screen.getByTestId('mycowork-nav-tag-tag_c'));
-    await waitFor(() => expect(calls('GET', 'tag_id=tag_c')).toHaveLength(2));
+    await waitFor(() => expect(calls('GET', 'tag_id=tag_c')).toHaveLength(1));
     fireEvent.click(screen.getByRole('button', { name: '存为智能分组' }));
     fireEvent.change(await screen.findByLabelText('分组名'), { target: { value: '我的风险' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
@@ -463,14 +481,14 @@ describe('OfficeResourcesSlot', () => {
     fireEvent.change(within(dialog).getByLabelText('搜索文件名或标签'), { target: { value: '周报' } });
     fireEvent.keyDown(within(dialog).getByLabelText('搜索文件名或标签'), { key: 'Enter', isComposing: true });
     expect(collapse).not.toHaveBeenCalled();
-    await waitFor(() => expect(calls('GET', `q=${encodeURIComponent('周报')}`)).toHaveLength(2));
+    await waitFor(() => expect(calls('GET', `q=${encodeURIComponent('周报')}`)).toHaveLength(1));
     expect(within(screen.getByTestId('mycowork-resources')).getByLabelText('搜索文件名或标签')).toHaveValue('周报');
     fireEvent.click(within(dialog).getByRole('button', { name: '查看结果' }));
     expect(collapse).toHaveBeenCalledWith(true);
     fireEvent.click(within(host).getByTestId('mycowork-nav-imports'));
-    await waitFor(() => expect(calls('GET', 'origin=imports&page=1')).toHaveLength(1));
+    await waitFor(() => expect(calls('GET', 'origin=imports&sort=updated&page=1')).toHaveLength(1));
     expect(within(screen.getByTestId('mycowork-resources')).getByLabelText('搜索文件名或标签')).toHaveValue('');
-    expect(screen.queryByRole('button', { name: '全部' })).toBeNull();
+    expect(screen.getByRole('button', { name: '全部' })).toBeInTheDocument();
     expect(within(host).getByRole('button', { name: '回收站' })).toBeInTheDocument();
   });
 
@@ -496,7 +514,7 @@ describe('OfficeResourcesSlot', () => {
     render(<OfficeResourcesSlot />);
     await screen.findByText('周报.md');
     const header = screen.getByTestId('mycowork-resources').querySelector('header') as HTMLElement;
-    expect(within(header).getByRole('heading', { name: '最近' })).toBeInTheDocument();
+    expect(within(header).getByRole('heading', { name: '全部' })).toBeInTheDocument();
     fireEvent.click(within(header).getByRole('button', { name: '新建' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: '新建标签' }));
     const dialog = await screen.findByRole('dialog');
@@ -810,7 +828,7 @@ describe('OfficeResourcesSlot', () => {
     await screen.findByRole('heading', { name: '青禾库' });
     fireEvent.click(document.querySelector('.mcw-rc-tagfilter') as HTMLElement);
     fireEvent.click(await screen.findByText('风险', { selector: '.arco-tree-select-popup *' }));
-    await waitFor(() => expect(calls('GET', 'source_id=src_q&tag_id=tag_c&page=1')).toHaveLength(1));
+    await waitFor(() => expect(calls('GET', 'source_id=src_q&tag_id=tag_c&sort=updated&page=1')).toHaveLength(1));
     fireEvent.click(screen.getByRole('button', { name: '存为智能分组' }));
     fireEvent.change(await screen.findByLabelText('分组名'), { target: { value: '青禾里的风险' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
@@ -829,7 +847,7 @@ describe('OfficeResourcesSlot', () => {
   it('no resources: the empty state leads to the import page', async () => {
     bridge({ empty: true });
     render(<OfficeResourcesSlot />);
-    expect(await screen.findByText('最近没有变化的资料')).toBeInTheDocument();
+    expect(await screen.findByText('空间里还没有资料')).toBeInTheDocument();
     const links = screen.getAllByRole('link', { name: /导入资料/ });
     expect(links.every((a) => a.getAttribute('href') === '#/office/imports')).toBe(true);
     expect(links).toHaveLength(1); // 空状态保留直接引导，页头统一用新建菜单

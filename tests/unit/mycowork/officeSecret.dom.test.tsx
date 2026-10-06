@@ -18,6 +18,7 @@ const item = (over: object) => ({
   resource_id: 'res_1',
   file_name: '工作稿.pptx',
   source_id: null,
+  origin: 'imports', // adapted：ResourceList的新来源字段；Secret合同断言保持原样。
   purpose: 'working',
   state: 'stored',
   tag_ids: [],

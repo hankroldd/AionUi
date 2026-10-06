@@ -21,6 +21,10 @@ import {
   OfficeVersionsSlot,
 } from '@/renderer/mycowork-slots';
 
+// 空间页按登录账号取“来源对话”名称：这里只替掉 AionUi 的登录上下文，账号固定为已登录
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'u1', username: 'fixture-account' }, status: 'authenticated' }),
+}));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ resourceId: 'res_1', sessionId: 'eds_1', decisionId: 'tdec_1' }),
@@ -35,6 +39,7 @@ const resource = (i: number) => ({
   resource_id: `res_${i}`,
   file_name: `长列表资料${i}.pptx`,
   source_id: null,
+  origin: 'imports', // adapted：ResourceList的新来源字段；页面滚动断言保持原样。
   state: 'stored',
   tag_ids: [],
   secret: false,

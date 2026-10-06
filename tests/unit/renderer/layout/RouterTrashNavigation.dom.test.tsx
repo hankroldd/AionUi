@@ -29,7 +29,7 @@ afterEach(() => {
 it('Space exposes trash at the bottom and entering it does not query ordinary resources', async () => {
   render(<ResourcesPage lang='zh-CN' />);
   const trash = await screen.findByRole('button', { name: '回收站' });
-  await screen.findByText('最近没有变化的资料');
+  await screen.findByText('空间里还没有资料'); // 进入空间默认在“全部”
   fetchMock.mockClear();
   fireEvent.click(trash);
   await screen.findByTestId('mycowork-trash');

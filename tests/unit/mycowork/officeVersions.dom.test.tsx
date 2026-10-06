@@ -138,7 +138,20 @@ function bridge(opts: Opts = {}) {
         : reply(201, {});
     if (url === '/bridge/v1/publications' && method === 'POST') {
       const code = codes.shift();
-      return code ? reply(409, { error: { code, message: 'x' } }) : reply(201, {});
+      if (code) return reply(409, { error: { code, message: 'x' } });
+      // 受理成功按合同回 Publication（versions-client 核对 publication_id 与 status）
+      const request = JSON.parse(String(init?.body));
+      return reply(201, {
+        publication_id: 'fixture-publication',
+        resource_id: request.resource_id,
+        revision_id: request.revision_id,
+        target: request.target,
+        status: request.target.kind === 'archive' ? 'published' : 'queued',
+        error: null,
+        accepted_at: '2026-10-03T09:00:00.000Z',
+        published_at: request.target.kind === 'archive' ? '2026-10-03T09:00:00.000Z' : null,
+        created_at: '2026-10-03T09:00:00.000Z',
+      });
     }
     // 右下当前版本预览（D138，另见 officeVersionsPreview.dom.test.tsx）：给一页成功的渲染，本文件的按钮与文案不受它干扰
     if (url.endsWith('/office/html'))

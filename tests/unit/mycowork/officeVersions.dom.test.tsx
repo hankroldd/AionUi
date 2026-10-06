@@ -343,7 +343,8 @@ describe('OfficeVersionsSlot', () => {
     expect(await screen.findByText(/除了所改的对象还有别的变化/)).toBeInTheDocument();
     expect(bodyOf('POST', '/bridge/v1/publications').confirm_out_of_scope).toBeUndefined();
     fireEvent.click(screen.getByRole('button', { name: '仍要发布' }));
-    expect(await screen.findByText(/含演讲者备注或批注/)).toBeInTheDocument();
+    // “这个版本”起头只匹配确认框：发布弹窗的影响说明里也有“含演讲者备注或批注”，退场动画期间还在 DOM 里
+    expect(await screen.findByText(/这个版本含演讲者备注或批注/)).toBeInTheDocument();
     expect(bodyOf('POST', '/bridge/v1/publications', 1).confirm_out_of_scope).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: '仍要发布' }));
     await waitFor(() => expect(calls('POST', '/bridge/v1/publications')).toHaveLength(3));
@@ -351,6 +352,6 @@ describe('OfficeVersionsSlot', () => {
       confirm_out_of_scope: true,
       confirm_hidden_content: true,
     });
-    await waitFor(() => expect(screen.queryByText(/含演讲者备注或批注/)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/这个版本含演讲者备注或批注/)).toBeNull());
   });
 });

@@ -123,7 +123,8 @@ describe('OfficeMemorySlot', () => {
     const before = calls('GET', '/memory-items?').length;
     fireEvent.click(screen.getAllByRole('button', { name: '接受' })[0] as HTMLElement);
     expect(await screen.findByText('条目已被更新，已重新读取；请再操作一次。')).toBeInTheDocument();
-    expect(calls('GET', '/memory-items?').length).toBeGreaterThan(before);
+    // 重读在提示渲染之后的 effect 里发出，不能紧跟着同步断言
+    await waitFor(() => expect(calls('GET', '/memory-items?').length).toBeGreaterThan(before));
   });
 
   it('an empty column shows an empty state that says how candidates arrive', async () => {

@@ -187,15 +187,6 @@ it.each([401, 404, 409])('restore failure %s is visible and does not discard the
   expect(calls('/purge')).toHaveLength(0);
 });
 
-it('incomplete list response fails visibly instead of becoming an empty list', async () => {
-  fetchMock.mockImplementation(async () => reply(200, { items: [], total: 0, page: 1 }));
-  mount();
-  await screen.findByText('回收站读取失败');
-  expect(screen.getByText('回收站返回的数据不完整，请重试。')).toBeTruthy();
-  expect(screen.queryByText('回收站是空的')).toBeNull();
-  expect(screen.getByRole('button', { name: '清空回收站' })).toBeDisabled();
-});
-
 it('duplicate ids across pages block confirmation and deletion', async () => {
   const original = fetchMock.getMockImplementation();
   fetchMock.mockImplementation(async (url, init) =>

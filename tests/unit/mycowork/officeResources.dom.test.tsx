@@ -212,7 +212,7 @@ describe('OfficeResourcesSlot', () => {
       '#/office/resources/res_1/versions'
     );
     expect(screen.queryByText(/个版本/)).toBeNull(); // 版本数在版本与变化页看（D146）
-    expect(within(draft).getByText('仅存档')).toBeInTheDocument();
+    expect(within(draft).getByText('存档（AI 不引用）')).toBeInTheDocument();
     expect(within(draft).getByText('风险')).toBeInTheDocument();
     expect(screen.queryByText(/T\d\d:\d\d/)).toBeNull(); // 不直出 ISO
   });

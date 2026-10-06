@@ -129,7 +129,7 @@ describe('[mycowork] sidebar collapse', () => {
     expect(sider.style.width).toBe('350px');
   });
 
-  it.each(['/office/memory', '/office/resources/fixture/versions'])(
+  it.each(['/office/imports', '/office/resources/fixture/versions'])(
     'Office route %s hides unrelated native conversation sidebar',
     (path) => {
       shortcut.pathname = path;

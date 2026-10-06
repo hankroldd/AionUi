@@ -731,7 +731,8 @@ describe('OfficeResourcesSlot', () => {
     fireEvent.click(within(screen.getAllByRole('dialog').at(-1) as HTMLElement).getByRole('button', { name: '删除' }));
     await waitFor(() => expect(screen.queryByTestId('mycowork-nav-tag-tag_c')).toBeNull());
     expect(screen.getByTestId('mycowork-nav-recent')).toHaveAttribute('aria-current', 'page');
-    expect(screen.getAllByTestId('mycowork-resource-item')).toHaveLength(2);
+    // 回到“最近”会重读列表，行要等这次读取回来才出现
+    await waitFor(() => expect(screen.getAllByTestId('mycowork-resource-item')).toHaveLength(2));
   });
 
   it('renames an invalid smart group without resending its filter or altering missing tags', async () => {

@@ -11,6 +11,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Same as renderer/main.tsx: Arco's global Message needs the React 19 adapter (tests load the CJS lib build).
 import '@arco-design/web-react/lib/_util/react-19-adapter';
+import { Message } from '@arco-design/web-react';
 import { ScopeChip, setScopeSelection } from '@mycowork/ui';
 
 const fetchMock = vi.fn();
@@ -93,6 +94,9 @@ describe('ScopeChip', () => {
     setScopeSelection([]);
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
+    // “已更新本轮范围”提示挂在 Arco 自己的根上，RTL 的 cleanup 不卸载它；它的自动关闭定时器（3 秒）会在 jsdom 拆掉之后
+    // 触发（ReferenceError: window is not defined，机器负载高时出现）。这里不让它真的弹，用例改为断言调用。
+    vi.spyOn(Message, 'success').mockReturnValue(() => {});
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -123,7 +127,7 @@ describe('ScopeChip', () => {
     fireEvent.click(await screen.findByText('产品知识库'));
     fireEvent.click(screen.getByRole('button', { name: '应用到本轮' }));
     expect(await screen.findByRole('button', { name: '资料范围：产品知识库' })).toBeInTheDocument();
-    expect(await screen.findByText('已更新本轮范围；未修改项目默认')).toBeInTheDocument();
+    await waitFor(() => expect(Message.success).toHaveBeenCalledWith('已更新本轮范围；未修改项目默认'));
     // R009: applying to this turn only reads; it never writes a project binding
     expect(fetchMock.mock.calls.every(([, init]) => !init?.method)).toBe(true);
   });

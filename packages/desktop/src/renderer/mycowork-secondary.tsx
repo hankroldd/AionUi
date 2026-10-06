@@ -13,15 +13,7 @@ import { useLocation } from 'react-router-dom';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import ConversationSearchPopover from '@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover';
 
-export const MYCOWORK_SPACE_SIDER_ID = 'mycowork-space-sider';
-export const MYCOWORK_MEMORY_SIDER_ID = 'mycowork-memory-sider';
-/** 只有已接通导航的Office页面占用原生二级栏，预留页与版本页仍独立。 */
-export const mycoworkSiderId = (path: string): string | null =>
-  /^\/office\/(space|resources|trash)\/?$/.test(path)
-    ? MYCOWORK_SPACE_SIDER_ID
-    : /^\/office\/memory\/?$/.test(path)
-      ? MYCOWORK_MEMORY_SIDER_ID
-      : null;
+export { mycoworkSiderId } from '@renderer/mycowork-sider-ids';
 
 const COLLAPSE_KEY = 'mycowork:sider-collapsed';
 

@@ -1,9 +1,12 @@
 /**
  * [mycowork] D103/D176: trash restore and explicitly confirmed deletion.
  * Bridge HTTP is the only substitute; React state, Arco controls and pagination are real.
+ * Permanent deletion takes two different controls: tick "cannot be recovered", then the final button; no single
+ * gesture (double-click included) may delete.
  */
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { TrashPage } from '@mycowork/ui/pages/trash/index.ts';
@@ -57,6 +60,8 @@ afterEach(() => {
 const mount = () => render(<TrashPage lang='zh-CN' onBack={vi.fn()} />);
 const dialog = () => within(screen.getByRole('dialog'));
 const row = (n: number) => within(screen.getByTestId('mycowork-trash-row-res_' + n));
+const acknowledge = () => fireEvent.click(dialog().getByRole('checkbox', { name: '我知道永久删除后无法恢复' }));
+const finalButton = () => dialog().getByRole('button', { name: '确认永久删除' });
 
 it('restore sends the read revision and reloads; no purge request', async () => {
   mount();
@@ -67,21 +72,23 @@ it('restore sends the read revision and reloads; no purge request', async () => 
   expect(calls('/purge')).toHaveLength(0);
   await screen.findByText('虚构资料3.md');
 });
-it('purge cancellation does not write, including after first confirmation', async () => {
+it('purge cancellation does not write, including after ticking the acknowledgement', async () => {
   mount();
   await screen.findByText('虚构资料1.md');
   fireEvent.click(row(1).getByRole('button', { name: '永久删除 虚构资料1.md' }));
-  fireEvent.click(dialog().getByRole('button', { name: '继续确认' }));
+  acknowledge();
   fireEvent.click(dialog().getByRole('button', { name: '取消' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(calls('/purge')).toHaveLength(0);
 });
-it('purge writes only after two confirmations and repeats the confirmed id', async () => {
+it('purge writes only after the acknowledgement and the final button, and repeats the confirmed id', async () => {
   mount();
   await screen.findByText('虚构资料1.md');
   fireEvent.click(row(1).getByRole('button', { name: '永久删除 虚构资料1.md' }));
+  expect(finalButton()).toBeDisabled();
+  fireEvent.click(finalButton());
   expect(calls('/purge')).toHaveLength(0);
-  fireEvent.click(dialog().getByRole('button', { name: '继续确认' }));
+  acknowledge();
   expect(calls('/purge')).toHaveLength(0);
   fireEvent.click(dialog().getByRole('button', { name: '确认永久删除' }));
   await waitFor(() => expect(calls('/purge')).toHaveLength(1));
@@ -96,7 +103,7 @@ it('clear reads all pages then freezes ids; new arrivals are excluded', async ()
   expect(dialog().getByText('虚构资料3.md')).toBeTruthy();
   expect(calls('/purge')).toHaveLength(0);
   rows.push(item(4));
-  fireEvent.click(dialog().getByRole('button', { name: '继续确认' }));
+  acknowledge();
   fireEvent.click(dialog().getByRole('button', { name: '确认永久删除' }));
   await waitFor(() => expect(calls('/purge')).toHaveLength(3));
   expect(rows.map((r) => r.resource_id)).toEqual(['res_4']);
@@ -107,11 +114,14 @@ it('partial failure retry contains only the original failed ids', async () => {
   await screen.findByText('虚构资料1.md');
   fireEvent.click(screen.getByRole('button', { name: '清空回收站' }));
   await screen.findByRole('dialog');
-  fireEvent.click(dialog().getByRole('button', { name: '继续确认' }));
+  acknowledge();
   fireEvent.click(dialog().getByRole('button', { name: '确认永久删除' }));
   await screen.findByText('1 项未确认成功，请查看原因；只重试这些项，不包含新资料。');
   rows.push(item(4));
   fail = {};
+  // a failed round is a new list: the acknowledgement must be ticked again before retrying
+  expect(dialog().getByRole('button', { name: '重试未成功项' })).toBeDisabled();
+  acknowledge();
   fireEvent.click(dialog().getByRole('button', { name: '重试未成功项' }));
   await waitFor(() => expect(calls('/purge')).toHaveLength(4));
   expect(calls('/purge').map(([url]) => String(url).split('/').at(-2))).toEqual(['res_1', 'res_2', 'res_3', 'res_2']);
@@ -126,7 +136,7 @@ it('pending prevents duplicate submits and cancellation; leaving stops later ids
   await screen.findByText('虚构资料1.md');
   fireEvent.click(screen.getByRole('button', { name: '清空回收站' }));
   await screen.findByRole('dialog');
-  fireEvent.click(dialog().getByRole('button', { name: '继续确认' }));
+  acknowledge();
   const confirm = dialog().getByRole('button', { name: '确认永久删除' });
   fireEvent.click(confirm);
   fireEvent.click(confirm);
@@ -290,7 +300,7 @@ it('a failed post-enumeration read invalidates the pending confirmation', async 
   expect(calls('/purge')).toHaveLength(0);
 });
 
-it.each(['500', 'disconnect'])('purge response %s after commit stays explicitly unconfirmed', async (mode) => {
+it.each(['500', 'disconnect'])('purge response %s after commit stays unconfirmed; retry 404 = done', async (mode) => {
   const original = fetchMock.getMockImplementation();
   let first = true;
   fetchMock.mockImplementation(async (url) => {
@@ -305,13 +315,16 @@ it.each(['500', 'disconnect'])('purge response %s after commit stays explicitly 
   mount();
   await screen.findByText('虚构资料1.md');
   fireEvent.click(row(1).getByRole('button', { name: '永久删除 虚构资料1.md' }));
-  fireEvent.click(dialog().getByRole('button', { name: '继续确认' }));
+  acknowledge();
   fireEvent.click(dialog().getByRole('button', { name: '确认永久删除' }));
   await screen.findByText('1 项未确认成功，请查看原因；只重试这些项，不包含新资料。');
   expect(screen.getByText(/未能确认操作结果，资料可能已恢复或删除/)).toBeTruthy();
   expect(rows.map((r) => r.resource_id)).toEqual(['res_2', 'res_3']);
+  acknowledge();
   fireEvent.click(dialog().getByRole('button', { name: '重试未成功项' }));
-  await screen.findByText(/资料已不在回收站，或你已无权操作/);
+  // the first request did delete it: the retry's 404 means done, not another failure to retry forever
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(screen.queryByText(/资料已不在回收站，或你已无权操作/)).toBeNull();
   expect(calls('/purge')).toHaveLength(2);
   expect(calls('/purge').every(([url]) => String(url).includes('/res_1/'))).toBe(true);
 });
@@ -354,7 +367,7 @@ it('read failure arriving during deletion stops later ids and never reopens a tr
   await screen.findByText('虚构资料1.md');
   fireEvent.click(screen.getByRole('button', { name: '清空回收站' }));
   await screen.findByRole('dialog');
-  fireEvent.click(dialog().getByRole('button', { name: '继续确认' }));
+  acknowledge();
   fireEvent.click(dialog().getByRole('button', { name: '确认永久删除' }));
   expect(calls('/purge')).toHaveLength(1);
   await act(async () => {
@@ -368,4 +381,60 @@ it('read failure arriving during deletion stops later ids and never reopens a tr
   expect(calls('/purge')).toHaveLength(1);
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(screen.getByRole('button', { name: '重试' })).toBeEnabled();
+});
+
+it.each(['永久删除 虚构资料1.md', '清空回收站'])(
+  'double-click on "%s" opens the confirmation but deletes nothing',
+  async (name) => {
+    mount();
+    await screen.findByText('虚构资料1.md');
+    await userEvent.dblClick(screen.getByRole('button', { name }));
+    await screen.findByRole('dialog');
+    expect(finalButton()).toBeDisabled();
+    fireEvent.click(finalButton());
+    expect(calls('/purge')).toHaveLength(0);
+    expect(rows).toHaveLength(3);
+  }
+);
+
+it('double-click on the acknowledgement leaves it unticked, so the final button stays disabled', async () => {
+  mount();
+  await screen.findByText('虚构资料1.md');
+  fireEvent.click(screen.getByRole('button', { name: '清空回收站' }));
+  await screen.findByRole('dialog');
+  await userEvent.dblClick(dialog().getByRole('checkbox'));
+  expect(dialog().getByRole('checkbox')).not.toBeChecked();
+  expect(finalButton()).toBeDisabled();
+  fireEvent.click(finalButton());
+  expect(calls('/purge')).toHaveLength(0);
+});
+
+it('the acknowledgement does not carry over to the next confirmation', async () => {
+  mount();
+  await screen.findByText('虚构资料1.md');
+  fireEvent.click(row(1).getByRole('button', { name: '永久删除 虚构资料1.md' }));
+  acknowledge();
+  fireEvent.click(dialog().getByRole('button', { name: '取消' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  fireEvent.click(row(2).getByRole('button', { name: '永久删除 虚构资料2.md' }));
+  expect(dialog().getByRole('checkbox')).not.toBeChecked();
+  expect(finalButton()).toBeDisabled();
+  expect(calls('/purge')).toHaveLength(0);
+});
+
+it.each([
+  ['an object without items', async () => ({})],
+  [
+    'a body that is not JSON',
+    async () => {
+      throw new SyntaxError('synthetic non-JSON body');
+    },
+  ],
+])('a 200 list response with %s shows the read failure and retry instead of a blank page', async (_, json) => {
+  fetchMock.mockImplementation(async () => ({ status: 200, ok: true, json }));
+  mount();
+  await screen.findByText('回收站读取失败');
+  expect(screen.getByRole('button', { name: '重试' })).toBeEnabled();
+  expect(screen.queryByText('回收站是空的')).toBeNull();
+  expect(screen.getByRole('button', { name: '清空回收站' })).toBeDisabled();
 });

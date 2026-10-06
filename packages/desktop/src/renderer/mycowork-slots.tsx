@@ -10,6 +10,8 @@ import { useInRouterContext, useLocation, useMatch, useNavigate, useParams } fro
 import { BookOpen } from '@icon-park/react';
 import { ipcBridge } from '@/common';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { MYCOWORK_MEMORY_SIDER_ID, MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-sider-ids';
 import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
 import MarkdownView from '@/renderer/components/Markdown';
@@ -172,17 +174,28 @@ export const OfficeResourcesSlot: React.FC = () => {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const trash = /^\/office\/trash\/?$/.test(pathname);
+  const { user, status } = useAuth();
+  const ownerKey = status === 'authenticated' ? (user?.id ?? 'local') : undefined;
   return (
     <ResourcesPage
+      key={`${status}:${user?.id ?? ''}`}
       lang={current.language}
       {...navigation}
       trash={trash}
       onTrashChange={(next) => {
         if (next !== trash) void navigate(next ? '/office/trash' : '/office/space');
       }}
+      ownerKey={ownerKey}
+      resolveConversationName={resolveOutputConversationName}
     />
   );
 };
+
+/** 使用当前登录原生GET校验会话归属；不把Bridge登记ID当成权限，也不复用全局标题缓存。 */
+async function resolveOutputConversationName(id: string): Promise<string | undefined> {
+  if (!id || id === '.' || id === '..') return undefined;
+  return (await getConversationOrNull(encodeURIComponent(id)))?.name.trim() || undefined;
+}
 
 /** [mycowork] ADR-0022：知识管理预留页，不连接任何管理 API。 */
 export const OfficeKnowledgeSlot: React.FC = () => {

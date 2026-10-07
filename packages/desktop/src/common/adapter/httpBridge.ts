@@ -456,7 +456,7 @@ function ensureWs(): void {
       };
       const eventName = msg.name ?? msg.event;
       const payload = msg.data ?? msg.payload;
-      console.debug('[WS:msg]', eventName, JSON.stringify(payload).slice(0, 200));
+      console.debug('[WS:msg]', eventName); // [mycowork] 不打载荷：流式回答分片会进控制台（D191）
       if (eventName) {
         dispatchWsEvent(eventName, payload);
       }

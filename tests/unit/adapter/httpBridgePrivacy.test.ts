@@ -8,7 +8,7 @@
 import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BackendHttpError, getBaseUrl, httpRequest } from '@/common/adapter/httpBridge';
+import { BackendHttpError, getBaseUrl, httpRequest, wsEmitter } from '@/common/adapter/httpBridge';
 
 const route = '/api/route-marker';
 const path = `${route}?query=private-query-marker`;
@@ -38,9 +38,12 @@ describe('httpRequest direct log privacy with a real HTTP server', () => {
   let requestPaths: string[];
   let debug: ReturnType<typeof vi.spyOn<typeof console, 'debug'>>;
   let error: ReturnType<typeof vi.spyOn<typeof console, 'error'>>;
+  let others: ReturnType<typeof vi.spyOn<typeof console, 'log' | 'info' | 'warn'>>[];
+  // console 的五个输出方法一起看，换哪个方法打印都逃不过
+  const allLogs = () => JSON.stringify([debug, error, ...others].map((spy) => spy.mock.calls));
 
   function expectPrivateLogs(method: string, responseStatus: number) {
-    const logs = JSON.stringify([...debug.mock.calls, ...error.mock.calls]);
+    const logs = allLogs();
     expect(logs).not.toMatch(
       /private-query-marker|fictional-(chat-message|question|nested-key|header-key|response)-marker|private-path-marker/
     );
@@ -58,6 +61,7 @@ describe('httpRequest direct log privacy with a real HTTP server', () => {
     requestPaths = [];
     debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
     error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    others = (['log', 'info', 'warn'] as const).map((method) => vi.spyOn(console, method).mockImplementation(() => {}));
     server = createServer(async (request, reply) => {
       request.setEncoding('utf8');
       let body = '';
@@ -202,7 +206,29 @@ describe('httpRequest direct log privacy with a real HTTP server', () => {
     dead.close();
     await once(dead, 'close');
     await httpRequest('POST', `http://127.0.0.1:${port}${path}`, requestBody).catch(() => undefined);
-    const logs = JSON.stringify([...debug.mock.calls, ...error.mock.calls]);
-    expect(logs).not.toMatch(/private-query-marker|fictional-(chat-message|question)-marker/);
+    expect(allLogs()).not.toMatch(/private-query-marker|fictional-(chat-message|question)-marker/);
+  });
+
+  it('a received WebSocket message is dispatched to listeners but only its event name is logged, never the payload', async () => {
+    let onMessage: ((event: { data: string }) => void) | undefined;
+    class FakeSocket {
+      static CONNECTING = 0;
+      static OPEN = 1;
+      readyState = 0;
+      addEventListener(type: string, listener: (event: { data: string }) => void) {
+        if (type === 'message') onMessage = listener;
+      }
+      close() {}
+    }
+    vi.stubGlobal('window', {});
+    vi.stubGlobal('WebSocket', FakeSocket);
+    const received: unknown[] = [];
+    const off = wsEmitter<{ text: string }>('fixture.stream').on((payload) => received.push(payload));
+    const payload = { text: 'fictional-stream-chunk-marker' };
+    onMessage?.({ data: JSON.stringify({ name: 'fixture.stream', data: payload }) });
+    off();
+    expect(received).toEqual([payload]);
+    expect(allLogs()).toMatch(/\[WS:msg\].*fixture\.stream/);
+    expect(allLogs()).not.toMatch(/fictional-stream-chunk-marker/);
   });
 });

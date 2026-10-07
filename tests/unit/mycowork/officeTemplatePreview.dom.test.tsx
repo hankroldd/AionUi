@@ -35,7 +35,7 @@ const candidate = (id: string) => ({
   limits: [{ code: 'preview_pending', text: '预览待渲染' }],
   preview: { state: 'pending', render_profile: null },
 });
-const decision = (ids: string[]) => ({
+const decision = (ids: string[], pageNo = 1) => ({
   decision_id: 'dec_1',
   version: 1,
   mode: 'confirm',
@@ -50,7 +50,7 @@ const decision = (ids: string[]) => ({
   created_at: 't',
   pages: [
     {
-      page_no: 1,
+      page_no: pageNo,
       intent: '三项成果',
       relation: 'parallel',
       facts: [],
@@ -77,6 +77,17 @@ describe('P09 candidate preview', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
+    // 默认：卡片一出现就算进入视口（全局的 IntersectionObserver 桩永远不触发）；懒加载用例自行覆盖
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(private cb: (e: { isIntersecting: boolean }[]) => void) {}
+        observe() {
+          this.cb([{ isIntersecting: true }]);
+        }
+        disconnect() {}
+      }
+    );
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -124,11 +135,53 @@ describe('P09 candidate preview', () => {
     await waitFor(() => expect(document.querySelector('iframe.mcw-tp-frame')).not.toBeNull());
   });
 
-  it('fetches a given asset version once, however often the cards re-render', async () => {
-    serve(['a5', 'a6'], { a5: () => reply(200, '<html>5</html>'), a6: () => reply(200, '<html>6</html>') });
-    const { rerender } = render(<OfficeCompositionSlot />);
+  it('gives a 404 / 409 a "preview unavailable" note and a 422 "no file" note — neither offers a retry', async () => {
+    serve(['a7', 'a8', 'a9'], {
+      a7: () => err(404, 'NOT_FOUND'),
+      a8: () => err(409, 'ASSET_CHANGED'),
+      a9: () => err(422, 'UNSUPPORTED_FORMAT'),
+    });
+    render(<OfficeCompositionSlot />);
+    expect(await screen.findAllByText('预览暂不可用：模板文件已变化或读不到')).toHaveLength(2);
+    expect(screen.getByText('没有可预览的文件')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重试' })).toBeNull();
+  });
+
+  it('fetches a given asset version once while the page re-renders its cards (cards remount after choosing), not across page mounts', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return reply(201, { ...decision(['a5', 'a6'], 2), version: 2 }) // 页号变了 → 卡片整体重挂，只有缓存能避免再取;
+      const m = /\/assets\/([^/]+)\/preview\?version=1$/.exec(url);
+      return m ? reply(200, `<html>${m[1]}</html>`) : reply(200, decision(['a5', 'a6']));
+    });
+    const first = render(<OfficeCompositionSlot />);
     await waitFor(() => expect(document.querySelectorAll('iframe.mcw-tp-frame')).toHaveLength(2));
-    rerender(<OfficeCompositionSlot />);
+    fireEvent.click(screen.getAllByRole('button', { name: '选这个结构' })[0] as HTMLElement);
+    await screen.findByText('决策版本 v2');
     expect([previewCalls('a5'), previewCalls('a6')]).toEqual([1, 1]);
+    first.unmount(); // 另一次页面（换账号必经）不复用上一页的缓存
+    render(<OfficeCompositionSlot />);
+    await waitFor(() => expect(previewCalls('a5')).toBe(2));
+  });
+
+  it('does not request a preview until its card scrolls into view', async () => {
+    const observers: ((e: { isIntersecting: boolean }[]) => void)[] = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(cb: (e: { isIntersecting: boolean }[]) => void) {
+          observers.push(cb);
+        }
+        observe() {}
+        disconnect() {}
+      }
+    );
+    serve(['b1'], { b1: () => reply(200, '<html>b1</html>') });
+    render(<OfficeCompositionSlot />);
+    await screen.findByText('正在渲染预览…');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(previewCalls('b1')).toBe(0);
+    observers.forEach((cb) => cb([{ isIntersecting: true }]));
+    await waitFor(() => expect(document.querySelector('iframe.mcw-tp-frame')).not.toBeNull());
+    expect(previewCalls('b1')).toBe(1);
   });
 });

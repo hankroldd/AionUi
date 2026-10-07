@@ -844,16 +844,20 @@ describe('OfficeResourcesSlot', () => {
     expect(await screen.findByRole('button', { name: '资料范围：青禾库（按标签）' })).toBeInTheDocument();
   });
 
-  it('no resources: the empty state leads to the import page', async () => {
+  it('no resources: the empty state and the Create menu both open the upload dialog (no page change)', async () => {
     bridge({ empty: true });
     render(<OfficeResourcesSlot />);
     expect(await screen.findByText('空间里还没有资料')).toBeInTheDocument();
-    const links = screen.getAllByRole('link', { name: /导入资料/ });
-    expect(links.every((a) => a.getAttribute('href') === '#/office/imports')).toBe(true);
-    expect(links).toHaveLength(1); // 空状态保留直接引导，页头统一用新建菜单
+    const buttons = screen.getAllByRole('button', { name: /导入资料/ });
+    expect(buttons).toHaveLength(1); // 空状态保留直接引导，页头统一用新建菜单
+    fireEvent.click(buttons[0] as HTMLElement);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '取消' }));
+    await waitFor(() => expect(screen.queryByText('上传文件', { selector: '.arco-modal-title' })).toBeNull());
     const header = screen.getByTestId('mycowork-resources').querySelector('header') as HTMLElement;
     fireEvent.click(within(header).getByRole('button', { name: '新建' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: '上传文件' }));
-    expect(window.location.hash).toBe('#/office/imports');
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(window.location.hash).not.toBe('#/office/imports');
   });
 });

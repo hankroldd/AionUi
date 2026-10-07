@@ -1,5 +1,5 @@
 /**
- * [mycowork] PR11 W4-6：空间页收到“在空间中查看”意图（#/office/space?resource=&name=）。
+ * [mycowork] PR11 W4-6：空间页收到“在空间中查看”意图（requestLocate 记下的一次性意图）。
  * 切到“产物”、按文件名查（服务端查询，不在浏览器过滤），该资源行带 is-located 并滚动到位；意图只放页面内存、只消费一次（地址栏里的旧查询串不读）；
  * 列表里没有该资源（已删/回收站/被撤权）→ 一句提示，页面照常；没有意图 → 行为不变。
  * 替身：Bridge HTTP（globalResourceFixture）；Arco、查询状态、空间页都是真实的。

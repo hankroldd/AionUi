@@ -1,7 +1,7 @@
 /**
  * [mycowork] PR11 W4-6：对话页预览“编辑”旁的“在空间中查看”（ADR-0022 决策 7）。
  * 渲染真实 PreviewPanel（同 previewEdit）；预览打开时只读定位该文件（GET output-resource），已登记产物才出现按钮，
- * 点击进空间并带定位意图；未登记、出错都不出现、也不影响“编辑”。空间页收到意图后切到“产物”按名称查并让该行可见，找不到给提示。
+ * 点击把一次性定位意图记在页面内存并进空间（不进地址栏）；未登记、出错都不出现、也不影响“编辑”。空间页收到意图后切到“产物”按名称查并让该行可见，找不到给提示。
  * 替身：fetch（Bridge）与 AionUi IPC；其余组件真实。
  */
 
@@ -46,6 +46,7 @@ vi.mock('@/common', () => ({
   })(),
 }));
 
+import { clearLocateIntent, peekLocateIntent } from '@mycowork/ui/pages/resources/locate-intent.ts';
 import PreviewPanel from '@/renderer/pages/conversation/Preview/components/PreviewPanel/PreviewPanel';
 import {
   PreviewProvider,
@@ -100,7 +101,7 @@ const doc = { title: 'report.docx', file_name: 'report.docx', fileRef: { kind: '
 
 describe('preview "View in Space" (W4-6)', () => {
   it(
-    'registered output: the button appears next to Edit, the lookup is a read-only GET, and clicking carries the intent to Space',
+    'registered output: the button appears next to Edit, the lookup is a read-only GET, and clicking carries the one-time intent to Space',
     async () => {
       fetchMock.mockImplementation(async (url: string) =>
         String(url).startsWith('/bridge/v1/conversations/conv_1/output-resource?') ? reply(200, { resource_id: 'res_9' }) : reply(404, {})
@@ -114,7 +115,9 @@ describe('preview "View in Space" (W4-6)', () => {
       expect(init?.method).toBeUndefined();
       expect(fetchMock.mock.calls.every(([, i]) => !i?.method && !i?.body)).toBe(true); // nothing written just by opening
       fireEvent.click(button);
-      expect(window.location.hash).toBe('#/office/space?resource=res_9&name=report.docx');
+      expect(window.location.hash).toBe('#/office/space'); // the intent lives in page memory, not in the address bar
+      expect(peekLocateIntent()).toEqual({ resourceId: 'res_9', name: 'report.docx' });
+      clearLocateIntent();
     },
     TIMEOUT_MS
   );

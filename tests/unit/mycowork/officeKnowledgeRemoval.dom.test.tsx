@@ -1,7 +1,8 @@
 /**
  * [mycowork] PR11 W4-3c。文件：tests/unit/mycowork/officeKnowledgeRemoval.dom.test.tsx
  * 职责：空间行“更多”里的“移出知识库”：只有可移出的条目有这一项；确认框写明影响与被移出的库；受理后显示“移出中”、
- *       轮询到结束重读列表；失败给原因并可重试；标 Secret 时对只挂存档库的资料提示“存档库里的副本会被删除”。
+ *       轮询到结束重读列表；失败按原因分别说明（删除已发出但没确认的不说成“没有删除”）并可重试；受理被拒与读不到进度分开提示；
+ *       标 Secret 时对只挂存档库的资料提示“存档库里的副本会被删除”。
  * 边界：只替换 Bridge HTTP（按 OpenAPI 的 knowledge-removals 形状）；Arco、菜单与弹窗均实用，不调用上游或模型。
  */
 import React from 'react';
@@ -55,6 +56,9 @@ const removal = (status: string, error: string | null = null) => ({
 /** 轮询依次得到的任务状态；removed 之后列表里不再有这份资料。 */
 let polls: ReturnType<typeof removal>[];
 let removed: boolean;
+/** 受理（POST）与读进度（GET）各自要回的失败；不设 = 正常。 */
+let rejectStart: { status: number; code: string } | undefined;
+let pollStatus: number | undefined;
 function bridge() {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
@@ -98,9 +102,12 @@ function bridge() {
     if (path === '/bridge/v1/resources/res_kb/metadata')
       return reply(200, { resource_id: 'res_kb', metadata_revision: 7, tag_ids: [], secret: false });
     if (path === '/bridge/v1/resources/res_kb/knowledge-removals' && method === 'POST')
-      return reply(202, removal('queued'));
+      return rejectStart
+        ? reply(rejectStart.status, { error: { code: rejectStart.code, message: 'fixture' } })
+        : reply(202, removal('queued'));
     if (path === '/bridge/v1/knowledge-removals/krm_1/retry' && method === 'POST') return reply(200, removal('queued'));
     if (path === '/bridge/v1/knowledge-removals/krm_1') {
+      if (pollStatus) return reply(pollStatus, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'fixture' } });
       const now = polls.shift() ?? removal('removed');
       if (now.status === 'removed') removed = true;
       return reply(200, now);
@@ -124,6 +131,8 @@ beforeEach(() => {
   fetchMock.mockReset();
   polls = [];
   removed = false;
+  rejectStart = undefined;
+  pollStatus = undefined;
   vi.stubGlobal('fetch', fetchMock);
   bridge();
 });
@@ -176,13 +185,58 @@ describe('space: remove from knowledge base', () => {
     fireEvent.click(await screen.findByRole('button', { name: '移出' }, LONG));
     const failed = await screen.findByTestId('mycowork-removal-failed', undefined, LONG);
     expect(failed.textContent).toContain('超过 50 MB');
-    expect(failed.textContent).toContain('都没有被删除');
+    expect(failed.textContent).toContain('没有删除知识库里的条目');
     expect(row('可移出.md')).toBeInTheDocument();
     expect(screen.queryByTestId('mycowork-removal-pending')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     await waitFor(() => expect(posts('/knowledge-removals/krm_1/retry')).toHaveLength(1), LONG);
     expect(posts('/knowledge-removals')).toHaveLength(1);
     await waitFor(() => expect(row('可移出.md')).toBeNull(), LONG);
+  });
+
+  it('a delete that was requested but not confirmed is not described as "nothing was deleted"', async () => {
+    polls = [removal('failed', 'delete_timeout')];
+    render(<OfficeResourcesSlot />);
+    await menu('可移出.md');
+    fireEvent.click(screen.getByRole('menuitem', { name: '移出知识库' }));
+    fireEvent.click(await screen.findByRole('button', { name: '移出' }, LONG));
+    const failed = await screen.findByTestId('mycowork-removal-failed', undefined, LONG);
+    expect(failed.textContent).toContain('删除请求也已发出');
+    expect(failed.textContent).toContain('可能稍后才消失');
+    expect(failed.textContent).not.toContain('没有被删除');
+  });
+
+  it('a conflict at acceptance says the file is busy; losing the progress poll does not claim the removal failed', async () => {
+    rejectStart = { status: 409, code: 'EDIT_LEASE_HELD' };
+    const view = render(<OfficeResourcesSlot />);
+    await menu('可移出.md');
+    fireEvent.click(screen.getByRole('menuitem', { name: '移出知识库' }));
+    fireEvent.click(await screen.findByRole('button', { name: '移出' }, LONG));
+    expect(await screen.findByText(/正在被编辑、导入或发布/, undefined, LONG)).toBeInTheDocument();
+    expect(screen.queryByTestId('mycowork-removal-pending')).toBeNull();
+    expect(row('可移出.md')).toBeInTheDocument();
+    view.unmount();
+
+    // 受理成功，之后读进度时网络断了
+    rejectStart = undefined;
+    pollStatus = 502;
+    render(<OfficeResourcesSlot />);
+    await menu('可移出.md');
+    fireEvent.click(screen.getAllByRole('menuitem', { name: '移出知识库' }).at(-1)!);
+    fireEvent.click(await screen.findByRole('button', { name: '移出' }, LONG));
+    expect(await screen.findByText(/读不到移出进度。移出仍在后台进行/, undefined, LONG)).toBeInTheDocument();
+    expect(screen.queryByText(/正在被编辑、导入或发布/)).toBeNull();
+    expect(screen.queryByTestId('mycowork-removal-failed')).toBeNull();
+    expect(screen.queryByTestId('mycowork-removal-pending')).toBeNull();
+  });
+
+  it('the menu follows the agreed order: ... edit tags, star, remove from knowledge base, Secret, delete', async () => {
+    render(<OfficeResourcesSlot />);
+    await menu('可移出.md');
+    const items = screen.getAllByRole('menuitem').map((el) => el.textContent ?? '');
+    const at = (label: string) => items.findIndex((text) => text.includes(label));
+    expect(at('移出知识库')).toBeGreaterThan(at('编辑标签'));
+    expect(at('移出知识库')).toBeLessThan(at('标为 Secret'));
   });
 
   it('marking an archived file Secret warns that its archive copy will be deleted; a local-only file does not', async () => {

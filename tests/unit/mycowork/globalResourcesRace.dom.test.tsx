@@ -33,11 +33,11 @@ it('初始all请求迟到不能覆盖后来source；旧error也不能盖住后�
   await screen.findByTestId('mycowork-nav-source-src_a');
   expect(document.querySelector('.arco-skeleton')).not.toBeNull();
   nav('source-src_a');
-  await screen.findByRole('link', { name: '新源资料.md' });
+  await screen.findByRole('button', { name: '新源资料.md' });
   await act(async () => {
     old.resolve(reply(503, { error: { code: 'PROVIDER_UNAVAILABLE', message: 'fictional' } }));
   });
-  expect(screen.getByRole('link', { name: '新源资料.md' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '新源资料.md' })).toBeInTheDocument();
   expect(screen.queryByText('资源列表没有读到')).toBeNull();
   expect(screen.getByText('共 1 项')).toBeInTheDocument();
 });
@@ -51,16 +51,16 @@ it('旧state请求晚到不能覆盖新的type筛选', async () => {
         : list(FIRST.slice(0, 2), 2)
   );
   render(<ResourcesPage lang='zh-CN' />);
-  await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+  await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   await choose('状态', '入库失败');
   await waitFor(() => expect(lastQuery().get('state')).toBe('failed'));
   await choose('类型', 'PDF');
-  await screen.findByRole('link', { name: '新PDF.pdf' });
+  await screen.findByRole('button', { name: '新PDF.pdf' });
   await act(async () => {
     old.resolve(list([item('res_old', '旧状态迟到.md')], 1));
   });
-  expect(screen.getByRole('link', { name: '新PDF.pdf' })).toBeInTheDocument();
-  expect(screen.queryByRole('link', { name: '旧状态迟到.md' })).toBeNull();
+  expect(screen.getByRole('button', { name: '新PDF.pdf' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '旧状态迟到.md' })).toBeNull();
 });
 it('旧q成功晚到不能覆盖更新的q、总数与当前位置', async () => {
   const old = deferred<Reply>();
@@ -72,20 +72,20 @@ it('旧q成功晚到不能覆盖更新的q、总数与当前位置', async () =>
         : list(FIRST.slice(0, 2), 2)
   );
   render(<ResourcesPage lang='zh-CN' />);
-  await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+  await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   nav('source-src_a');
   await screen.findByRole('heading', { name: '虚构甲库', exact: true });
   fireEvent.change(input(), { target: { value: '旧查询' } });
   await waitFor(() => expect(lastQuery().get('q')).toBe('旧查询'));
   fireEvent.change(input(), { target: { value: '新查询' } });
-  await screen.findByRole('link', { name: '新查询结果.md' });
+  await screen.findByRole('button', { name: '新查询结果.md' });
   await act(async () => {
     old.resolve(list([item('res_old', '旧查询迟到.md')], 98));
   });
-  expect(screen.getByRole('link', { name: '新查询结果.md' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '新查询结果.md' })).toBeInTheDocument();
   expect(screen.getByText('共 1 项')).toBeInTheDocument();
   expect(screen.queryByText('共 98 项')).toBeNull();
-  expect(screen.queryByRole('link', { name: '旧查询迟到.md' })).toBeNull();
+  expect(screen.queryByRole('button', { name: '旧查询迟到.md' })).toBeNull();
   expect(screen.getByTestId('mycowork-nav-source-src_a')).toHaveAttribute('aria-current', 'page');
 });
 it('旧place成功晚到不能覆盖新imports集合', async () => {
@@ -98,16 +98,16 @@ it('旧place成功晚到不能覆盖新imports集合', async () => {
         : list(FIRST.slice(0, 2), 2)
   );
   render(<ResourcesPage lang='zh-CN' />);
-  await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+  await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   nav('source-src_a');
   await waitFor(() => expect(lastQuery().get('source_id')).toBe('src_a'));
   nav('imports');
-  await screen.findByRole('link', { name: '新导入集合.md' });
+  await screen.findByRole('button', { name: '新导入集合.md' });
   await act(async () => {
     old.resolve(list([item('res_old', '旧库迟到.md')], 300));
   });
-  expect(screen.getByRole('link', { name: '新导入集合.md' })).toBeInTheDocument();
-  expect(screen.queryByRole('link', { name: '旧库迟到.md' })).toBeNull();
+  expect(screen.getByRole('button', { name: '新导入集合.md' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '旧库迟到.md' })).toBeNull();
   expect(screen.getByText('共 1 项')).toBeInTheDocument();
   expect(screen.getByTestId('mycowork-nav-imports')).toHaveAttribute('aria-current', 'page');
 });
@@ -117,7 +117,7 @@ it('input变化当帧隐藏旧列表，300ms窗口内旧filter响应不能显示
     q.has('q') ? list([item('res_new', '新q匹配.md')], 1) : q.has('state') ? old.promise : list(FIRST.slice(0, 2), 2)
   );
   render(<ResourcesPage lang='zh-CN' />);
-  await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+  await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   await choose('状态', '入库失败');
   fireEvent.change(input(), { target: { value: '新查询' } });
   expect(screen.queryByTestId('mycowork-resource-item')).toBeNull();
@@ -126,8 +126,8 @@ it('input变化当帧隐藏旧列表，300ms窗口内旧filter响应不能显示
     old.resolve(list([item('res_old', '旧filter迟到.md')], 1));
   });
   expect(reads()).toHaveLength(before);
-  expect(screen.queryByRole('link', { name: '旧filter迟到.md' })).toBeNull();
-  await screen.findByRole('link', { name: '新q匹配.md' });
+  expect(screen.queryByRole('button', { name: '旧filter迟到.md' })).toBeNull();
+  await screen.findByRole('button', { name: '新q匹配.md' });
   expect(lastQuery().get('q')).toBe('新查询');
 });
 it('partial显示准确成功候选total与失败库人名，重试单查询；空、错误、加载均可识别', async () => {
@@ -143,7 +143,7 @@ it('partial显示准确成功候选total与失败库人名，重试单查询；�
           : loading.promise
   );
   render(<ResourcesPage lang='zh-CN' />);
-  await screen.findByRole('link', { name: '仍可管理.md' });
+  await screen.findByRole('button', { name: '仍可管理.md' });
   expect(screen.getByText('共 137 项')).toBeInTheDocument();
   const partial = screen
     .getByText('以下知识库暂时读不到：虚构乙库。结果不完整，当前显示已成功读取的资料。')
@@ -166,6 +166,6 @@ it('partial显示准确成功候选total与失败库人名，重试单查询；�
   await act(async () => {
     loading.resolve(list([item('res_back', '恢复后的资料.md')], 1));
   });
-  await screen.findByRole('link', { name: '恢复后的资料.md' });
+  await screen.findByRole('button', { name: '恢复后的资料.md' });
   expect(reads()).toHaveLength(4);
 });

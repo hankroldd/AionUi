@@ -18,7 +18,6 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
-import { ScopeChip } from '@mycowork/ui';
 import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
 import { LayoutContext } from '@/renderer/hooks/context/LayoutContext';
 
@@ -27,9 +26,10 @@ vi.mock('@/renderer/hooks/context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1', username: 'fixture-account' }, status: 'authenticated' }),
 }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
+const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock('react-router-dom', () => ({
-  useLocation: () => ({ state: null, pathname: '/' }),
-  useNavigate: () => vi.fn(),
+  useLocation: () => ({ state: null, pathname: '/', key: 'k' }),
+  useNavigate: () => navigateMock,
 }));
 
 const fetchMock = vi.fn();
@@ -214,7 +214,7 @@ describe('OfficeResourcesSlot', () => {
     bridge();
     render(<OfficeResourcesSlot />);
     const rows = await screen.findAllByTestId('mycowork-resource-item');
-    expect(rows.map((r) => within(r).getByRole('link', { name: /\.(md|pptx)$/ }).textContent)).toEqual([
+    expect(rows.map((r) => within(r).getByRole('button', { name: /^(周报\.md|工作稿\.pptx)$/ }).textContent)).toEqual([
       '周报.md',
       '工作稿.pptx',
     ]);
@@ -225,10 +225,7 @@ describe('OfficeResourcesSlot', () => {
     expect(within(weekly).getAllByText('今天 10:13').length).toBeGreaterThan(0);
     expect(within(weekly).getByText('AI 可引用')).toBeInTheDocument();
     expect(within(draft).getByText('导入')).toBeInTheDocument();
-    expect(within(draft).getByRole('link', { name: '工作稿.pptx' })).toHaveAttribute(
-      'href',
-      '#/office/resources/res_1/versions'
-    );
+    expect(within(draft).getByRole('button', { name: '工作稿.pptx' })).toHaveAttribute('type', 'button');
     expect(screen.queryByText(/个版本/)).toBeNull(); // 版本数在版本与变化页看（D146）
     expect(within(draft).getByText('存档（AI 不引用）')).toBeInTheDocument();
     expect(within(draft).getByText('风险')).toBeInTheDocument();
@@ -323,7 +320,7 @@ describe('OfficeResourcesSlot', () => {
     bridge({ secretReady: true });
     const { container } = render(<OfficeResourcesSlot />);
     const row = (await screen.findAllByTestId('mycowork-resource-item')).find((r) =>
-      within(r).queryByRole('link', { name: '周报.md' })
+      within(r).queryByRole('button', { name: '周报.md' })
     )!;
     expect(within(row).getByText('AI 不引用')).toBeInTheDocument();
     expect(within(row).queryByText('AI 可引用')).toBeNull();
@@ -332,7 +329,7 @@ describe('OfficeResourcesSlot', () => {
     await waitFor(() => expect(container.querySelector('.mcw-rc-grid')).not.toBeNull());
     const card = screen
       .getAllByTestId('mycowork-resource-item')
-      .find((r) => within(r).queryByRole('link', { name: '周报.md' }))!;
+      .find((r) => within(r).queryByRole('button', { name: '周报.md' }))!;
     expect(within(card).getByText('AI 不引用')).toBeInTheDocument();
     expect(within(card).queryByText('AI 可引用')).toBeNull();
     expect(calls('PATCH', '/metadata')).toHaveLength(0);
@@ -817,12 +814,7 @@ describe('OfficeResourcesSlot', () => {
 
   it('a knowledge base filtered by tags lists base ∩ tags, saves a smart group limited to it, and asks with it (D144)', async () => {
     bridge();
-    render(
-      <>
-        <OfficeResourcesSlot />
-        <ScopeChip lang='zh-CN' />
-      </>
-    );
+    render(<OfficeResourcesSlot />);
     await screen.findByText('周报.md');
     fireEvent.click(screen.getByTestId('mycowork-nav-source-src_q'));
     await screen.findByRole('heading', { name: '青禾库' });
@@ -838,10 +830,19 @@ describe('OfficeResourcesSlot', () => {
       filter: { tag_ids: ['tag_c'], source_ids: ['src_q'] },
       layout: 'list',
     });
-    const ask = screen.getByRole('link', { name: /用这些资料提问/ });
-    expect(ask).toHaveAttribute('href', '#/guid');
+    const ask = screen.getByRole('button', { name: /用这些资料提问/ });
+    expect(ask).not.toHaveAttribute('href');
     fireEvent.click(ask);
-    expect(await screen.findByRole('button', { name: '资料范围：青禾库（按标签）' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(navigateMock).toHaveBeenCalledWith('/guid', {
+        state: {
+          mycoworkScopeDraft: {
+            ownerKey: 'u1',
+            selection: { items: [{ source_id: 'src_q', name: '青禾库', tag_ids: ['tag_c'] }], views: [] },
+          },
+        },
+      })
+    );
   });
 
   it('no resources: the empty state and the Create menu both open the upload dialog (no page change)', async () => {

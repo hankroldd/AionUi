@@ -29,14 +29,14 @@ afterEach(() => vi.unstubAllGlobals());
 it('来源按origin，KB按source_id各自显示；产物原稿显示“已生成”而不是存档文案，Secret人工可见但标AI不引用', async () => {
   const publishedOutput = { ...OUTPUT, source_id: 'src_a', file_name: '已入库产物.pdf', state: 'ready' };
   fixture(() => list([publishedOutput, OUTPUT, SECRET], 3));
-  render(<ResourcesPage lang='zh-CN' />);
-  const published = (await screen.findByRole('link', { name: '已入库产物.pdf' })).closest(
+  render(<ResourcesPage lang='zh-CN' onAskScope={async () => undefined} />);
+  const published = (await screen.findByRole('button', { name: '已入库产物.pdf' })).closest(
     '[data-testid="mycowork-resource-item"]'
   ) as HTMLElement;
   expect(published.querySelector('.mcw-rc-source')).toHaveTextContent('产物');
   expect(published.querySelector('.mcw-rc-knowledge-base')).toHaveTextContent('虚构甲库');
   const output = screen
-    .getByRole('link', { name: '首页外产物-600.pdf' })
+    .getByRole('button', { name: '首页外产物-600.pdf' })
     .closest('[data-testid="mycowork-resource-item"]') as HTMLElement;
   expect(output.querySelector('.mcw-rc-source')).toHaveTextContent('产物');
   expect(output.querySelector('.mcw-rc-knowledge-base')).toHaveTextContent('—');
@@ -45,7 +45,7 @@ it('来源按origin，KB按source_id各自显示；产物原稿显示“已生�
   expect(within(output).queryByText(/存档|AI 不引用/)).toBeNull();
   expect(within(published).getByText('AI 可引用')).toBeInTheDocument();
   const secret = screen
-    .getByRole('link', { name: '虚构密件.md' })
+    .getByRole('button', { name: '虚构密件.md' })
     .closest('[data-testid="mycowork-resource-item"]') as HTMLElement;
   expect(within(secret).getByText('AI 不引用')).toBeInTheDocument();
   expect(within(secret).getByTestId('mycowork-secret-lock')).toHaveTextContent('Secret');
@@ -62,8 +62,8 @@ it('来源按origin，KB按source_id各自显示；产物原稿显示“已生�
 });
 it('产物“更多”有发布到知识库；解析不到来源对话就不给入口；Secret仍可查看原件且不出现发布或加入知识库', async () => {
   fixture(() => list([OUTPUT, SECRET], 2));
-  render(<ResourcesPage lang='zh-CN' />);
-  await screen.findByRole('link', { name: '首页外产物-600.pdf' });
+  render(<ResourcesPage lang='zh-CN' onAskScope={async () => undefined} />);
+  await screen.findByRole('button', { name: '首页外产物-600.pdf' });
   fireEvent.click(screen.getByRole('button', { name: '更多操作 首页外产物-600.pdf' }));
   const menu = await screen.findByRole('menu');
   expect(within(menu).getByRole('menuitem', { name: '版本与变化' })).toBeInTheDocument();
@@ -84,8 +84,8 @@ it.each([
   ['排序', 'sort', 'name'],
 ])('键盘Enter打开与选定%s，Escape关闭菜单', async (label, field, value) => {
   fixture(() => list(FIRST.slice(0, 2), 2));
-  render(<ResourcesPage lang='zh-CN' />);
-  await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+  render(<ResourcesPage lang='zh-CN' onAskScope={async () => undefined} />);
+  await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   const combo = screen.getByRole('combobox', { name: label });
   const target = label === '类型' ? within(combo).getByRole('textbox') : combo;
   target.focus();
@@ -99,8 +99,8 @@ it.each([
 });
 it('Tab可达搜索后续动作，原生按钮Enter切导航、Space切checkbox选择', async () => {
   fixture(() => list(FIRST.slice(0, 2), 2));
-  render(<ResourcesPage lang='zh-CN' />);
-  await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+  render(<ResourcesPage lang='zh-CN' onAskScope={async () => undefined} />);
+  await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   const user = userEvent.setup();
   input().focus();
   expect(input()).toHaveFocus();
@@ -120,16 +120,16 @@ it('Tab可达搜索后续动作，原生按钮Enter切导航、Space切checkbox�
 });
 it('输入当帧清selection，清除全部条件保留source且恢复整库动作，既有ID不复活', async () => {
   fixture(() => list(FIRST.slice(0, 2), 2));
-  render(<ResourcesPage lang='zh-CN' />);
-  await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+  render(<ResourcesPage lang='zh-CN' onAskScope={async () => undefined} />);
+  await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   nav('source-src_a');
-  await screen.findByRole('link', { name: '用这些资料提问' });
+  await screen.findByRole('button', { name: '用这些资料提问' });
   selectFile('第一页-1.md');
   fireEvent.change(input(), { target: { value: '输入清选' } });
   expect(screen.queryByRole('region', { name: '所选资料的操作' })).toBeNull();
-  expect(screen.queryByRole('link', { name: '用这些资料提问' })).toBeNull();
+  expect(screen.queryByRole('button', { name: '用这些资料提问' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '清除条件' }));
-  await screen.findByRole('link', { name: '用这些资料提问' });
+  await screen.findByRole('button', { name: '用这些资料提问' });
   expect(input()).toHaveValue('');
   expect(lastQuery().get('source_id')).toBe('src_a');
   expect(screen.getByRole('checkbox', { name: '选择 第一页-1.md', exact: true })).not.toBeChecked();

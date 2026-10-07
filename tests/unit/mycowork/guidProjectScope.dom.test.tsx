@@ -14,6 +14,9 @@ import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { GuidScopeSlot, withGuidScope } from '@/renderer/mycowork-slots';
 
 vi.mock('@/common', () => ({ ipcBridge: {} }));
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({ status: 'authenticated', user: { id: 'fixture-owner' } }),
+}));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('i18next', () => ({ default: { language: 'zh-CN' } }));
 

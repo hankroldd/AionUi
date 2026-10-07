@@ -7,10 +7,12 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
-import { ResourcesPage, ScopeChip } from '@mycowork/ui';
+import { ResourcesPage } from '@mycowork/ui';
 import { choose, fixture, input, lastQuery, list, nav, reads, reset, writes, FIRST } from './globalResourceFixture';
 
+const askScope = vi.fn(async () => undefined);
 beforeEach(() => {
+  askScope.mockClear();
   reset();
   fixture(() => list(FIRST.slice(0, 2), 2));
 });
@@ -19,14 +21,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 const noScopeActions = () => {
-  expect(screen.queryByRole('link', { name: '用这些资料提问' })).toBeNull();
+  expect(screen.queryByRole('button', { name: '用这些资料提问' })).toBeNull();
   expect(screen.queryByRole('button', { name: '存为智能分组' })).toBeNull();
 };
 async function sourceAndTags() {
-  render(<ResourcesPage lang='zh-CN' />);
-  await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+  render(<ResourcesPage lang='zh-CN' onAskScope={askScope} />);
+  await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   nav('source-src_a');
-  await screen.findByRole('link', { name: '用这些资料提问' });
+  await screen.findByRole('button', { name: '用这些资料提问' });
   fireEvent.click(screen.getByLabelText('按标签筛选'));
   fireEvent.click(await screen.findByText('风险', { selector: '.arco-tree-select-popup *' }));
   await waitFor(() => expect(lastQuery().get('tag_id')).toBe('tag_case'));
@@ -63,7 +65,7 @@ it('输入当帧及299ms内隐藏ask/save、不发查询；旧q清空前仍隐�
   expect(lastQuery().has('q')).toBe(false);
   expect(lastQuery().get('source_id')).toBe('src_a');
   expect(lastQuery().get('tag_id')).toBe('tag_case');
-  expect(screen.getByRole('link', { name: '用这些资料提问' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '用这些资料提问' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '存为智能分组' })).toBeInTheDocument();
   expect(writes()).toHaveLength(0);
 });
@@ -78,7 +80,7 @@ it.each([
   await waitFor(() => expect(lastQuery().get(field)).toBe(value));
   expect(writes()).toHaveLength(0);
   fireEvent.click(screen.getByRole('button', { name: '清除条件' }));
-  await screen.findByRole('link', { name: '用这些资料提问' });
+  await screen.findByRole('button', { name: '用这些资料提问' });
   expect(lastQuery().get('source_id')).toBe('src_a');
   expect(lastQuery().has(field)).toBe(false);
   expect(lastQuery().has('tag_id')).toBe(false);
@@ -89,11 +91,14 @@ it('排序仍完整表达源+标签；ask沿用真实Scope并且save只写源/�
   await sourceAndTags();
   await choose('排序', '按名称');
   await waitFor(() => expect(lastQuery().get('sort')).toBe('name'));
-  expect(screen.getByRole('link', { name: '用这些资料提问' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '用这些资料提问' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '存为智能分组' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('link', { name: '用这些资料提问' }));
-  render(<ScopeChip lang='zh-CN' />);
-  expect(await screen.findByRole('button', { name: '资料范围：虚构甲库（按标签）' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '用这些资料提问' }));
+  await waitFor(() => expect(askScope).toHaveBeenCalledTimes(1));
+  expect(askScope.mock.calls[0]?.[0]).toEqual({
+    items: [{ source_id: 'src_a', name: '虚构甲库', tag_ids: ['tag_case'] }],
+    views: [],
+  });
   expect(writes()).toHaveLength(0);
   fireEvent.click(screen.getByRole('button', { name: '存为智能分组' }));
   fireEvent.change(await screen.findByLabelText('分组名'), { target: { value: '虚构精确分组' } });

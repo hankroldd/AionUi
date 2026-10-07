@@ -13,6 +13,7 @@ import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { MYCOWORK_MEMORY_SIDER_ID, MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-sider-ids';
+import { useGuidResourceSelection, useResourceQuestionNavigation } from '@/renderer/mycowork-resource-navigation';
 import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
 import MarkdownView from '@/renderer/components/Markdown';
 import { MarkdownViewer } from '@/renderer/pages/conversation/Preview/components/viewers';
@@ -42,9 +43,13 @@ import {
  */
 export const GuidScopeSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
+  const { user, status } = useAuth();
+  const ownerKey = status === 'authenticated' ? (user?.id ?? 'local') : undefined;
   const state = useLocation().state as { mycoworkProjectId?: unknown } | null;
   const projectId = typeof state?.mycoworkProjectId === 'string' ? state.mycoworkProjectId : undefined;
-  return <ScopeChip lang={current.language} projectId={projectId} />;
+  // 从“空间”的“用这些资料提问”进来时，范围由路由意图一次性装入（navigation-intent.md）；账号不符 = 空必选集
+  const { initialScope, scopeKey } = useGuidResourceSelection(ownerKey);
+  return <ScopeChip key={`${scopeKey}:${ownerKey ?? ''}`} lang={current.language} projectId={projectId} initialScope={initialScope} />;
 };
 
 /**
@@ -106,6 +111,7 @@ type CreateExtra = {
   workspace?: string;
   custom_workspace?: boolean;
   selected_session_mcp_servers?: ISessionMcpServer[];
+  default_files?: string[];
 };
 
 /**
@@ -119,7 +125,7 @@ export const withGuidScope = async <T extends CreateExtra>(
   extra: T,
   overrides?: { permission?: string }
 ): Promise<T> => {
-  const scoped = await prepareScopedSession(i18n.language);
+  const scoped = await prepareScopedSession(i18n.language, (extra.default_files?.length ?? 0) > 0);
   if (!scoped) return extra;
   if (overrides && (!overrides.permission || overrides.permission === 'yolo')) overrides.permission = 'default';
   return {
@@ -176,6 +182,7 @@ export const OfficeResourcesSlot: React.FC = () => {
   const trash = /^\/office\/trash\/?$/.test(pathname);
   const { user, status } = useAuth();
   const ownerKey = status === 'authenticated' ? (user?.id ?? 'local') : undefined;
+  const onAskScope = useResourceQuestionNavigation(ownerKey);
   return (
     <ResourcesPage
       key={`${status}:${user?.id ?? ''}`}
@@ -187,6 +194,8 @@ export const OfficeResourcesSlot: React.FC = () => {
       }}
       ownerKey={ownerKey}
       resolveConversationName={resolveOutputConversationName}
+      onAskScope={onAskScope}
+      renderMarkdown={(content, overrides) => <MarkdownView components={overrides}>{content}</MarkdownView>}
     />
   );
 };

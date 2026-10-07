@@ -147,7 +147,7 @@ it('知识库目录首次读取失败：页面仍列出本人资料，点“重�
       : serve(url, init)
   );
   render(<ResourcesPage lang='zh-CN' />);
-  await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+  await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   expect(screen.queryByTestId('mycowork-nav-source-src_a')).toBeNull();
   const notice = (await screen.findAllByRole('alert')).find((alert) =>
     within(alert).queryByRole('button', { name: '重试' })

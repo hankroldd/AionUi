@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { BridgeError, fetchConversationContext, getScope, type ScopeDraft } from '@mycowork/ui';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 
 export type ResourceWorkOrigin = { ownerKey: string; projectId?: string; originConversationId?: string };
@@ -23,6 +24,16 @@ export function useSpaceNavigationState(ownerKey: string | undefined) {
     const { projectId } = getScope();
     return { mycoworkResourceOrigin: { ownerKey, ...(pathname === '/guid' && projectId ? { projectId } : {}) } };
   };
+}
+
+/** 当前登录账号键；没有 AuthProvider（上游单测直接挂 GuidPage）时按未登录处理，useAuth 内部只有一次 useContext，try 不改变 hook 顺序。 */
+export function useOwnerKey(): string | undefined {
+  try {
+    const { user, status } = useAuth();
+    return status === 'authenticated' ? (user?.id ?? 'local') : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** 新建任务页：把路由里的提问意图变成 ScopeChip 的初始范围；别的账号的意图一律变成空必选集（拒发，不退回整库）。意图随路由走，普通“新任务”导航即清空。 */

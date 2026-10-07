@@ -13,7 +13,7 @@ import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { MYCOWORK_MEMORY_SIDER_ID, MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-sider-ids';
-import { useGuidResourceSelection, useResourceQuestionNavigation } from '@/renderer/mycowork-resource-navigation';
+import { useGuidResourceSelection, useOwnerKey, useResourceQuestionNavigation } from '@/renderer/mycowork-resource-navigation';
 import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
 import MarkdownView from '@/renderer/components/Markdown';
 import { MarkdownViewer } from '@/renderer/pages/conversation/Preview/components/viewers';
@@ -43,8 +43,7 @@ import {
  */
 export const GuidScopeSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
-  const { user, status } = useAuth();
-  const ownerKey = status === 'authenticated' ? (user?.id ?? 'local') : undefined;
+  const ownerKey = useOwnerKey();
   const state = useLocation().state as { mycoworkProjectId?: unknown } | null;
   const projectId = typeof state?.mycoworkProjectId === 'string' ? state.mycoworkProjectId : undefined;
   // 从“空间”的“用这些资料提问”进来时，范围由路由意图一次性装入（navigation-intent.md）；账号不符 = 空必选集

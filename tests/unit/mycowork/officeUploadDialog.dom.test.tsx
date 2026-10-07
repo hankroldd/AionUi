@@ -192,7 +192,8 @@ describe('上传弹窗', () => {
     fixture(() => list([], 0));
     bridge();
     render(<ResourcesPage lang='zh-CN' />);
-    fireEvent.click(await screen.findByRole('button', { name: /导入资料/ }));
+    await screen.findByText('空间里还没有资料', {}, { timeout: 5000 }); // 负载高时首屏慢
+    fireEvent.click(screen.getByRole('button', { name: /导入资料/ }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(window.location.hash).not.toContain('imports');
   });

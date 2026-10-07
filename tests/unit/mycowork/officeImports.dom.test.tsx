@@ -178,4 +178,74 @@ describe('OfficeImportsSlot', () => {
     expect(body.source_id).toBeUndefined();
     expect(await screen.findByText('Secret（只存本机）')).toBeInTheDocument();
   });
+  describe('progress polling survives failed reads', () => {
+    afterEach(() => vi.useRealTimers());
+    const reads = () => calls('GET', '/import-batches/bat_1');
+    // 受理后一直“处理中”；读取按 failUntil 前失败、之后返回 done
+    async function startPending(failFirst: number) {
+      const pendingBatch = batch([item({})]);
+      const doneBatch = batch([item({ status: 'ready', steps: steps('done') })]);
+      let n = 0;
+      bridge({ afterCreate: [item({})] });
+      const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<unknown>;
+      fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+        if (url === '/bridge/v1/import-batches/bat_1') {
+          n++;
+          if (n <= failFirst) throw new TypeError('network');
+          return reply(200, doneBatch);
+        }
+        if (url === '/bridge/v1/import-batches' && init?.method === 'POST') return reply(201, pendingBatch);
+        return base(url, init);
+      });
+      const view = render(<OfficeImportsSlot />);
+      await drop();
+      await screen.findByText('周报.md');
+      await chooseTarget();
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      return view;
+    }
+    const tick = (ms: number) =>
+      act(async () => {
+        await vi.advanceTimersByTimeAsync(ms);
+      });
+
+    it('one failed read, then success: shows the hint, keeps polling and completes', async () => {
+      await startPending(1);
+      await tick(2000); // 第一次读取失败
+      expect(screen.getByText('读取进度失败，正在重试')).toBeInTheDocument();
+      expect(reads()).toHaveLength(1);
+      await tick(4000); // 退避后再读，成功
+      expect(reads()).toHaveLength(2);
+      expect(screen.queryByText('读取进度失败，正在重试')).toBeNull();
+      expect(screen.getByText('就绪')).toBeInTheDocument();
+      await tick(60_000);
+      expect(reads()).toHaveLength(2); // 完成后不再读
+    });
+
+    it('repeated failures: backoff is capped, hint stays, manual retry reads at once', async () => {
+      await startPending(5);
+      for (const ms of [2000, 4000, 8000, 16_000, 30_000]) await tick(ms); // 每步让 React 提交后再排下一次
+      expect(reads()).toHaveLength(5);
+      expect(screen.getByText('读取进度失败，正在重试')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '只重试失败项' })).toBeNull();
+      await tick(10); // 手动前的状态：未再读
+      fireEvent.click(screen.getByRole('button', { name: '立即重试' }));
+      await tick(0);
+      expect(reads()).toHaveLength(6);
+      expect(screen.getByText('就绪')).toBeInTheDocument();
+    });
+
+    it('unmount stops polling', async () => {
+      const view = await startPending(99);
+      await tick(2000);
+      expect(reads()).toHaveLength(1);
+      view.unmount();
+      await tick(120_000);
+      expect(reads()).toHaveLength(1);
+    });
+  });
 });

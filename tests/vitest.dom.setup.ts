@@ -4,7 +4,13 @@
  */
 
 import '@testing-library/jest-dom/vitest';
+import { configure } from '@testing-library/react';
 import { afterAll } from 'vitest';
+
+// [mycowork] PR11: findBy*/waitFor give up after 1s by default. With the whole DOM project running in parallel the first
+// render of a heavy page (the Space list) took 1.2-1.4s, so a few first-screen lookups failed while the same files pass
+// alone. Waiting longer only matters when the element is late; no test here relies on a lookup timing out.
+configure({ asyncUtilTimeout: 5000 });
 
 // [mycowork] PR11 (A125): when a test file ends, jsdom is torn down. Work that React or Arco queued shortly before —
 // a react-transition-group exit timer (Arco popups, <= 400ms), Arco's deferred root unmount (0ms), a scheduler task —

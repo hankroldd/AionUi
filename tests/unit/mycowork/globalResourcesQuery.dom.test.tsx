@@ -51,7 +51,8 @@ it('初始全部一次origin=all查询，显示600与50条；第2/12页显示服
   await screen.findByRole('link', { name: '尾页-600.md', exact: true });
   expect(lastQuery().get('page')).toBe('12');
   expect(reads()).toHaveLength(3);
-});
+  // 整页 50 行在 jsdom 里渲染本身就重：沿用本仓 CI 给 DOM 用例的 30 秒预算（vitest.config.ts），不随机器忙闲误报
+}, 30_000);
 it.each([
   ['状态', '入库失败', 'state', 'failed', '首页外失败-51.pdf'],
   ['类型', 'PDF', 'file_type', 'pdf', '首页外失败-51.pdf'],

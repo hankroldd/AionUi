@@ -1,0 +1,200 @@
+/**
+ * [mycowork] PR11 W4-3c。文件：tests/unit/mycowork/officeKnowledgeRemoval.dom.test.tsx
+ * 职责：空间行“更多”里的“移出知识库”：只有可移出的条目有这一项；确认框写明影响与被移出的库；受理后显示“移出中”、
+ *       轮询到结束重读列表；失败给原因并可重试；标 Secret 时对只挂存档库的资料提示“存档库里的副本会被删除”。
+ * 边界：只替换 Bridge HTTP（按 OpenAPI 的 knowledge-removals 形状）；Arco、菜单与弹窗均实用，不调用上游或模型。
+ */
+import React from 'react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import '@arco-design/web-react/lib/_util/react-19-adapter';
+import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
+
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'u1', username: 'fixture-account' }, status: 'authenticated' }),
+}));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
+vi.mock('react-router-dom', () => ({
+  useLocation: () => ({ state: null, pathname: '/' }),
+  useNavigate: () => vi.fn(),
+}));
+
+const fetchMock = vi.fn();
+const reply = (status: number, body: unknown) => ({
+  status,
+  ok: status < 300,
+  json: async () => structuredClone(body),
+});
+const file = (id: string, name: string, over = {}) => ({
+  resource_id: id,
+  file_name: name,
+  source_id: 'src_kb',
+  origin: 'knowledge_base',
+  state: 'ready',
+  tag_ids: [],
+  secret: false,
+  can_mark_secret: true,
+  can_remove_from_kb: true,
+  storage: 'weknora',
+  updated_at: '2026-10-01T00:00:00Z',
+  revision_count: 0,
+  ...over,
+});
+const removal = (status: string, error: string | null = null) => ({
+  removal_id: 'krm_1',
+  kind: 'resource',
+  resource_id: 'res_kb',
+  source_id: 'src_kb',
+  status,
+  error,
+  archive_source_id: null,
+  removed_at: null,
+  created_at: '2026-10-07T00:00:00Z',
+  updated_at: '2026-10-07T00:00:00Z',
+});
+/** 轮询依次得到的任务状态；removed 之后列表里不再有这份资料。 */
+let polls: ReturnType<typeof removal>[];
+let removed: boolean;
+function bridge() {
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET';
+    const path = String(url).split('?')[0];
+    if (path === '/bridge/v1/scopes')
+      return reply(200, {
+        sources: [
+          {
+            source_id: 'src_kb',
+            name: '虚构库',
+            provider: 'weknora',
+            counts: { total: 2, ready: 2, indexing: 0, failed: 0, unavailable: 0 },
+          },
+        ],
+        projects: [],
+      });
+    if (path === '/bridge/v1/tags') return reply(200, { tags: [] });
+    if (path === '/bridge/v1/saved-views') return reply(200, { views: [] });
+    if (path === '/bridge/v1/collections') return reply(200, { collections: [] });
+    if (path === '/bridge/v1/resources') {
+      const items = [
+        ...(removed ? [] : [file('res_kb', '可移出.md')]),
+        file('res_other', '别人的库.md', { can_remove_from_kb: false }),
+        file('res_arch', '存档里的.md', {
+          source_id: null,
+          origin: 'imports',
+          state: 'stored',
+          storage: 'both',
+          can_remove_from_kb: false,
+        }),
+        file('res_local', '只在本机.md', {
+          source_id: null,
+          origin: 'imports',
+          state: 'stored',
+          storage: 'bridge',
+          can_remove_from_kb: false,
+        }),
+      ];
+      return reply(200, { items, page: 1, page_size: 50, total: items.length });
+    }
+    if (path === '/bridge/v1/resources/res_kb/metadata')
+      return reply(200, { resource_id: 'res_kb', metadata_revision: 7, tag_ids: [], secret: false });
+    if (path === '/bridge/v1/resources/res_kb/knowledge-removals' && method === 'POST')
+      return reply(202, removal('queued'));
+    if (path === '/bridge/v1/knowledge-removals/krm_1/retry' && method === 'POST') return reply(200, removal('queued'));
+    if (path === '/bridge/v1/knowledge-removals/krm_1') {
+      const now = polls.shift() ?? removal('removed');
+      if (now.status === 'removed') removed = true;
+      return reply(200, now);
+    }
+    return reply(404, { error: { code: 'NOT_FOUND', message: 'unexpected fixture request' } });
+  });
+}
+const posts = (suffix: string) =>
+  fetchMock.mock.calls.filter(([url, init]) => init?.method === 'POST' && String(url).endsWith(suffix));
+// 机器忙时首屏与轮询（1.5 秒一次）都慢：等待给足，不放松断言
+const LONG = { timeout: 8000 };
+/** 列表里某份资料的那一行在不在：按行首的选择框认（名称是链接还是按钮随界面切片变化）。 */
+const row = (name: string) => screen.queryByRole('checkbox', { name: `选择 ${name}` });
+const menu = async (name: string) => {
+  fireEvent.click(await screen.findByRole('button', { name: `更多操作 ${name}` }, LONG));
+  await screen.findAllByRole('menuitem', { name: '编辑标签' }, LONG);
+};
+
+beforeEach(() => {
+  localStorage.clear();
+  fetchMock.mockReset();
+  polls = [];
+  removed = false;
+  vi.stubGlobal('fetch', fetchMock);
+  bridge();
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  document.querySelectorAll('.arco-modal-wrapper').forEach((n) => n.remove());
+});
+
+describe('space: remove from knowledge base', () => {
+  it('offers the menu item only for items the owner can remove', async () => {
+    render(<OfficeResourcesSlot />);
+    // 三行的菜单依次打开（Arco 的下拉层都留在文档里）：三份“编辑标签”，只有一份“移出知识库”
+    const open = async (name: string, menus: number) => {
+      fireEvent.click(await screen.findByRole('button', { name: `更多操作 ${name}` }, LONG));
+      await waitFor(() => expect(screen.getAllByRole('menuitem', { name: '编辑标签' })).toHaveLength(menus), LONG);
+      expect(screen.getAllByRole('menuitem', { name: '移出知识库' })).toHaveLength(1);
+    };
+    await open('可移出.md', 1);
+    await open('别人的库.md', 2);
+    await open('存档里的.md', 3);
+  });
+
+  it('confirms with the effects and the knowledge base name, shows progress, then reloads the list', async () => {
+    polls = [removal('archiving')];
+    render(<OfficeResourcesSlot />);
+    await menu('可移出.md');
+    fireEvent.click(screen.getByRole('menuitem', { name: '移出知识库' }));
+    const confirm = await screen.findByTestId('mycowork-removal-confirm', undefined, LONG);
+    expect(confirm.textContent).toContain('虚构库');
+    expect(confirm.textContent).toContain('只保留原件、不再被检索；其他有权限的人也检索不到');
+    expect(posts('/knowledge-removals')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: '移出' }));
+    await waitFor(() => expect(posts('/knowledge-removals')).toHaveLength(1), LONG);
+    const sent = JSON.parse(String(posts('/knowledge-removals')[0][1].body));
+    expect(sent.source_id).toBe('src_kb');
+    expect(sent.expected_metadata_revision).toBe(7);
+    expect(sent.submission_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await screen.findByTestId('mycowork-removal-pending', undefined, LONG)).toHaveTextContent('移出中');
+    expect(screen.queryByRole('button', { name: '更多操作 可移出.md' })).toBeNull();
+    await waitFor(() => expect(row('可移出.md')).toBeNull(), LONG);
+    expect(screen.queryByTestId('mycowork-removal-pending')).toBeNull();
+    await waitFor(() => expect(row('别人的库.md')).toBeInTheDocument(), LONG);
+  });
+
+  it('a failed removal says why, keeps the item, and retry resumes the same task', async () => {
+    polls = [removal('failed', 'baseline_too_large')];
+    render(<OfficeResourcesSlot />);
+    await menu('可移出.md');
+    fireEvent.click(screen.getByRole('menuitem', { name: '移出知识库' }));
+    fireEvent.click(await screen.findByRole('button', { name: '移出' }, LONG));
+    const failed = await screen.findByTestId('mycowork-removal-failed', undefined, LONG);
+    expect(failed.textContent).toContain('超过 50 MB');
+    expect(failed.textContent).toContain('都没有被删除');
+    expect(row('可移出.md')).toBeInTheDocument();
+    expect(screen.queryByTestId('mycowork-removal-pending')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+    await waitFor(() => expect(posts('/knowledge-removals/krm_1/retry')).toHaveLength(1), LONG);
+    expect(posts('/knowledge-removals')).toHaveLength(1);
+    await waitFor(() => expect(row('可移出.md')).toBeNull(), LONG);
+  });
+
+  it('marking an archived file Secret warns that its archive copy will be deleted; a local-only file does not', async () => {
+    render(<OfficeResourcesSlot />);
+    await menu('存档里的.md');
+    fireEvent.click(screen.getAllByRole('menuitem', { name: '标为 Secret' }).at(-1)!);
+    expect(await screen.findByText(/存档库里的副本会被删除/, undefined, LONG)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+    await waitFor(() => expect(screen.queryByText(/存档库里的副本会被删除/)).toBeNull(), LONG);
+    await menu('只在本机.md');
+    fireEvent.click(screen.getAllByRole('menuitem', { name: '标为 Secret' }).at(-1)!);
+    await screen.findByText(/把“只在本机.md”标为 Secret？/, undefined, LONG);
+    expect(screen.queryByText(/存档库里的副本会被删除/)).toBeNull();
+  });
+});

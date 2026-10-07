@@ -198,6 +198,71 @@ describe('withGuidScope', () => {
   });
 });
 
+describe('withGuidScope with a required file set (ask about selected files)', () => {
+  const FILES = [
+    { source_id: 'src_a', name: 'A', resource_ids: ['r1', 'r2'] },
+    { source_id: 'src_b', name: 'B', resource_ids: ['r3'] },
+  ];
+  beforeEach(() => {
+    setScopeSelection([]);
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('freezes exactly the picked files as strict evidence with web off', async () => {
+    setScopeSelection(FILES, [], ['r1', 'r2', 'r3']);
+    bridgeOk();
+    await withGuidScope({});
+    expect(fetchMock.mock.calls[0][0]).toBe('/bridge/v1/context-plans');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      scopes: [
+        { selector: 'knowledge_base', id: 'src_a', resource_ids: ['r1', 'r2'] },
+        { selector: 'knowledge_base', id: 'src_b', resource_ids: ['r3'] },
+      ],
+      refs: [
+        { resource_id: 'r1', role: 'evidence' },
+        { resource_id: 'r2', role: 'evidence' },
+        { resource_id: 'r3', role: 'evidence' },
+      ],
+      policy: { strict: true, web: 'off' },
+      use_project_defaults: false,
+    });
+  });
+
+  it('refuses to send with an empty required set: no request, never a plain chat or the whole base', async () => {
+    setScopeSelection([], [], []);
+    await expect(withGuidScope({})).rejects.toThrow('未发送');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses to send when extra attachments ride along with the required set', async () => {
+    setScopeSelection(FILES, [], ['r1', 'r2', 'r3']);
+    await expect(withGuidScope({ default_files: ['/x'] })).rejects.toThrow('请移除未选中的附件');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('a later plain scope selection drops the required set: no refs, no policy', async () => {
+    setScopeSelection(FILES, [], ['r1', 'r2', 'r3']);
+    setScopeSelection([{ source_id: 'src_a', name: 'A' }]);
+    bridgeOk();
+    await withGuidScope({});
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).not.toHaveProperty('refs');
+    expect(body).not.toHaveProperty('policy');
+  });
+
+  it('maps the Bridge 400 for a Secret reference to a readable not-sent message', async () => {
+    setScopeSelection(FILES, [], ['r1', 'r2', 'r3']);
+    fetchMock.mockResolvedValueOnce(
+      reply(400, { error: { code: 'INVALID_REQUEST', message: 'secret resources cannot be referenced' } })
+    );
+    const failure = withGuidScope({});
+    await expect(failure).rejects.toThrow('未发送：所选资料里有不能用于提问的文件');
+    await expect(failure).rejects.not.toThrow('INVALID_REQUEST');
+  });
+});
+
 describe('useGuidSend with a selected scope', () => {
   beforeEach(() => {
     setScopeSelection([{ source_id: 'src_a', name: 'A' }]);

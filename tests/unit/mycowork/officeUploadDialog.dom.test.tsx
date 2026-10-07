@@ -53,7 +53,7 @@ function bridge(opts: { duplicate?: string[]; created?: object[]; retried?: obje
 }
 async function openDialog(lang = 'zh-CN') {
   render(<ResourcesPage lang={lang} />);
-  await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+  await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   fireEvent.click(within(document.querySelector('header') as HTMLElement).getByRole('button', { name: lang === 'en' ? 'Create' : '新建' }));
   fireEvent.click(await screen.findByRole('menuitem', { name: lang === 'en' ? 'Upload files' : '上传文件' }));
   return screen.findByRole('dialog');
@@ -116,7 +116,7 @@ describe('上传弹窗', () => {
   it('在某个知识库视图里打开：默认选该库；选了库 → purpose=reference + source_id，标签进 tag_ids', async () => {
     bridge({ created: [row({ purpose: 'reference', source_id: 'src_a', status: 'stored', steps: steps('pending') })] });
     render(<ResourcesPage lang='zh-CN' />);
-    await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+    await screen.findByRole('button', { name: '第一页-1.md', exact: true });
     nav('source-src_a');
     fireEvent.click(within(document.querySelector('header') as HTMLElement).getByRole('button', { name: '新建' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: '上传文件' }));
@@ -152,7 +152,7 @@ describe('上传弹窗', () => {
   it('勾 Secret：知识库选择禁用、同内容选择隐藏，整批 secret=true、purpose=working、独立登记，不带 source_id', async () => {
     bridge({ duplicate: ['res_old'] });
     render(<ResourcesPage lang='zh-CN' />);
-    await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+    await screen.findByRole('button', { name: '第一页-1.md', exact: true });
     nav('source-src_a'); // 在知识库视图里默认选了库，勾 Secret 后不生效
     fireEvent.click(within(document.querySelector('header') as HTMLElement).getByRole('button', { name: '新建' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: '上传文件' }));

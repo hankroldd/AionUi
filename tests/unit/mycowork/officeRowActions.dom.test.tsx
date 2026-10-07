@@ -101,6 +101,14 @@ describe('row ··· menu', () => {
     expect(screen.queryByRole('menuitem', { name: '删除' })).toBeNull();
   });
 
+  it('an imported file that already has a knowledge-base link has no 删除 either (the source manages it)', async () => {
+    items = [file('res_e', { source_id: 'src_a', state: 'ready' })];
+    mount();
+    await openMenu('E.md');
+    await screen.findByRole('menuitem', { name: '用这份资料提问' });
+    expect(screen.queryByRole('menuitem', { name: '删除' })).toBeNull();
+  });
+
   it('ask: a knowledge-base file hands exactly that file to the host; outputs and archived files are disabled with a reason', async () => {
     mount();
     await openMenu('C.md');
@@ -115,6 +123,17 @@ describe('row ··· menu', () => {
     ask.mockClear();
     mount();
     await openMenu('D.md');
+    const item = await screen.findByRole('menuitem', { name: /用这份资料提问/ });
+    expect(item).toHaveClass('arco-dropdown-menu-disabled');
+    expect(item).toHaveTextContent('产物与存档资料暂不能提问');
+    fireEvent.click(item);
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it('ask: a file that only sits in the archive base (no source_id, storage both) says archived files cannot be asked about', async () => {
+    items = [file('res_f', { state: 'stored', storage: 'both' })];
+    mount();
+    await openMenu('F.md');
     const item = await screen.findByRole('menuitem', { name: /用这份资料提问/ });
     expect(item).toHaveClass('arco-dropdown-menu-disabled');
     expect(item).toHaveTextContent('产物与存档资料暂不能提问');

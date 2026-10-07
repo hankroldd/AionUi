@@ -154,9 +154,8 @@ describe('selected resource questions', () => {
     pick();
     pick('B.md');
     expect(ask()).toBeDisabled();
-    expect(screen.getByRole('alert')).toHaveTextContent('包含 Secret');
-    expect(ask()).toHaveAttribute('aria-describedby', 'mycowork-resource-question-error');
-    expect(document.getElementById('mycowork-resource-question-error')).toHaveTextContent('包含 Secret');
+    expect(ask().getAttribute('title')).toContain('包含 Secret'); // 原因只挂在禁用的按钮上，页面顶部不出提示
+    expect(screen.queryByRole('alert')).toBeNull();
     fireEvent.click(ask());
     expect(onAskScope).not.toHaveBeenCalled();
     expect(screen.getByRole('checkbox', { name: '选择 A.md', exact: true })).toBeChecked();
@@ -174,7 +173,8 @@ describe('selected resource questions', () => {
     pick();
     pick('B.md');
     expect(ask()).toBeDisabled();
-    expect(screen.getByRole('alert')).toHaveTextContent('没有普通知识库来源');
+    expect(ask().getAttribute('title')).toContain('没有普通知识库来源');
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(onAskScope).not.toHaveBeenCalled();
     expect(within(bar()).getByText('已选 2 项')).toBeVisible();
   });
@@ -194,25 +194,26 @@ describe('selected resource questions', () => {
     await waitFor(() => expect(onAskScope).toHaveBeenCalledTimes(1));
     expect(onAskScope.mock.calls[0][0].requiredResourceIds).toEqual(['res_a', 'res_b', 'res_c']);
   });
-  it('unavailable scope catalog can be retried without reloading the list or losing selected IDs', async () => {
+  it('unavailable scope catalog can be retried: the catalog and list are re-read and the question works again', async () => {
     catalogStatus = 503;
     const onAskScope = host();
     mount(onAskScope);
     await ready();
     pick();
     expect(ask()).toBeDisabled();
-    expect(screen.getByRole('alert')).toHaveTextContent('无法确认可选知识库');
+    expect(ask().getAttribute('title')).toContain('无法确认可选知识库');
+    expect(screen.getByRole('alert')).toHaveTextContent('资料服务暂不可用'); // 目录读取失败本身的提示，带重试
     const before = readCalls('/bridge/v1/resources');
     catalogStatus = 200;
     fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: '重试' }));
+    await waitFor(() => expect(readCalls('/bridge/v1/resources')).toBeGreaterThan(before));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    await waitFor(() => pick()); // 重试走基线的 reload：列表重读、选择清空；目录读到后再选就能提问
     await waitFor(() => expect(ask()).toBeEnabled());
-    expect(screen.queryByRole('alert')).toBeNull();
-    expect(readCalls('/bridge/v1/resources')).toBe(before);
-    expect(screen.getByRole('checkbox', { name: '选择 A.md', exact: true })).toBeChecked();
     fireEvent.click(ask());
     await waitFor(() => expect(onAskScope).toHaveBeenCalledTimes(1));
   });
-  it('a missing source is an explicit authorization failure and retry cannot silently remove its file', async () => {
+  it('a missing source is an explicit authorization failure with no retry that could silently drop its file', async () => {
     sources = [source('src_a')];
     const onAskScope = host();
     mount(onAskScope);
@@ -220,9 +221,8 @@ describe('selected resource questions', () => {
     pick();
     pick('C.md');
     expect(ask()).toBeDisabled();
-    expect(screen.getByRole('alert')).toHaveTextContent('已不在当前授权范围');
-    fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: '重试' }));
-    await waitFor(() => expect(readCalls('/bridge/v1/scopes')).toBe(2));
+    expect(ask().getAttribute('title')).toContain('已不在当前授权范围');
+    expect(screen.queryByRole('alert')).toBeNull(); // 没有会悄悄去掉这份文件的重试
     expect(ask()).toBeDisabled();
     expect(within(bar()).getByText('已选 2 项')).toBeVisible();
     expect(onAskScope).not.toHaveBeenCalled();

@@ -233,6 +233,21 @@ describe('ScopeChip', () => {
     expect(await screen.findByRole('button', { name: '资料范围：未选择' })).toBeInTheDocument();
   });
 
+  it('"select all" keeps the explicit file IDs instead of falling back to the whole knowledge base (R010)', async () => {
+    route();
+    render(<ScopeChip lang='zh-CN' />);
+    await openDialog();
+    tick(await screen.findByText('产品知识库').then(() => '产品知识库'));
+    fireEvent.click(await screen.findByRole('button', { name: '挑选文件' }));
+    expect(await screen.findByText('已勾选 2 / 2 份')).toBeInTheDocument();
+    tick('价格带.xlsx');
+    await waitFor(() => expect(screen.getByText(/已勾选/)).toHaveTextContent('已勾选 1 / 2 份'));
+    fireEvent.click(screen.getByRole('button', { name: '全选' }));
+    await waitFor(() => expect(screen.getByText(/已勾选/)).toHaveTextContent('已勾选 2 / 2 份'));
+    fireEvent.click(screen.getByRole('button', { name: '应用到本轮' }));
+    expect(await screen.findByRole('button', { name: '资料范围：产品知识库（挑选 2 份）' })).toBeInTheDocument();
+  });
+
   it('a knowledge base with nothing checked stays warned after the list is hidden and is not counted as selected', async () => {
     route();
     render(<ScopeChip lang='zh-CN' />);

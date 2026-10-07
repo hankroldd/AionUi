@@ -47,6 +47,7 @@ vi.mock('@/common', () => ({
 }));
 
 import { clearLocateIntent, peekLocateIntent } from '@mycowork/ui/pages/resources/locate-intent.ts';
+import { PreviewEditButton } from '@mycowork/ui';
 import PreviewPanel from '@/renderer/pages/conversation/Preview/components/PreviewPanel/PreviewPanel';
 import {
   PreviewProvider,
@@ -142,4 +143,82 @@ describe('preview "View in Space" (W4-6)', () => {
     expect(locateCalls()).toHaveLength(0);
     expect(screen.queryByRole('button', { name: '在空间中查看' })).toBeNull();
   }, TIMEOUT_MS);
+});
+
+describe('PreviewEditButton lookup lifecycle (W4-6)', () => {
+  const ok = (id: string) => reply(200, { resource_id: id });
+  const nf = () => reply(404, { error: { code: 'NOT_FOUND', message: 'not found' } });
+  const mount = (path: string) => (
+    <PreviewEditButton lang='zh-CN' conversationId='conv_1' relativePath={path} />
+  );
+  const lookups = () => locateCalls().length;
+  afterEach(() => vi.useRealTimers());
+
+  it('not registered yet, registered later (the AI registers after the tab opened): the button appears on a backed-off re-check; 3 tries at 3/6/12 s, then it stops', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    let registered = false;
+    fetchMock.mockImplementation(async () => (registered ? ok('res_late') : nf()));
+    render(mount('out/late.docx'));
+    await act(async () => {});
+    expect(lookups()).toBe(1);
+    expect(screen.queryByRole('button', { name: '在空间中查看' })).toBeNull();
+    await act(async () => vi.advanceTimersByTimeAsync(2900));
+    expect(lookups()).toBe(1); // not before 3 s
+    registered = true;
+    await act(async () => vi.advanceTimersByTimeAsync(200));
+    expect(lookups()).toBe(2);
+    expect(screen.getByRole('button', { name: '在空间中查看' })).toBeInTheDocument(); // (findBy would hang on fake timers)
+    await act(async () => vi.advanceTimersByTimeAsync(60000));
+    expect(lookups()).toBe(2); // found: no more polling
+  });
+
+  it('never registered: exactly 4 lookups (now, +3 s, +6 s, +12 s) and then silence', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fetchMock.mockImplementation(async () => nf());
+    render(mount('out/never.docx'));
+    await act(async () => vi.advanceTimersByTimeAsync(3000));
+    await act(async () => vi.advanceTimersByTimeAsync(6000));
+    await act(async () => vi.advanceTimersByTimeAsync(12000));
+    expect(lookups()).toBe(4);
+    await act(async () => vi.advanceTimersByTimeAsync(120000));
+    expect(lookups()).toBe(4);
+  });
+
+  it('unmount (tab closed or switched away) stops the re-checks', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fetchMock.mockImplementation(async () => nf());
+    const view = render(mount('out/gone.docx'));
+    await act(async () => {});
+    view.unmount();
+    await act(async () => vi.advanceTimersByTimeAsync(60000));
+    expect(lookups()).toBe(1);
+  });
+
+  it('switching the tab: registered A, then B (404 or 500) -> the button disappears', async () => {
+    for (const second of [() => nf(), () => reply(500, { error: { code: 'INTERNAL', message: 'x' } })]) {
+      fetchMock.mockReset();
+      fetchMock.mockImplementation(async (url: string) =>
+        String(url).includes('relative_path=a.docx') ? ok('res_a') : second()
+      );
+      const view = render(mount('a.docx'));
+      expect(await screen.findByRole('button', { name: '在空间中查看' })).toBeInTheDocument();
+      view.rerender(mount('b.docx'));
+      await waitFor(() => expect(screen.queryByRole('button', { name: '在空间中查看' })).toBeNull());
+      view.unmount();
+    }
+  });
+
+  it('a late answer for the previous tab is discarded', async () => {
+    let answerA: (r: unknown) => void = () => {};
+    fetchMock.mockImplementation((url: string) =>
+      String(url).includes('relative_path=a.docx') ? new Promise((r) => (answerA = r)) : Promise.resolve(nf())
+    );
+    const view = render(mount('a.docx'));
+    await waitFor(() => expect(lookups()).toBe(1));
+    view.rerender(mount('b.docx'));
+    await waitFor(() => expect(lookups()).toBe(2));
+    await act(async () => answerA(ok('res_a'))); // A's answer arrives after switching to B
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.queryByRole('button', { name: '在空间中查看' })).toBeNull();
+  });
 });

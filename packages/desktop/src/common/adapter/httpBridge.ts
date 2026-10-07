@@ -156,24 +156,6 @@ export type HttpRequestOptions = {
   headers?: Record<string, string>;
 };
 
-const SENSITIVE_LOG_KEY_PATTERN = /api[_-]?key|authorization|auth[_-]?token|access[_-]?token|refresh[_-]?token|secret/i;
-
-function redactForLog(value: unknown, depth = 0): unknown {
-  if (depth > 8 || value === null || typeof value !== 'object') {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => redactForLog(item, depth + 1));
-  }
-
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
-      key,
-      SENSITIVE_LOG_KEY_PATTERN.test(key) ? '[REDACTED]' : redactForLog(entry, depth + 1),
-    ])
-  );
-}
-
 const REFRESH_ENDPOINT = '/api/auth/refresh';
 
 /**
@@ -233,10 +215,9 @@ export async function httpRequest<T>(
     Object.assign(headers, options.headers);
   }
 
-  console.debug(
-    `[httpBridge] ${method} ${path}`,
-    body !== undefined ? JSON.stringify(redactForLog(body)).slice(0, 500) : '(no body)'
-  );
+  // [mycowork] D191: never log request/response bodies or the query string (search text, names); method + path + status only.
+  const logPath = path.split('?')[0];
+  console.debug(`[httpBridge] ${method} ${logPath}`);
 
   let response = await sendHttpRequest(method, path, headers, body);
 
@@ -245,10 +226,10 @@ export async function httpRequest<T>(
   // no-op outside browser mode and single-flights concurrent 401s into one POST.
   // The auth endpoints themselves are skipped to avoid recursion.
   if (response.status === 401 && !isAuthEndpoint(path)) {
-    console.debug(`[httpBridge] ${method} ${path} → 401, attempting session refresh`);
+    console.debug(`[httpBridge] ${method} ${logPath} → 401, attempting session refresh`);
     const refreshed = await refreshSession();
     if (refreshed) {
-      console.debug(`[httpBridge] session refreshed, replaying ${method} ${path}`);
+      console.debug(`[httpBridge] session refreshed, replaying ${method} ${logPath}`);
       response = await sendHttpRequest(method, path, headers, body);
     }
   }
@@ -263,14 +244,14 @@ export async function httpRequest<T>(
       errorBody = rawText;
     }
     if (options?.silentStatuses?.includes(response.status)) {
-      console.debug(`[httpBridge] ${method} ${path} → ${response.status} (silenced)`, errorBody);
+      console.debug(`[httpBridge] ${method} ${logPath} → ${response.status} (silenced)`);
     } else {
-      console.error(`[httpBridge] ${method} ${path} → ${response.status}`, errorBody);
+      console.error(`[httpBridge] ${method} ${logPath} → ${response.status}`);
     }
     throw new BackendHttpError({ method, path, status: response.status, body: errorBody });
   }
 
-  console.debug(`[httpBridge] ${method} ${path} → ${response.status} OK`);
+  console.debug(`[httpBridge] ${method} ${logPath} → ${response.status} OK`);
 
   const contentType = response.headers.get('Content-Type');
   if (!contentType?.includes('application/json')) {

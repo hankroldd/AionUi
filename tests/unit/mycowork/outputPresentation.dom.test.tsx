@@ -8,6 +8,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@t
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ItemMenu, type ItemActions } from '@mycowork/ui/pages/resources/ItemParts.tsx';
+import { rowActionText } from '@mycowork/ui/pages/resources/row-action-messages.ts';
 import { OutputPublication, OutputSourceLine } from '@mycowork/ui/pages/resources/OutputParts.tsx';
 import { resourceText } from '@mycowork/ui/pages/resources/messages.ts';
 import { useOutputConversations } from '@mycowork/ui/pages/resources/use-output-conversations.ts';
@@ -40,6 +41,9 @@ const actions = (over: Partial<ItemActions> = {}): ItemActions => ({
   onStar: vi.fn(),
   onEditTags: vi.fn(),
   onSecret: vi.fn(),
+  row: rowActionText('zh-CN'),
+  canTrash: () => false,
+  onTrash: vi.fn(),
   ...over,
 });
 afterEach(() => {

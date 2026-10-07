@@ -1,9 +1,10 @@
 /**
- * [mycowork] ADR-0011: `/office/imports` (MyCowork P07 import queue, PR04 slice f).
- * Only the Bridge boundary is mocked (fetch). Covers: a dropped file is uploaded as octet-stream (nothing written
- * until "confirm"), a reference item needs a target knowledge base, confirm creates one idempotent batch, the page
- * polls until ready and links the original; a failed item offers "retry failed only" with expected_revision;
- * duplicate content offers reference/register; an over-limit upload shows the Bridge message.
+ * [mycowork] ADR-0011 / ADR-0022 决策 3：`/office/imports`（P07，PR11 W4-5 起与空间上传弹窗是同一套 UploadFlow，只是整页）。
+ * Only the Bridge boundary is mocked (fetch). Covers: a dropped file is uploaded as octet-stream (nothing written until
+ * "confirm"), no purpose picker exists, no knowledge base → purpose=working without source_id, a chosen knowledge base →
+ * purpose=reference + source_id, confirm creates one idempotent batch, the page polls until ready and links the original;
+ * a failed item offers "retry failed only" with expected_revision; duplicate content offers reference/register;
+ * an over-limit upload shows the Bridge message.
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -50,6 +51,7 @@ function bridge(opts: { upload?: object; uploadStatus?: number; afterCreate: obj
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     if (url === '/bridge/v1/scopes') return reply(200, SCOPES);
+    if (url === '/bridge/v1/tags') return reply(200, { tags: [] });
     if (url === '/bridge/v1/uploads')
       return opts.uploadStatus
         ? reply(opts.uploadStatus, { error: { code: 'PAYLOAD_TOO_LARGE', message: '单个文件不超过 50MB' } })
@@ -75,7 +77,7 @@ async function drop(name = '周报.md') {
 }
 
 async function chooseTarget() {
-  fireEvent.click(screen.getAllByText('有参考材料或模板时须选择目标知识库')[0] as HTMLElement);
+  fireEvent.click(screen.getByLabelText('放进哪个知识库'));
   fireEvent.click(await screen.findByText('青禾库'));
 }
 
@@ -86,7 +88,7 @@ describe('OfficeImportsSlot', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('uploads on drop, requires a target for references, confirms one batch, polls to ready and links the original', async () => {
+  it('uploads on drop, has no purpose picker, confirms one batch as reference for a chosen base, polls to ready and links the original', async () => {
     bridge({ afterCreate: [item({})], later: [item({ status: 'ready', steps: steps('done') })] });
     render(<OfficeImportsSlot />);
     await drop();
@@ -97,18 +99,21 @@ describe('OfficeImportsSlot', () => {
       'x-file-name': '%E5%91%A8%E6%8A%A5.md',
     });
     expect(calls('POST', '/import-batches')).toHaveLength(0); // nothing written before confirm
+    expect(screen.queryByText('参考材料')).toBeNull();
+    expect(screen.queryByText('可编辑工作文件')).toBeNull();
     const confirm = () => screen.getByRole('button', { name: '确认导入' });
-    await waitFor(() => expect(confirm()).toBeDisabled()); // reference needs a target knowledge base
+    await waitFor(() => expect(confirm()).toBeEnabled()); // knowledge base is optional
     await chooseTarget();
-    await waitFor(() => expect(confirm()).toBeEnabled());
     fireEvent.click(confirm());
     expect(await screen.findByText('原件已保存，AI 尚未读完')).toBeInTheDocument();
     const [[, create]] = calls('POST', '/import-batches');
-    expect(JSON.parse(String(create?.body))).toMatchObject({
+    const sent = JSON.parse(String(create?.body));
+    expect(sent).toMatchObject({
       source_id: 'src_q',
       project_id: 'proj-1',
       items: [{ upload_id: 'up_1', purpose: 'reference', duplicate_action: 'reference_existing' }],
     });
+    expect(sent.secret).toBeUndefined();
     expect(await screen.findByText('就绪', {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '查看原件' })).toHaveAttribute(
       'href',
@@ -130,20 +135,20 @@ describe('OfficeImportsSlot', () => {
     expect(JSON.parse(String(calls('POST', '/retry')[0]?.[1]?.body))).toEqual({ expected_revision: 1 });
   });
 
-  it('offers reference/register for duplicate content, and working files need no target', async () => {
+  it('offers reference/register for duplicate content; no knowledge base sends working without a target', async () => {
     bridge({ upload: { duplicate_of: ['res_old'] }, afterCreate: [item({ purpose: 'working', source_id: null })] });
     render(<OfficeImportsSlot />);
     await drop();
     expect(await screen.findByText('与你已导入的 1 个资源内容相同')).toBeInTheDocument();
+    expect(screen.getByText('不选知识库（存档，AI 不引用）')).toBeInTheDocument();
     fireEvent.click(screen.getByText('另登记为独立来源'));
-    fireEvent.click(screen.getByText('参考材料'));
-    fireEvent.click(await screen.findByText('可编辑工作文件'));
     await waitFor(() => expect(screen.getByRole('button', { name: '确认导入' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
     await waitFor(() => expect(calls('POST', '/import-batches')).toHaveLength(1));
     const body = JSON.parse(String(calls('POST', '/import-batches')[0]?.[1]?.body));
     expect(body.items[0]).toMatchObject({ purpose: 'working', duplicate_action: 'register_separately' });
     expect(body.source_id).toBeUndefined();
+    expect(await screen.findByText('存档（AI 不引用）')).toBeInTheDocument();
   });
 
   it('shows the Bridge limit when an upload is too large, and cannot confirm', async () => {
@@ -152,5 +157,25 @@ describe('OfficeImportsSlot', () => {
     await drop();
     expect(await screen.findByText(/上传失败：单个文件不超过 50MB/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '确认导入' })).toBeDisabled();
+  });
+
+  it('Secret: disables the knowledge base choice, hides the duplicate choice, sends secret=true as working', async () => {
+    bridge({ upload: { duplicate_of: ['res_old'] }, afterCreate: [item({ purpose: 'working', source_id: null })] });
+    render(<OfficeImportsSlot />);
+    await drop();
+    await screen.findByText('与你已导入的 1 个资源内容相同');
+    await chooseTarget(); // 先选了库，再勾 Secret：库选择不生效
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: '设为 Secret：只存本机，不进知识库和存档库，AI 读不到' })
+    );
+    expect(screen.queryByText('另登记为独立来源')).toBeNull();
+    expect(document.querySelector('.arco-select-disabled')).not.toBeNull(); // 知识库选择被禁用
+    expect(screen.getAllByText('不选知识库（存档，AI 不引用）').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
+    await waitFor(() => expect(calls('POST', '/import-batches')).toHaveLength(1));
+    const body = JSON.parse(String(calls('POST', '/import-batches')[0]?.[1]?.body));
+    expect(body).toMatchObject({ secret: true, items: [{ purpose: 'working', duplicate_action: 'register_separately' }] });
+    expect(body.source_id).toBeUndefined();
+    expect(await screen.findByText('Secret（只存本机）')).toBeInTheDocument();
   });
 });

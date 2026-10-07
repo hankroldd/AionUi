@@ -11,10 +11,24 @@ import { afterAll } from 'vitest';
 // then ran without `window` and threw `ReferenceError: window is not defined` (all tests pass, vitest reports Errors 1;
 // seen under load from scopeChip and officeDrop). Let that work finish while the environment still exists.
 // Real timers are captured here so a file that leaves fake timers on cannot hang the hook.
-// Ceiling: timers longer than 500ms that a test leaves behind (e.g. a toast auto-close) are still that test's to clear.
+// Ceiling: a timer longer than 500ms that a test's own code leaves behind is still that test's to clear.
 const realSetTimeout = globalThis.setTimeout;
 const realSetImmediate = globalThis.setImmediate;
 export async function settlePendingReactWork(): Promise<void> {
+  // Toasts, notifications and confirms live in roots RTL does not clean up. A toast left on screen closes itself seconds
+  // later and only then starts its exit animation, so waiting alone cannot outlast it: close them now. Arco is imported
+  // only when such a layer is on the page, so files that never load it do not pay for it.
+  if (document.querySelector('.arco-message-wrapper, .arco-notification-wrapper, .arco-modal-wrapper')) {
+    const [{ Message, Modal, Notification }, { act }] = await Promise.all([
+      import('@arco-design/web-react'),
+      import('react'),
+    ]);
+    act(() => {
+      Message.clear();
+      Notification.clear();
+      Modal.destroyAll();
+    });
+  }
   await new Promise((resolve) => realSetTimeout(resolve, 500)); // every transition timer due before this fires first
   await new Promise((resolve) => realSetTimeout(resolve, 5)); // 0ms timers those callbacks queued (deferred unmount)
   await new Promise((resolve) => realSetImmediate(resolve)); // scheduler tasks queued by those timers

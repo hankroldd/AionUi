@@ -10,6 +10,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 import {
+  fetchMock,
   FIRST,
   fixture,
   input,
@@ -18,6 +19,7 @@ import {
   nav,
   OUTPUT,
   reads,
+  reply,
   reset,
   SECRET,
   selectFile,
@@ -134,4 +136,24 @@ it('输入当帧清selection，清除全部条件保留source且恢复整库动�
   expect(lastQuery().get('source_id')).toBe('src_a');
   expect(screen.getByRole('checkbox', { name: '选择 第一页-1.md', exact: true })).not.toBeChecked();
   expect(writes()).toHaveLength(0);
+});
+it('知识库目录首次读取失败：页面仍列出本人资料，点“重试”后重读目录，知识库导航出现', async () => {
+  fixture(() => list(FIRST.slice(0, 2), 2));
+  const serve = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
+  let scopes = 0;
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+    url === '/bridge/v1/scopes' && scopes++ === 0
+      ? reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'x' } })
+      : serve(url, init)
+  );
+  render(<ResourcesPage lang='zh-CN' />);
+  await screen.findByRole('link', { name: '第一页-1.md', exact: true });
+  expect(screen.queryByTestId('mycowork-nav-source-src_a')).toBeNull();
+  const notice = (await screen.findAllByRole('alert')).find((alert) =>
+    within(alert).queryByRole('button', { name: '重试' })
+  );
+  expect(notice).toBeDefined();
+  fireEvent.click(within(notice as HTMLElement).getByRole('button', { name: '重试' }));
+  expect(await screen.findByTestId('mycowork-nav-source-src_a')).toHaveTextContent('虚构甲库');
+  expect(scopes).toBe(2);
 });

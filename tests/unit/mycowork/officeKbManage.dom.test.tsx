@@ -45,12 +45,21 @@ let sources: { source_id: string; name: string; provider: string; counts: Return
 let polls: ReturnType<typeof removal>[];
 /** 写接口各自要回的失败；不设 = 正常。 */
 let reject: { status: number; code: string; message?: string } | undefined;
+/** 删除第一步重读 /scopes 时回的状态码（只在 scopesFailFrom 次读取之后生效）；读进度失败的状态码。 */
+let scopesReads = 0;
+let scopesFailFrom: number | undefined;
+let pollFailOnce: boolean;
 function bridge() {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     const path = String(url).split('?')[0];
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
-    if (path === '/bridge/v1/scopes') return reply(200, { sources, projects: [], can_manage_kbs: canManage });
+    if (path === '/bridge/v1/scopes') {
+      scopesReads++;
+      if (scopesFailFrom !== undefined && scopesReads >= scopesFailFrom)
+        return reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'fixture' } });
+      return reply(200, { sources, projects: [], can_manage_kbs: canManage });
+    }
     if (path === '/bridge/v1/tags') return reply(200, { tags: [] });
     if (path === '/bridge/v1/saved-views') return reply(200, { views: [] });
     if (path === '/bridge/v1/collections') return reply(200, { collections: [] });
@@ -69,6 +78,10 @@ function bridge() {
     }
     if (path === '/bridge/v1/knowledge-removals/krm_kb/retry') return reply(200, removal('queued'));
     if (path === '/bridge/v1/knowledge-removals/krm_kb') {
+      if (pollFailOnce) {
+        pollFailOnce = false;
+        return reply(502, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'fixture' } });
+      }
       const now = polls.shift() ?? removal('removed');
       if (now.status === 'removed') sources = sources.filter((s) => s.source_id !== 'src_a');
       return reply(200, now);
@@ -101,6 +114,9 @@ beforeEach(() => {
   ];
   polls = [];
   reject = undefined;
+  scopesReads = 0;
+  scopesFailFrom = undefined;
+  pollFailOnce = false;
   vi.stubGlobal('fetch', fetchMock);
   bridge();
 });
@@ -141,11 +157,14 @@ describe('space: knowledge base management', () => {
 
   it('two-step delete: step one states the count, keeps the originals and warns about uploads; nothing is sent until the second step', async () => {
     polls = [removal('archiving', { progress: { total: 12, moved: 5, preserved: 1, failed: 0 } }), removal('removing')];
+    sources[0]!.counts = counts(0); // 目录里是导入之前读的旧数字
     render(<OfficeResourcesSlot />);
     await open();
+    sources[0]!.counts = counts(12); // 之后库里多了资料；打开确认框时重读 /scopes
     fireEvent.click(screen.getByRole('button', { name: '删除“渠道库”' }));
     const step1 = await screen.findByTestId('mycowork-kb-delete-step1', undefined, LONG);
-    expect(step1.textContent).toContain('移出该库 12 条资料并保留原件');
+    await waitFor(() => expect(step1.textContent).toContain('移出该库 12 条资料并保留原件'), LONG);
+    expect(step1.textContent).toContain('其他有权限的成员将不能再检索这些资料');
     expect(step1.textContent).toContain('删除期间不要在 WeKnora 自带界面向该库上传');
     expect(sent('DELETE')).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: '继续' }));
@@ -220,5 +239,31 @@ describe('space: knowledge base management', () => {
     fireEvent.click(await screen.findByRole('button', { name: '删除知识库' }, LONG));
     expect(await screen.findByText(/正在删除，或其中有资料正在移出/, undefined, LONG)).toBeInTheDocument();
     expect(sent('GET', '/knowledge-removals/krm_kb')).toHaveLength(0);
+  });
+
+  it('step one cannot continue until the latest file count is read; a failed re-read blocks it', async () => {
+    render(<OfficeResourcesSlot />);
+    await open();
+    scopesFailFrom = scopesReads + 1; // 打开确认框那一次重读失败
+    fireEvent.click(screen.getByRole('button', { name: '删除“渠道库”' }));
+    const step1 = await screen.findByTestId('mycowork-kb-delete-step1', undefined, LONG);
+    expect(await within(step1).findByText(/读不到最新的资料数，不能继续/, undefined, LONG)).toBeInTheDocument();
+    expect(step1.textContent).not.toContain('移出该库');
+    expect(screen.getByRole('button', { name: '继续' })).toBeDisabled();
+    expect(sent('DELETE')).toHaveLength(0);
+  });
+
+  it('when the progress cannot be read it says so and offers to read again instead of stopping silently', async () => {
+    polls = [removal('archiving')];
+    render(<OfficeResourcesSlot />);
+    await open();
+    pollFailOnce = true;
+    fireEvent.click(screen.getByRole('button', { name: '删除“渠道库”' }));
+    fireEvent.click(await screen.findByRole('button', { name: '继续' }, LONG));
+    fireEvent.click(await screen.findByRole('button', { name: '删除知识库' }, LONG));
+    const stale = await screen.findByTestId('mycowork-kb-task-queued', undefined, LONG);
+    expect(await within(stale).findByText(/读不到删除进度/, undefined, LONG)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '重新读取' }));
+    await waitFor(() => expect(screen.queryByText('渠道库')).toBeNull(), LONG);
   });
 });

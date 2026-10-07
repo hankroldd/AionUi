@@ -184,6 +184,19 @@ describe('PreviewEditButton lookup lifecycle (W4-6)', () => {
     expect(lookups()).toBe(4);
   });
 
+  it('a hidden browser tab does not look up (no request while not visible)', async () => {
+    const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    try {
+      fetchMock.mockImplementation(async () => ok('res_x'));
+      render(mount('out/hidden.docx'));
+      await new Promise((r) => setTimeout(r, 50));
+      expect(lookups()).toBe(0);
+      expect(screen.queryByRole('button', { name: '在空间中查看' })).toBeNull();
+    } finally {
+      hidden.mockRestore();
+    }
+  });
+
   it('unmount (tab closed or switched away) stops the re-checks', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     fetchMock.mockImplementation(async () => nf());

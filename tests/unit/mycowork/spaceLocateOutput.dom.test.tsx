@@ -68,3 +68,55 @@ describe('space locate-output intent', () => {
     expect(document.querySelector('.is-located')).toBeNull();
   });
 });
+
+describe('space locate-output edge cases', () => {
+  it('file name with leading/trailing spaces: still marked (no comparison against the trimmed query)', async () => {
+    const spaced = item('res_sp', ' 带空格 .docx', { origin: 'outputs', source_id: null, state: 'stored' });
+    fixture((q) => (q.get('origin') === 'outputs' ? list([spaced], 1) : list([], 0)));
+    locate('res_sp', ' 带空格 .docx');
+    render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
+    await waitFor(() => expect(document.querySelector('[data-resource-id="res_sp"]')!.className).toContain('is-located'));
+    expect(screen.queryByText(/没找到/)).toBeNull();
+  });
+
+  it('target not on the first page (total > items): says so instead of "deleted"', async () => {
+    fixture((q) => (q.get('origin') === 'outputs' ? list([OTHER], 120) : list([], 0)));
+    locate('res_far', '季度报告.docx');
+    render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
+    expect(await screen.findByText('同名结果较多，请缩小范围后查找。')).toBeInTheDocument();
+    expect(screen.queryByText(/没找到/)).toBeNull();
+  });
+
+  it('a name over 200 chars is cut to 200 for the query (the list API rejects longer q)', async () => {
+    fixture(() => list([], 0));
+    locate('res_long', '长'.repeat(260));
+    render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
+    await waitFor(() => expect(queries().some((q) => q.get('origin') === 'outputs' && q.get('q') === '长'.repeat(200))).toBe(true));
+    expect(queries().every((q) => (q.get('q') ?? '').length <= 200)).toBe(true);
+  });
+
+  it.each([
+    [14_000, true],
+    [16_000, false],
+  ])('intent age %i ms: applied=%s (15 s freshness, fake Date)', async (age, applied) => {
+    vi.useFakeTimers({ toFake: ['Date'], now: 1_000_000 });
+    try {
+      fixture((q) => (q.get('origin') === 'outputs' ? list([OUT], 1) : list([], 0)));
+      locate('res_out', '季度报告.docx');
+      vi.setSystemTime(1_000_000 + age);
+      render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
+      await waitFor(() => expect(queries().length).toBeGreaterThan(0));
+      expect(queries()[0]!.get('origin') === 'outputs').toBe(applied);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('card layout also marks the located resource', async () => {
+    localStorage.setItem('mycowork.resources.layout', 'card');
+    fixture((q) => (q.get('origin') === 'outputs' ? list([OUT], 1) : list([], 0)));
+    locate('res_out', '季度报告.docx');
+    render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
+    await waitFor(() => expect(document.querySelector('.mcw-rc-card[data-resource-id="res_out"]')!.className).toContain('is-located'));
+  });
+});

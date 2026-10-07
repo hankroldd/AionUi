@@ -170,7 +170,7 @@ describe('OfficeImportsSlot', () => {
     );
     expect(screen.queryByText('另登记为独立来源')).toBeNull();
     expect(document.querySelector('.arco-select-disabled')).not.toBeNull(); // 知识库选择被禁用
-    expect(screen.getAllByText('不选知识库（存档，AI 不引用）').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('不进知识库和存档库').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
     await waitFor(() => expect(calls('POST', '/import-batches')).toHaveLength(1));
     const body = JSON.parse(String(calls('POST', '/import-batches')[0]?.[1]?.body));

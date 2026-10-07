@@ -72,7 +72,35 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+const flush = (ms: number) =>
+  act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+/** 批次受理后一直“处理中”；读取按 getReads 的返回（抛错 = 读取失败）。confirm 之前用真实计时器，之后切假计时器。 */
+async function pendingBatch(getReads: (n: number) => object) {
+  const pending = [row({ status: 'stored', steps: steps('pending') })];
+  bridge({ created: pending, retried: pending });
+  const base = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
+  let n = 0;
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url === '/bridge/v1/import-batches/bat_1') return reply(200, getReads(++n));
+    return base(url, init);
+  });
+  const dialog = await openDialog();
+  await addFile(dialog);
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  fireEvent.click(within(dialog).getByRole('button', { name: '确认导入' }));
+  await flush(0);
+  return dialog;
+}
+const batchReads = () => calls('GET', '/import-batches/bat_1');
+const failRead = (): object => {
+  throw new TypeError('network');
+};
+
 describe('上传弹窗', () => {
+  afterEach(() => vi.useRealTimers());
+
   it('新建 → 上传文件打开弹窗而不是跳页；只问知识库、标签、Secret，没有用途选择；默认不选知识库', async () => {
     bridge();
     const dialog = await openDialog();
@@ -133,7 +161,7 @@ describe('上传弹窗', () => {
     expect(within(dialog).getByText('另登记为独立来源')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('checkbox', { name: /设为 Secret/ }));
     expect(kb().closest('.arco-select')).toHaveClass('arco-select-disabled');
-    expect(selectedKb(dialog)).toBe('不选知识库（存档，AI 不引用）');
+    expect(selectedKb(dialog)).toBe('不进知识库和存档库');
     expect(within(dialog).queryByText('另登记为独立来源')).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: '确认导入' }));
     await waitFor(() => expect(calls('POST', '/import-batches')).toHaveLength(1));
@@ -167,6 +195,59 @@ describe('上传弹窗', () => {
     await waitFor(() => expect(calls('POST', '/retry')).toHaveLength(1));
     expect(JSON.parse(String(calls('POST', '/retry')[0]?.[1]?.body))).toEqual({ expected_revision: 1 });
     expect(await within(dialog).findByText('就绪')).toBeInTheDocument();
+  });
+
+  it('读取失败后手动“立即重试”读到完成：空间列表也重读', async () => {
+    const dialog = await pendingBatch((n) => (n === 1 ? failRead() : batch([row({ steps: steps('done') })])));
+    await flush(2000);
+    expect(within(dialog).getByText('读取进度失败，正在重试')).toBeInTheDocument();
+    const before = reads().length;
+    fireEvent.click(within(dialog).getByRole('button', { name: '立即重试' }));
+    await flush(0);
+    expect(within(dialog).getByText('就绪')).toBeInTheDocument();
+    expect(reads().length).toBeGreaterThan(before);
+  });
+
+  it('上一批读取失败过：再导入一批后，新批次的首次轮询回到 2 秒而不是沿用退避', async () => {
+    const dialog = await pendingBatch((n) => (n === 1 ? failRead() : batch([row({ status: 'stored', steps: steps('pending') })])));
+    await flush(2000);
+    expect(batchReads()).toHaveLength(1);
+    fireEvent.click(within(dialog).getByRole('button', { name: '再导入一批' }));
+    vi.useRealTimers();
+    await addFile(dialog);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fireEvent.click(within(dialog).getByRole('button', { name: '确认导入' }));
+    await flush(0);
+    await flush(2000);
+    expect(batchReads()).toHaveLength(2);
+  });
+
+  it('上一批读取失败过：只重试失败项成功后，下一次轮询回到 2 秒', async () => {
+    const failedAndStored = [
+      row({ seq: 0, status: 'failed', steps: steps('failed', 'pending'), error: 'upstream_failed' }),
+      row({ seq: 1, file_name: '乙.md', status: 'stored', steps: steps('pending') }),
+    ];
+    bridge({ created: failedAndStored, retried: failedAndStored });
+    const base = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
+    let n = 0;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/bridge/v1/import-batches/bat_1') {
+        if (++n === 1) throw new TypeError('network');
+        return reply(200, batch(failedAndStored));
+      }
+      return base(url, init);
+    });
+    const dialog = await openDialog();
+    await addFile(dialog);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fireEvent.click(within(dialog).getByRole('button', { name: '确认导入' }));
+    await flush(0);
+    await flush(2000);
+    expect(batchReads()).toHaveLength(1);
+    fireEvent.click(within(dialog).getByRole('button', { name: '只重试失败项' }));
+    await flush(0);
+    await flush(2000);
+    expect(batchReads()).toHaveLength(2);
   });
 
   it('取消：上传了文件但没确认时不建批次，弹窗关闭', async () => {

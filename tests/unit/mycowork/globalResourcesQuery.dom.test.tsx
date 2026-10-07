@@ -10,7 +10,6 @@ import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 import {
   choose,
-  FIRST,
   fixture,
   input,
   lastQuery,
@@ -34,6 +33,7 @@ const mount = async () => {
   await screen.findByRole('link', { name: '第一页-1.md', exact: true });
 };
 it('初始全部一次origin=all查询，显示600与50条；第2/12页显示服务端页面且没有首50聚合', async () => {
+  fixture((q) => (q.get('page') === '1' ? list() : standard(q))); // 只有这条要整页 50 行
   await mount();
   expect(reads()).toHaveLength(1);
   expect(Object.fromEntries(lastQuery())).toEqual({ origin: 'all', sort: 'updated', page: '1' });
@@ -70,8 +70,6 @@ it.each([
   expect(screen.getByText(field === 'file_type' ? '共 2 项' : '共 1 项')).toBeInTheDocument();
 });
 it('All↔Recent重新查询并清条件/输入/页/选择；仅layout切换保留选择且不新增请求', async () => {
-  // 这条不看分页：未筛选时只回 3 条。整页 50 行在列表与网格间重渲染 4 次，机器忙时会超过 10 秒
-  fixture((q) => (q.get('state') ? standard(q) : list(FIRST.slice(0, 3), 3)));
   await mount();
   selectFile('第一页-1.md');
   const before = reads().length;

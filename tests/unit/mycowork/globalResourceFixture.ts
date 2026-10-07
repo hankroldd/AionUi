@@ -114,9 +114,11 @@ export function standard(q: URLSearchParams): Reply {
       1
     );
   if (q.get('origin') === 'imports') return list([IMPORT], 1);
-  if (q.get('page') === '2') return list(SECOND, 600, 2);
-  if (q.get('page') === '12') return list(TAIL, 600, 12);
-  return list();
+  // A full page is 50 rows; re-rendering it several times per test is what made these files time out on a busy machine.
+  // Only the pagination test needs a full first page (it asks for one itself); everything else gets 3 rows of 600.
+  if (q.get('page') === '2') return list(SECOND.slice(0, 3), 600, 2);
+  if (q.get('page') === '12') return list(TAIL.slice(-3), 600, 12);
+  return list(FIRST.slice(0, 3));
 }
 export function reset() {
   fetchMock.mockReset();

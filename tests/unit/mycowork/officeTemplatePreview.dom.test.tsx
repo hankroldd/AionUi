@@ -131,6 +131,7 @@ describe('P09 candidate preview', () => {
     serve(['a4'], { a4: () => new Promise((r) => (release = r)) });
     render(<OfficeCompositionSlot />);
     expect(await screen.findByText('正在渲染预览…')).toBeInTheDocument();
+    await waitFor(() => expect(previewCalls('a4')).toBe(1)); // 请求发出后 release 才有效（高负载下 effect 可能晚于文案）
     release(reply(200, '<html>x</html>'));
     await waitFor(() => expect(document.querySelector('iframe.mcw-tp-frame')).not.toBeNull());
   });

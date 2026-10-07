@@ -159,7 +159,8 @@ describe('space: knowledge base management', () => {
     expect(await screen.findByText(/正在保全资料：已处理 6\/12/, undefined, LONG)).toBeInTheDocument();
     expect(await screen.findByText(/资料都已保全，正在删除知识库/, undefined, LONG)).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('渠道库')).toBeNull(), LONG);
-    expect(await screen.findByTestId('mycowork-kb-task-removed', undefined, LONG)).toBeInTheDocument();
+    // 库删掉后目录里已没有它，状态行仍说清是哪个库
+    expect((await screen.findByTestId('mycowork-kb-task-removed', undefined, LONG)).textContent).toContain('渠道库');
   });
 
   it('cancelling either step sends nothing', async () => {

@@ -98,6 +98,27 @@ afterEach(() => {
 });
 
 describe('发布结果未知时冻结完整请求身份', () => {
+  it('Bridge 明确拒绝请求内容（400）后放开库和文件名：改名重发是新请求，不沿用被拒的那次', async () => {
+    serve((r, i) =>
+      i === 0
+        ? new Response(JSON.stringify({ error: { code: 'INVALID_REQUEST', message: 'x' } }), { status: 400 })
+        : json(publication(r), 201)
+    );
+    render(<Harness />);
+    await choose('虚构原目标库');
+    fireEvent.click(screen.getByRole('button', { name: '发布', exact: true }));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    const fileName = screen.getByLabelText('库里的文件名');
+    await waitFor(() => expect(fileName).toBeEnabled());
+    expect(screen.getByLabelText('选择知识库').closest('.arco-select')).not.toHaveClass('arco-select-disabled');
+    expect(accepted).not.toHaveBeenCalled();
+    fireEvent.change(fileName, { target: { value: '改名后的成果.txt' } });
+    fireEvent.click(screen.getByRole('button', { name: '发布', exact: true }));
+    await waitFor(() => expect(accepted).toHaveBeenCalledTimes(1));
+    expect(requests[1]?.target).toMatchObject({ file_name: '改名后的成果.txt' });
+    expect(requests[1]?.submission_id).not.toBe(requests[0]?.submission_id);
+  });
+
   it('fetch reject 后库和文件名仍锁定，同窗重复提交body及nonce完全相同', async () => {
     serve((r, i) => {
       if (i === 0) throw new Error('fixture网络中断，是否受理未知');

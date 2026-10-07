@@ -4,6 +4,23 @@
  */
 
 import '@testing-library/jest-dom/vitest';
+import { afterAll } from 'vitest';
+
+// [mycowork] PR11 (A125): when a test file ends, jsdom is torn down. Work that React or Arco queued shortly before —
+// a react-transition-group exit timer (Arco popups, <= 400ms), Arco's deferred root unmount (0ms), a scheduler task —
+// then ran without `window` and threw `ReferenceError: window is not defined` (all tests pass, vitest reports Errors 1;
+// seen under load from scopeChip and officeDrop). Let that work finish while the environment still exists.
+// Real timers are captured here so a file that leaves fake timers on cannot hang the hook.
+// Ceiling: timers longer than 500ms that a test leaves behind (e.g. a toast auto-close) are still that test's to clear.
+const realSetTimeout = globalThis.setTimeout;
+const realSetImmediate = globalThis.setImmediate;
+export async function settlePendingReactWork(): Promise<void> {
+  await new Promise((resolve) => realSetTimeout(resolve, 500)); // every transition timer due before this fires first
+  await new Promise((resolve) => realSetTimeout(resolve, 5)); // 0ms timers those callbacks queued (deferred unmount)
+  await new Promise((resolve) => realSetImmediate(resolve)); // scheduler tasks queued by those timers
+  await new Promise((resolve) => realSetImmediate(resolve)); // and the passive effects they schedule in turn
+}
+afterAll(settlePendingReactWork);
 
 // Make this a module
 

@@ -60,7 +60,7 @@ const CONTEXT = {
   withheld: 1,
   superseded: false,
 };
-const SUMMARY = '项目A资料 + 产品库；公网关闭；AI 可引用 8 · 入库中 1 · 暂不可用 2'; // D145 文案
+const SUMMARY = '项目A资料 + 产品库；公网关闭；AI 可引用 8 · 入库中 1 · 暂不可用 2；本轮未包含 1 份处理中的资料（按发送时的状态）'; // D145 文案 + W4-9 ③
 
 const emit = (m: StreamMessage) => act(() => streamListeners.forEach((fn) => fn(m)));
 

@@ -321,6 +321,14 @@ describe('nomination dialog', () => {
 });
 
 describe('result', () => {
+  it('points the nominee to 浏览全部 → 审批状态：待审核 so the candidate can be found after closing (A230)', async () => {
+    mount();
+    const { dialog } = await openNominate();
+    fill(dialog);
+    submit(dialog);
+    expect(await within(dialog).findByTestId('nominate-guide')).toHaveTextContent('浏览全部 → 审批状态：待审核');
+  });
+
   it('no flags: says it can go to review, lists nothing, and a non-owner sees 等待 owner 审核 without buttons', async () => {
     mount();
     const { dialog } = await openNominate();
@@ -365,7 +373,11 @@ describe('result', () => {
     expect(rows[7]).toHaveTextContent('备注或批注未能检查');
     const zone = await within(result).findByTestId('asset-transitions'); // 审批区已加载
     expect(zone).toHaveTextContent('还有 8 条去事实化标记，不能批准');
-    expect(within(zone).queryByRole('button')).toBeNull(); // 草稿以外的迁移值不渲染按钮
+    expect(
+      within(zone)
+        .getAllByRole('button')
+        .map((b) => b.textContent)
+    ).toEqual(['退回草稿']); // 只有接口列的退回
     expect(within(result).queryByRole('button', { name: '批准' })).toBeNull();
   });
 
@@ -379,7 +391,12 @@ describe('result', () => {
     submit(dialog);
     const zone = await within(dialog).findByTestId('asset-transitions');
     expect(zone).toHaveTextContent('不能批准');
-    expect(within(zone).queryByRole('button')).toBeNull();
+    expect(within(zone).queryByRole('button', { name: '批准' })).toBeNull();
+    expect(
+      within(zone)
+        .getAllByRole('button')
+        .map((b) => b.textContent)
+    ).toEqual(['退回草稿']); // 合同允许的退回（A231）仍给
   });
 
   it('waiting note is only for a non-owner on a candidate that is neither approved nor deprecated; an owner with buttons does not see it', async () => {
@@ -447,7 +464,7 @@ describe('owner approval in the same dialog', () => {
     await step('开始校验', 'validating', 'draft');
     await step('标为可预览', 'previewable', 'validating');
     fireEvent.click(await within(dialog).findByRole('button', { name: '批准' }));
-    expect(await screen.findByText('批准后所有人可见并进入模板推荐，界面暂不能撤回。')).toBeInTheDocument();
+    expect(await screen.findByText('批准后所有人可见并进入模板推荐；之后你可以在这里弃用它。')).toBeInTheDocument();
     expect(posts('/transitions')).toHaveLength(2); // 点“批准”本身不发请求
     fireEvent.click(screen.getByRole('button', { name: '确认批准' }));
     await waitFor(() =>
@@ -456,7 +473,11 @@ describe('owner approval in the same dialog', () => {
     expect(await within(dialog).findByText(/已批准，可在页面计划页的“浏览全部”里看到/)).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: '批准' })).toBeNull();
     const zone = within(dialog).getByTestId('asset-transitions');
-    expect(within(zone).queryByRole('button')).toBeNull(); // 已批准后接口列的是 deprecated，不出按钮
+    expect(
+      within(zone)
+        .getAllByRole('button')
+        .map((b) => b.textContent)
+    ).toEqual(['弃用']); // 已批准后接口列 deprecated：owner 可弃用（A231）
   });
 
   it('cancelling the approval confirmation sends nothing', async () => {
@@ -472,7 +493,7 @@ describe('owner approval in the same dialog', () => {
     expect(within(dialog).getByRole('button', { name: '批准' })).toBeEnabled();
   });
 
-  it('only the three forward steps get buttons: draft / deprecated values give none', async () => {
+  it('every listed step gets a button (forward, return to draft, deprecate); unknown values give none', async () => {
     approval = 'validating';
     transitions = ['previewable', 'draft', 'deprecated'];
     mount();
@@ -484,7 +505,7 @@ describe('owner approval in the same dialog', () => {
       within(zone)
         .getAllByRole('button')
         .map((b) => b.textContent)
-    ).toEqual(['标为可预览']);
+    ).toEqual(['标为可预览', '退回草稿', '弃用']);
   });
 
   it('after a step succeeds, the buttons stay disabled until the re-read arrives (no second POST on a double click)', async () => {

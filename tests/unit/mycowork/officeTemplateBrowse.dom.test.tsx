@@ -10,6 +10,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeCompositionSlot } from '@/renderer/mycowork-slots';
+import { calls, fetchMock, item, serve } from './templateBrowseFixture';
 
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
@@ -18,109 +19,6 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => navigate,
   useParams: () => ({ decisionId: 'dec_1' }),
 }));
-
-const fetchMock = vi.fn();
-const reply = (status: number, body: unknown) => ({
-  status,
-  ok: status < 300,
-  json: async () => body,
-  text: async () => (typeof body === 'string' ? body : JSON.stringify(body)),
-});
-const err = (status: number, code: string) => reply(status, { error: { code, message: 'x' } });
-const cand = (id: string) => ({
-  asset_id: id,
-  version: 1,
-  title: `模板 ${id}`,
-  structure: id,
-  reasons: [{ code: 'relation_match', text: '适合“并列要点”' }],
-  limits: [],
-  preview: { state: 'pending', render_profile: null },
-});
-type Page = { no: number; picked?: string; cands: string[]; excluded?: boolean };
-const pageOf = (p: Page) => ({
-  page_no: p.no,
-  intent: `意图${p.no}`,
-  relation: 'parallel',
-  facts: [],
-  facts_sha256: `f${p.no}`,
-  status: p.picked ? 'selected' : 'awaiting_confirmation',
-  selected: p.picked ? { asset_id: p.picked, version: 1 } : null,
-  candidates: p.cands.map(cand),
-  excluded: p.excluded
-    ? [{ asset_id: 'x1', version: 1, title: '排除模板', reasons: [{ code: 'font_missing', text: '缺少字体 FZ' }] }]
-    : [],
-  fallbacks: [],
-  message: null,
-});
-const decisionOf = (n: number, pages: Page[]) => ({
-  decision_id: `dec_${n}`,
-  version: n,
-  mode: 'confirm',
-  status: pages.every((p) => p.picked) ? 'selected' : 'awaiting_confirmation',
-  output_format: 'pptx',
-  aspect: '16:9',
-  constraints: { native_editable: true, keep_master: true, allow_split: true },
-  theme: null,
-  theme_excluded: [],
-  fallbacks: [],
-  message: null,
-  created_at: 't',
-  pages: pages.map(pageOf),
-});
-const item = (id: string, kind = 'page-pattern') => ({
-  asset_id: id,
-  version: 1,
-  kind,
-  title: `资产 ${id}`,
-  approval: 'approved',
-  shared: false,
-  scenes: [],
-  formats: ['pptx'],
-  aspect: '16:9',
-  relations: ['parallel'],
-  structure: id,
-  preview: { state: 'pending', render_profile: null },
-});
-const detail = (id: string) => ({
-  ...item(id),
-  category: 'content',
-  density: 'medium',
-  slots: null,
-  theme_id: null,
-  fonts: ['Noto Sans'],
-  missing_dependencies: [],
-  touches_master: false,
-  acceptance: { editable: 'native', checked_at: null, evidence: null },
-  source: { package: 'fixtures', path: 'qualified-16x9.pptx#/slide[2]', sha256: null },
-  private_keys: [],
-  transitions: [],
-});
-
-type Server = { pages: Page[]; items?: ReturnType<typeof item>[]; total?: number; failChoiceAt?: { pageNo: number } };
-/** 有状态的假 Bridge：每次 choices 生成 dec_{n+1}，只改被选的那一页。 */
-function serve(s: Server) {
-  let n = 1;
-  const posts: { id: string; body: { page_no: number; asset_id: string } }[] = [];
-  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-    const u = new URL(url, 'http://x');
-    const path = u.pathname;
-    if (init?.method === 'POST') {
-      const body = JSON.parse(String(init.body));
-      posts.push({ id: path.split('/')[4] as string, body });
-      if (s.failChoiceAt?.pageNo === body.page_no) return err(409, 'TEMPLATE_NOT_ELIGIBLE');
-      s.pages = s.pages.map((p) => (p.no === body.page_no ? { ...p, picked: body.asset_id } : p));
-      return reply(201, decisionOf(++n, s.pages));
-    }
-    if (path.endsWith('/preview')) return reply(200, '<html>预览</html>');
-    if (path === '/bridge/v1/assets')
-      return reply(200, { page: Number(u.searchParams.get('page')), page_size: 50, total: s.total ?? 2, items: s.items ?? [] });
-    const a = /^\/bridge\/v1\/assets\/([^/]+)$/.exec(path);
-    if (a) return reply(200, detail(a[1] as string));
-    return reply(200, decisionOf(n, s.pages));
-  });
-  return posts;
-}
-const calls = (re: RegExp) => fetchMock.mock.calls.filter(([u]) => re.test(String(u)));
 
 describe('P09 browse all / view original / adopt all', () => {
   beforeEach(() => {
@@ -174,7 +72,10 @@ describe('P09 browse all / view original / adopt all', () => {
   });
 
   it('greys out excluded items with the reason and never posts for them; marks the item already chosen', async () => {
-    const posts = serve({ pages: [{ no: 1, cands: ['a1'], excluded: true, picked: 'n2' }], items: [item('x1'), item('n2')] });
+    const posts = serve({
+      pages: [{ no: 1, cands: ['a1'], excluded: true, picked: 'n2' }],
+      items: [item('x1'), item('n2')],
+    });
     const dialog = await open();
     expect(await within(dialog).findByText('缺少字体 FZ')).toBeInTheDocument();
     const buttons = within(dialog).getAllByRole('button', { name: /用于第 1 页|已选中/ });
@@ -188,7 +89,7 @@ describe('P09 browse all / view original / adopt all', () => {
     serve({ pages: [{ no: 1, cands: ['a1'] }], items: [item('n1')], failChoiceAt: { pageNo: 1 } });
     const dialog = await open();
     fireEvent.click(await within(dialog).findByRole('button', { name: '用于第 1 页' }));
-    expect(await screen.findByText('这个模板在当前约束下不再合格，已重新读取')).toBeInTheDocument();
+    expect(await screen.findByText('这个模板不符合本页或整套主题的硬约束，不能用于第 1 页')).toBeInTheDocument();
     expect(screen.getByText('决策版本 v1')).toBeInTheDocument();
     expect(navigate).not.toHaveBeenCalled();
   });

@@ -60,7 +60,7 @@ describe('withGuidScope for the scene assistant (A197)', () => {
     const overrides = { permission: 'yolo' };
     const out = await withGuidScope({ workspace: '', custom_workspace: false }, overrides, SCENE);
     expect(fetchMock.mock.calls[0][0]).toBe('/bridge/v1/context-plans');
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ explicit_empty: true });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ explicit_empty: true, use_project_defaults: false });
     expect(fetchMock.mock.calls[1][0]).toBe('/bridge/v1/context-plans/plan_e/tokens');
     expect(out.selected_session_mcp_servers).toEqual([SERVER]);
     expect(out).toMatchObject({ workspace: '/data/ws/1', custom_workspace: true });
@@ -75,6 +75,7 @@ describe('withGuidScope for the scene assistant (A197)', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
       working_project_id: 'proj-1',
       explicit_empty: true,
+      use_project_defaults: false,
     });
   });
 

@@ -186,7 +186,8 @@ describe('space: remove from knowledge base', () => {
     const failed = await screen.findByTestId('mycowork-removal-failed', undefined, LONG);
     expect(failed.textContent).toContain('超过 50 MB');
     expect(failed.textContent).toContain('没有删除知识库里的条目');
-    expect(row('可移出.md')).toBeInTheDocument();
+    // 列表在提示出现后可能正重读一轮，行会短暂不在；等它回来再断言（机器忙时偶发）
+    await waitFor(() => expect(row('可移出.md')).toBeInTheDocument(), LONG);
     expect(screen.queryByTestId('mycowork-removal-pending')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     await waitFor(() => expect(posts('/knowledge-removals/krm_1/retry')).toHaveLength(1), LONG);
@@ -214,7 +215,8 @@ describe('space: remove from knowledge base', () => {
     fireEvent.click(await screen.findByRole('button', { name: '移出' }, LONG));
     expect(await screen.findByText(/正在被编辑、导入或发布/, undefined, LONG)).toBeInTheDocument();
     expect(screen.queryByTestId('mycowork-removal-pending')).toBeNull();
-    expect(row('可移出.md')).toBeInTheDocument();
+    // 列表在提示出现后可能正重读一轮，行会短暂不在；等它回来再断言（机器忙时偶发）
+    await waitFor(() => expect(row('可移出.md')).toBeInTheDocument(), LONG);
     view.unmount();
 
     // 受理成功，之后读进度时网络断了

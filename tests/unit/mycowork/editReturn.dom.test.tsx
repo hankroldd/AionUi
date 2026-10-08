@@ -154,9 +154,10 @@ describe('空间预览的“在线编辑”', () => {
     render(<OfficeTextEditSlot />);
     const editor = (await screen.findByTestId('md-editor')) as HTMLTextAreaElement;
     fireEvent.change(editor, { target: { value: '# 周报\n改了\n' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存并返回' }));
     await waitFor(() => expect(window.location.hash).toBe('#/office/space'));
     expect(calls('POST', '/txe_1/close')).toHaveLength(1);
+    await waitFor(() => expect(document.querySelector('.arco-message')).toHaveTextContent('已保存为新版本。')); // 跨页面提示
   });
 
   it('docx：点击按页面看到的当前版本开 ONLYOFFICE 会话；会话保存完成（登记出新版本）后回到空间', async () => {
@@ -182,6 +183,7 @@ describe('空间预览的“在线编辑”', () => {
     render(<OfficeEditSlot />);
     fireEvent.click(await screen.findByRole('button', { name: '结束编辑并保存' }));
     await waitFor(() => expect(window.location.hash).toBe('#/office/space'), { timeout: 4000 });
+    await waitFor(() => expect(document.querySelector('.arco-message')).toHaveTextContent('已保存为新版本。'));
   });
 });
 
@@ -198,8 +200,33 @@ describe('保存后回到来时的页面', () => {
     render(<OfficeTextEditSlot />);
     const editor = (await screen.findByTestId('md-editor')) as HTMLTextAreaElement;
     fireEvent.change(editor, { target: { value: '改了' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存并返回' }));
     await waitFor(() => expect(window.location.hash).toBe('#/office/resources/res_md/versions'));
+    await waitFor(() => expect(document.querySelector('.arco-message')).toHaveTextContent('已保存为新版本。'));
+  });
+
+  it('有返回意图时按钮是“保存并返回”；Ctrl+S 只保存、留在编辑页，之后点按钮才返回', async () => {
+    window.location.hash = '#/office/resources/res_md/versions';
+    bridge((url) =>
+      url.endsWith('/save') ? reply(200, { revision_id: 'rev_b', created: true, base_revision_id: 'rev_b' }) : undefined
+    );
+    const { unmount } = render(<OfficeVersionsSlot />);
+    fireEvent.click(await screen.findByRole('button', { name: '在线编辑' }));
+    await waitFor(() => expect(window.location.hash).toBe('#/office/edit-text/res_md'));
+    unmount();
+    render(<OfficeTextEditSlot />);
+    const editor = (await screen.findByTestId('md-editor')) as HTMLTextAreaElement;
+    expect(screen.queryByRole('button', { name: '保存' })).toBeNull();
+    fireEvent.change(editor, { target: { value: '第一次' } });
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+    expect(await screen.findByText('已保存为新版本。')).toBeInTheDocument();
+    await act(async () => undefined);
+    expect(window.location.hash).toBe('#/office/edit-text/res_md');
+    expect(document.querySelector('.arco-message')).toBeNull();
+    fireEvent.change(editor, { target: { value: '第二次' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存并返回' }));
+    await waitFor(() => expect(window.location.hash).toBe('#/office/resources/res_md/versions'));
+    expect(calls('POST', '/save')).toHaveLength(2);
   });
 
   it('保存失败（版本冲突）不跳转，输入保留', async () => {
@@ -214,7 +241,7 @@ describe('保存后回到来时的页面', () => {
     render(<OfficeTextEditSlot />);
     const editor = (await screen.findByTestId('md-editor')) as HTMLTextAreaElement;
     fireEvent.change(editor, { target: { value: '我的改动' } });
-    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存并返回' }));
     expect(await screen.findByText(/已有更新的版本/)).toBeInTheDocument();
     await act(async () => undefined);
     expect(window.location.hash).toBe('#/office/edit-text/res_md');

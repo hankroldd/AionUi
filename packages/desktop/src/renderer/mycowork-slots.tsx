@@ -46,7 +46,7 @@ import {
  * project's "ask about this project" (router state `mycoworkProjectId`), the chip starts from that project's
  * default sources (MyCowork 01 §5); without it, behaviour is unchanged.
  */
-export const GuidScopeSlot: React.FC = () => {
+export const GuidScopeSlot: React.FC<{ assistantId?: string | undefined }> = ({ assistantId }) => {
   const { i18n: current } = useTranslation();
   const ownerKey = useOwnerKey();
   const state = useLocation().state as { mycoworkProjectId?: unknown } | null;
@@ -59,6 +59,7 @@ export const GuidScopeSlot: React.FC = () => {
       lang={current.language}
       projectId={projectId}
       initialScope={initialScope}
+      assistantId={assistantId}
     />
   );
 };

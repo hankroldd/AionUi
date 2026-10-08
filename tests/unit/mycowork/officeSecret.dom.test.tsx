@@ -173,4 +173,36 @@ describe('ScopeStrip Secret count (D116)', () => {
       unmount();
     }
   });
+
+  it('says how many template samples the frozen plan left out (A170)', async () => {
+    const counts = { total: 2, ready: 1, indexing: 0, failed: 0, unavailable: 0 };
+    for (const [n, expected] of [
+      [2, true],
+      [undefined, false],
+    ] as const) {
+      fetchMock.mockReset();
+      fetchMock.mockImplementation(async () =>
+        reply(200, {
+          plan_id: 'plan_1',
+          version: 1,
+          status: 'OK',
+          brief: {
+            groups: [{ source_id: 'src_q', source_name: '青禾库', mode: 'subset', counts }],
+            excluded: 0,
+            unauthorized: 0,
+            refs: {},
+            policy: { strict: false, web: 'off' },
+            ...(n === undefined ? {} : { template_excluded: n }),
+          },
+          used: [],
+          withheld: 0,
+          superseded: false,
+        })
+      );
+      const { unmount } = render(<ScopeStrip conversationId='c1' lang='zh-CN' />);
+      await screen.findByText(/青禾库/);
+      expect(screen.queryByText(/已排除 2 份模板样例/) !== null).toBe(expected);
+      unmount();
+    }
+  });
 });

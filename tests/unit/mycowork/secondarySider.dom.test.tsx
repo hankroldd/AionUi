@@ -82,6 +82,9 @@ describe('secondary header', () => {
     expect(mycoworkSiderId('/office/resources')).toBe('mycowork-space-sider');
     expect(mycoworkSiderId('/office/trash')).toBe('mycowork-space-sider');
     expect(mycoworkSiderId('/office/trash/')).toBe('mycowork-space-sider');
+    expect(mycoworkSiderId('/scheduled')).toBe('mycowork-scheduled-sider');
+    expect(mycoworkSiderId('/scheduled/job-1')).toBe('mycowork-scheduled-sider');
+    expect(mycoworkSiderId('/scheduledx')).toBeNull();
     for (const path of ['/office/resources/res_fixture/versions', '/office/imports', '/office/knowledge'])
       expect(mycoworkSiderId(path)).toBeNull();
   });
@@ -101,5 +104,18 @@ describe('secondary header', () => {
     render(<SecondaryHeader onConversationSelect={vi.fn()} />);
     expect(screen.getByRole('heading').textContent).toBe('定时任务');
     expect(screen.queryByRole('button', { name: 'conversation.historySearch.tooltip' })).toBeNull();
+  });
+
+  it('Scheduled route fills its own container with a one-line note instead of the Home conversation list', () => {
+    route.path = '/scheduled';
+    const host = document.createElement('div');
+    host.id = 'mycowork-scheduled-sider';
+    document.body.append(host);
+    try {
+      render(<SecondaryHeader onConversationSelect={vi.fn()} />);
+      expect(host.textContent).toBe('任务列表与新建在右侧页面。');
+    } finally {
+      host.remove();
+    }
   });
 });

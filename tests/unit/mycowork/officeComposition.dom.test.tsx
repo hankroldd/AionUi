@@ -132,7 +132,11 @@ describe('OfficeCompositionSlot', () => {
     render(<OfficeCompositionSlot />);
     await screen.findByText('双栏对比');
     fireEvent.click(screen.getAllByRole('button', { name: '选这个结构' })[0] as HTMLElement);
-    expect(await screen.findByText('这个模板在当前约束下不再合格，已重新读取')).toBeInTheDocument();
-    await waitFor(() => expect(fetchMock.mock.calls.filter(([u, i]) => !i?.method && !String(u).includes('/preview')).length).toBeGreaterThanOrEqual(2));
+    expect(await screen.findByText('这个候选在推荐之后变得不合格，已重新读取')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(([u, i]) => !i?.method && !String(u).includes('/preview')).length
+      ).toBeGreaterThanOrEqual(2)
+    );
   });
 });

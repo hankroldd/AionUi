@@ -193,7 +193,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
               selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
               selected_session_mcp_servers: selectedSessionMcpServersToSend,
             },
-            assistantOverrides // [mycowork] D115：带范围时不以 YOLO 创建
+            assistantOverrides, // [mycowork] D115：带范围时不以 YOLO 创建
+            assistantConversationId // [mycowork] A197：场景助手无范围也带空范围计划
           ),
         });
 
@@ -250,7 +251,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
           selected_session_mcp_servers:
             selectedMcpServerIds !== undefined ? selectedSessionMcpServers : selectedSessionMcpServersToSend,
-        }),
+        }, undefined, assistantConversationId), // [mycowork] A197
       });
       if (!conversation || !conversation.id) {
         console.error('Failed to create ACP conversation - conversation object is null or missing id');

@@ -243,7 +243,9 @@ describe('nomination dialog', () => {
   it.each([
     [fail(404, 'NOT_FOUND'), '这份资料不可用'],
     [fail(400, 'INVALID_REQUEST', 'slide is not in the file'), '页码不在文件里'],
-    [fail(400, 'INVALID_REQUEST', 'slide is not in the file'), '（slide is not in the file）'],
+    [fail(400, 'INVALID_REQUEST', 'only 16:9 and 4:3 slides can become templates'), '画幅不是 16:9 / 4:3'],
+    [fail(400, 'INVALID_REQUEST', 'secret resources cannot become template assets'), '已标为 Secret'],
+    [fail(400, 'INVALID_REQUEST', 'something unexpected'), '请求无效'],
     [fail(409, 'SUBMISSION_CONFLICT'), '同一编号提交的内容不同'],
     [fail(503, 'UPSTREAM_UNAVAILABLE'), '资料服务暂不可用'],
   ])('translates a failed nomination: %#', async (res, text) => {
@@ -252,8 +254,69 @@ describe('nomination dialog', () => {
     const { dialog } = await openNominate();
     fill(dialog);
     submit(dialog);
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(text);
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent(text);
+    expect(alert.textContent).not.toMatch(/slide is not|16:9 and 4:3|secret resources|unexpected/); // 不拼后端英文原文
     expect(within(dialog).queryByTestId('nominate-result')).toBeNull();
+  });
+
+  it('title is fixed; the file name is the first body line; the title field is cut to 200 chars and trimmed on send', async () => {
+    items = [file('res_a', { file_name: `${'长'.repeat(230)}.pptx` })];
+    mount();
+    fireEvent.click(await moreButton(items[0]?.file_name ?? ''));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '存为模板候选' }));
+    const dialog = await screen.findByRole('dialog', { name: '存为模板候选' });
+    expect(dialog).toHaveTextContent(`资料：${'长'.repeat(230)}.pptx`);
+    const title = within(dialog).getByLabelText('候选标题') as HTMLInputElement;
+    expect(title.value).toHaveLength(200);
+    fireEvent.change(title, { target: { value: '  两侧有空格  ' } });
+    fireEvent.change(within(dialog).getByLabelText('页码（从 1 起）'), { target: { value: '3' } });
+    fireEvent.click(within(dialog).getByLabelText('封面'));
+    fireEvent.click(within(dialog).getByLabelText('高'));
+    submit(dialog);
+    await within(dialog).findByTestId('nominate-result');
+    expect(posts('/template-candidates')[0]).toMatchObject({ title: '两侧有空格', slide: 3, density: 'high' });
+  });
+
+  it('a file name over 200 chars: the untouched default title that is sent is at most 200 chars', async () => {
+    items = [file('res_a', { file_name: `${'长'.repeat(230)}.pptx` })];
+    mount();
+    fireEvent.click(await moreButton(items[0]?.file_name ?? ''));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '存为模板候选' }));
+    const dialog = await screen.findByRole('dialog', { name: '存为模板候选' });
+    fireEvent.change(within(dialog).getByLabelText('页码（从 1 起）'), { target: { value: '2' } });
+    fireEvent.click(within(dialog).getByLabelText('封面'));
+    submit(dialog);
+    await within(dialog).findByTestId('nominate-result');
+    expect(String(posts('/template-candidates')[0]?.['title']).length).toBeLessThanOrEqual(200);
+  });
+
+  it('an empty title is rejected locally without a request', async () => {
+    mount();
+    const { dialog } = await openNominate();
+    fill(dialog, { title: '   ' });
+    submit(dialog);
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('请填写候选标题');
+    expect(posts('/template-candidates')).toHaveLength(0);
+  });
+
+  it('while the nomination is in flight: 取消 is disabled and Esc does not close; the result still arrives', async () => {
+    let release: (() => void) | undefined;
+    const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<Response>;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith('/template-candidates')) await new Promise<void>((r) => (release = r));
+      return base(url, init);
+    });
+    mount();
+    const { dialog } = await openNominate();
+    fill(dialog);
+    submit(dialog);
+    await waitFor(() => expect(posts('/template-candidates').length + (release ? 1 : 0)).toBeGreaterThan(0));
+    expect(within(dialog).getByRole('button', { name: '取消' })).toBeDisabled();
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape', keyCode: 27 });
+    expect(screen.getByRole('dialog', { name: '存为模板候选' })).toBeInTheDocument();
+    release?.();
+    expect(await within(dialog).findByTestId('nominate-result')).toBeInTheDocument();
   });
 });
 
@@ -281,7 +344,9 @@ describe('result', () => {
       { kind: 'comments', path: '/slide[2]/comment[1]', text: '' },
       { kind: 'notes_unchecked', path: '/slide[2]', text: '' },
     ];
-    transitions = ['validating'];
+    // 后端对带标记的可预览候选只列退回草稿，不列 approved（registry.ts nextApprovals）
+    approval = 'previewable';
+    transitions = ['draft'];
     mount();
     const { dialog } = await openNominate();
     fill(dialog);
@@ -298,9 +363,48 @@ describe('result', () => {
     expect(rows[5]).toHaveTextContent('（不显示内容）');
     expect(rows[6]).toHaveTextContent('批注 · /slide[2]/comment[1]');
     expect(rows[7]).toHaveTextContent('备注或批注未能检查');
-    expect(await within(result).findByRole('button', { name: '开始校验' })).toBeInTheDocument();
+    const zone = await within(result).findByTestId('asset-transitions'); // 审批区已加载
+    expect(zone).toHaveTextContent('还有 8 条去事实化标记，不能批准');
+    expect(within(zone).queryByRole('button')).toBeNull(); // 草稿以外的迁移值不渲染按钮
     expect(within(result).queryByRole('button', { name: '批准' })).toBeNull();
-    expect(await within(result).findByText(/还有 8 条去事实化标记，不能批准/)).toBeInTheDocument();
+  });
+
+  it('even if the interface lists approved for a flagged candidate, no 批准 is rendered (UI backstop)', async () => {
+    findings = [{ kind: 'date', path: '/slide[2]/shape[1]', text: '2026年3月' }];
+    approval = 'previewable';
+    transitions = ['approved', 'draft'];
+    mount();
+    const { dialog } = await openNominate();
+    fill(dialog);
+    submit(dialog);
+    const zone = await within(dialog).findByTestId('asset-transitions');
+    expect(zone).toHaveTextContent('不能批准');
+    expect(within(zone).queryByRole('button')).toBeNull();
+  });
+
+  it('waiting note is only for a non-owner on a candidate that is neither approved nor deprecated; an owner with buttons does not see it', async () => {
+    const note = async () => {
+      mount();
+      const { dialog } = await openNominate();
+      fill(dialog);
+      submit(dialog);
+      const zone = await within(dialog).findByTestId('nominate-result');
+      await within(zone).findByText(/资料|版本/); // 详情已读到
+      const text = zone.textContent ?? '';
+      cleanup();
+      return text;
+    };
+    transitions = [];
+    expect(await note()).toContain('等待 owner 审核'); // 非 owner、草稿
+    approval = 'deprecated';
+    expect(await note()).not.toContain('等待 owner 审核');
+    approval = 'approved';
+    const approved = await note();
+    expect(approved).not.toContain('等待 owner 审核');
+    expect(approved).toContain('已批准');
+    approval = 'draft';
+    transitions = ['validating'];
+    expect(await note()).not.toContain('等待 owner 审核'); // owner 有按钮
   });
 
   it('English labels for the notes / comments / notes_unchecked flags', async () => {
@@ -342,10 +446,73 @@ describe('owner approval in the same dialog', () => {
     };
     await step('开始校验', 'validating', 'draft');
     await step('标为可预览', 'previewable', 'validating');
-    await step('批准', 'approved', 'previewable');
+    fireEvent.click(await within(dialog).findByRole('button', { name: '批准' }));
+    expect(await screen.findByText('批准后所有人可见并进入模板推荐，界面暂不能撤回。')).toBeInTheDocument();
+    expect(posts('/transitions')).toHaveLength(2); // 点“批准”本身不发请求
+    fireEvent.click(screen.getByRole('button', { name: '确认批准' }));
+    await waitFor(() =>
+      expect(posts('/transitions').at(-1)).toEqual({ version: 1, expected_approval: 'previewable', to: 'approved' })
+    );
     expect(await within(dialog).findByText(/已批准，可在页面计划页的“浏览全部”里看到/)).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: '批准' })).toBeNull();
-    expect(within(dialog).queryByRole('button', { name: '弃用' })).toBeNull();
+    const zone = within(dialog).getByTestId('asset-transitions');
+    expect(within(zone).queryByRole('button')).toBeNull(); // 已批准后接口列的是 deprecated，不出按钮
+  });
+
+  it('cancelling the approval confirmation sends nothing', async () => {
+    approval = 'previewable';
+    transitions = ['approved', 'draft'];
+    mount();
+    const { dialog } = await openNominate();
+    fill(dialog);
+    submit(dialog);
+    fireEvent.click(await within(dialog).findByRole('button', { name: '批准' }));
+    fireEvent.click(await screen.findByRole('button', { name: '取消', hidden: false }));
+    expect(posts('/transitions')).toHaveLength(0);
+    expect(within(dialog).getByRole('button', { name: '批准' })).toBeEnabled();
+  });
+
+  it('only the three forward steps get buttons: draft / deprecated values give none', async () => {
+    approval = 'validating';
+    transitions = ['previewable', 'draft', 'deprecated'];
+    mount();
+    const { dialog } = await openNominate();
+    fill(dialog);
+    submit(dialog);
+    const zone = await within(dialog).findByTestId('asset-transitions');
+    expect(
+      within(zone)
+        .getAllByRole('button')
+        .map((b) => b.textContent)
+    ).toEqual(['标为可预览']);
+  });
+
+  it('after a step succeeds, the buttons stay disabled until the re-read arrives (no second POST on a double click)', async () => {
+    transitions = ['validating'];
+    let release: (() => void) | undefined;
+    let hold = false;
+    const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<Response>;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const u = new URL(String(url), 'http://fixture.invalid');
+      if (u.pathname.endsWith('/transitions') && init?.method === 'POST') hold = true;
+      else if (hold && u.pathname === '/bridge/v1/assets/pattern.cand_1') await new Promise<void>((r) => (release = r));
+      return base(url, init);
+    });
+    mount();
+    const { dialog } = await openNominate();
+    fill(dialog);
+    submit(dialog);
+    const button = await within(dialog).findByRole('button', { name: '开始校验' });
+    fireEvent.click(button);
+    await waitFor(() => expect(posts('/transitions')).toHaveLength(1));
+    await waitFor(() => expect(release).toBeDefined()); // POST 已返回，详情重读挂住
+    const during = within(dialog).getByTestId('asset-transitions').querySelectorAll('button');
+    expect([...during].every((b) => b.disabled)).toBe(true);
+    fireEvent.click(during[0] as HTMLElement);
+    expect(posts('/transitions')).toHaveLength(1);
+    release?.();
+    expect(await within(dialog).findByRole('button', { name: '标为可预览' })).toBeEnabled();
+    expect(within(dialog).queryByRole('alert')).toBeNull();
   });
 
   it.each([

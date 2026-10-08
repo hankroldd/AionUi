@@ -54,9 +54,9 @@ it('初始全部一次origin=all查询，显示600与50条；第2/12页显示服
   // 整页 50 行在 jsdom 里渲染本身就重：沿用本仓 CI 给 DOM 用例的 30 秒预算（vitest.config.ts），不随机器忙闲误报
 }, 30_000);
 it.each([
-  ['状态', '不可用', 'state', 'failed', '首页外失败-51.pdf'],
+  ['状态', '不可用', 'status_group', 'unavailable', '首页外失败-51.pdf'],
   ['类型', 'PDF', 'file_type', 'pdf', '首页外失败-51.pdf'],
-  ['来源', 'AI 生成的', 'origin_filter', 'outputs', '首页外产物-600.pdf'],
+  ['来源', 'AI 生成的', 'origin_group', 'ai_generated', '首页外产物-600.pdf'],
 ])('首页51之外匹配%s时查询后端、回1页并清selection', async (label, option, field, value, name) => {
   await mount();
   fireEvent.click(screen.getByText('2', { selector: '.arco-pagination-item' }));
@@ -65,9 +65,8 @@ it.each([
   await choose(label, option);
   await screen.findByRole('button', { name, exact: true });
   expect(lastQuery().get(field)).toBe(value);
-  // 一组对应多个 Bridge 取值：客户端按组重复带参（Bridge 现只认第一个，A200）
-  if (field === 'state') expect(lastQuery().getAll('state')).toEqual(['failed', 'unavailable']);
-  if (field === 'origin_filter') expect(lastQuery().getAll('origin_filter')).toEqual(['outputs', 'publication']);
+  expect(lastQuery().has('state')).toBe(false); // 分组参数不再展开成旧参数
+  expect(lastQuery().has('origin_filter')).toBe(false);
   expect(lastQuery().get('page')).toBe('1');
   expect(screen.queryByRole('region', { name: '所选资料的操作' })).toBeNull();
   expect(screen.queryByRole('button', { name: '第一页-1.md', exact: true })).toBeNull();
@@ -91,7 +90,7 @@ it('All↔Recent重新查询并清条件/输入/页/选择；仅layout切换保�
   nav('all');
   await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   expect(input()).toHaveValue('');
-  expect(lastQuery().has('state')).toBe(false);
+  expect(lastQuery().has('status_group')).toBe(false);
   expect(lastQuery().has('q')).toBe(false);
   expect(lastQuery().get('page')).toBe('1');
   expect(document.querySelector('.mcw-rc-grid')).not.toBeNull();

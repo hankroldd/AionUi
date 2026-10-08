@@ -54,7 +54,7 @@ afterEach(() => {
 });
 
 describe('产物展示边界', () => {
-  it('历史成功在名称旁显示“已发布到”小标记，最近失败的尝试另列；状态为 AI 可引用', () => {
+  it('历史成功在名称旁显示“已发布到”小标记，最近失败的尝试另列；状态仍是仅存档', () => {
     const r = output({
       published_to: [
         { publication_id: 'pub-original', source_id: 'src-fictional', status: 'failed', has_published: true },
@@ -68,9 +68,9 @@ describe('产物展示边界', () => {
       </>
     );
     expect(screen.getByTestId('mycowork-published-mark')).toHaveTextContent('已发布到 虚构库');
-    expect(screen.getByText('AI 可引用')).toBeInTheDocument();
+    expect(screen.getByText('仅存档')).toBeInTheDocument();
     expect(screen.getByText('发布失败')).toBeInTheDocument();
-    expect(screen.queryByText(/已生成|已发布成果|存档/)).toBeNull();
+    expect(screen.queryByText(/已生成|已发布成果/)).toBeNull();
   });
   it('排队不算成功：没有小标记，状态为仅存档；status 不足以猜历史成功', () => {
     const r = output({

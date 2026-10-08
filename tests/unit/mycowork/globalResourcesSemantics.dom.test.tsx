@@ -80,9 +80,9 @@ it('产物“更多”有发布到知识库；解析不到来源对话就不给�
   expect(writes()).toHaveLength(0);
 });
 it.each([
-  ['来源', 'origin_filter', 'imports'],
+  ['来源', 'origin_group', 'mine_uploaded'],
   ['类型', 'file_type', 'csv'],
-  ['状态', 'state', 'ready'],
+  ['状态', 'status_group', 'citable'],
   ['排序', 'sort', 'name'],
 ])('键盘Enter打开与选定%s，Escape关闭菜单', async (label, field, value) => {
   fixture(() => list(FIRST.slice(0, 2), 2));

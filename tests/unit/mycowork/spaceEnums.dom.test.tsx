@@ -4,6 +4,8 @@
  * 边界：只用真实 React/Arco 组件，不连 Bridge；参数怎么带给 Bridge 见 globalResourcesQuery。
  */
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
@@ -11,13 +13,23 @@ import { StateTag, TagList } from '@mycowork/ui/pages/resources/ItemParts.tsx';
 import { resourceText } from '@mycowork/ui/pages/resources/messages.ts';
 import {
   SOURCE_GROUPS,
-  SOURCE_ORIGINS,
   STATE_GROUPS,
-  STATE_VALUES,
   sourceGroupOf,
   stateGroupOf,
 } from '@mycowork/ui/pages/resources/resource-enums.ts';
 import type { Resource } from '@mycowork/ui/pages/resources/resource-client.ts';
+
+// 与 Bridge 的 services/bridge/tests/contract/resource-groups.test.ts 读同一份映射表（docs/contracts/resource-groups.md）
+const UI = process.env['MYCOWORK_UI_DIR'] ?? resolve(import.meta.dirname, '../../../../../packages/ui/src');
+type Case = {
+  name: string;
+  origin: Resource['origin'];
+  state: Resource['state'];
+  secret: boolean;
+  source_group: string;
+  status_group: string;
+};
+const CASES = JSON.parse(readFileSync(resolve(UI, '../../../fixtures/resource-groups/cases.json'), 'utf8')) as Case[];
 
 const text = resourceText('zh-CN');
 const en = resourceText('en');
@@ -43,29 +55,18 @@ describe('来源与状态枚举', () => {
     expect(SOURCE_GROUPS.map((g) => en.source[g])).toEqual(['Uploaded by me', 'AI-generated', 'From knowledge base']);
     expect(STATE_GROUPS.map((g) => en.status[g])).toEqual(['AI can cite', 'Processing', 'Unavailable', 'Archive only']);
   });
-  it('四个 origin 恰好各属一个来源组（互斥且穷尽）；已发布成果仍算 AI 生成的', () => {
-    const all = Object.values(SOURCE_ORIGINS).flat();
-    expect([...all].sort()).toEqual(['imports', 'knowledge_base', 'outputs', 'publication']);
-    expect(sourceGroupOf('publication')).toBe('ai');
-    expect(sourceGroupOf('outputs')).toBe('ai');
-  });
-  it('五个 state 恰好各属一个状态组；“不可用”合并失败与暂不可用', () => {
-    expect(Object.values(STATE_VALUES).flat().sort()).toEqual(['failed', 'indexing', 'ready', 'stored', 'unavailable']);
-    expect(STATE_VALUES.unavailable).toEqual(['failed', 'unavailable']);
-  });
-  it.each([
-    ['ready', 'AI 可引用', 'ready'],
-    ['indexing', '处理中', 'processing'],
-    ['failed', '不可用', 'unavailable'],
-    ['unavailable', '不可用', 'unavailable'],
-    ['stored', '仅存档', 'archived'],
-  ] as const)('state=%s 显示“%s”', (state, label, group) => {
-    const r = res({ state });
-    expect(stateGroupOf(r)).toBe(group);
-    render(<StateTag r={r} text={text} />);
-    expect(screen.getByText(label).closest('.mcw-rc-state')).toHaveAttribute('data-status', group);
-  });
-  it('不可用的两种原因悬停时仍分得开', async () => {
+  it.each(CASES.map((c) => [c.name, c] as const))(
+    '映射表 %s：行上显示的分组 = 表里的分组（只落在一个来源组、一个状态组）',
+    (_name, c) => {
+      const r = res({ origin: c.origin, state: c.state, secret: c.secret });
+      expect(sourceGroupOf(r.origin)).toBe(c.source_group);
+      expect(stateGroupOf(r)).toBe(c.status_group);
+      expect(SOURCE_GROUPS.filter((g) => g === sourceGroupOf(r.origin))).toHaveLength(1);
+      render(<StateTag r={r} text={text} />);
+      expect(document.querySelector('.mcw-rc-state')).toHaveAttribute('data-status', c.status_group);
+    }
+  );
+  it('“不可用”的两种原因悬停时仍分得开', async () => {
     const { rerender } = render(<StateTag r={res({ state: 'failed' })} text={text} />);
     fireEvent.mouseEnter(screen.getByText('不可用'));
     expect(await screen.findByText(/入库失败：解析或入库没成功/)).toBeInTheDocument();
@@ -73,17 +74,17 @@ describe('来源与状态枚举', () => {
     fireEvent.mouseEnter(screen.getByText('不可用'));
     expect(await screen.findByText(/暂不可用：知识库暂时读不到/)).toBeInTheDocument();
   });
-  it('产物：没发布过 = 仅存档，发布过 = AI 可引用；Secret 的 ready 仍显示 AI 不引用', () => {
-    const out = res({ origin: 'outputs', state: 'stored', published_to: [] });
-    expect(stateGroupOf(out)).toBe('archived');
+  it('Secret 的 ready 行写“AI 不引用”，归仅存档；产物原稿发布过也仍是仅存档', () => {
+    const secret = res({ secret: true });
+    expect(stateGroupOf(secret)).toBe('archive_only');
+    render(<StateTag r={secret} text={text} />);
+    expect(screen.getByText('AI 不引用')).toBeInTheDocument();
     const published = res({
       origin: 'outputs',
       state: 'stored',
       published_to: [{ publication_id: 'p', source_id: 's', status: 'published', has_published: true }],
     });
-    expect(stateGroupOf(published)).toBe('ready');
-    render(<StateTag r={res({ secret: true })} text={text} />);
-    expect(screen.getByText('AI 不引用')).toBeInTheDocument();
+    expect(stateGroupOf(published)).toBe('archive_only');
   });
 });
 

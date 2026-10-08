@@ -13,7 +13,11 @@ import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { MYCOWORK_MEMORY_SIDER_ID, MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-sider-ids';
-import { useGuidResourceSelection, useOwnerKey, useResourceQuestionNavigation } from '@/renderer/mycowork-resource-navigation';
+import {
+  useGuidResourceSelection,
+  useOwnerKey,
+  useResourceQuestionNavigation,
+} from '@/renderer/mycowork-resource-navigation';
 import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
 import MarkdownView from '@/renderer/components/Markdown';
 import { MarkdownViewer } from '@/renderer/pages/conversation/Preview/components/viewers';
@@ -33,6 +37,7 @@ import {
   ScopeChip,
   ScopeStrip,
   bindScopedConversation,
+  isSceneAssistant,
   prepareScopedSession,
 } from '@mycowork/ui';
 
@@ -48,7 +53,14 @@ export const GuidScopeSlot: React.FC = () => {
   const projectId = typeof state?.mycoworkProjectId === 'string' ? state.mycoworkProjectId : undefined;
   // 从“空间”的“用这些资料提问”进来时，范围由路由意图一次性装入（navigation-intent.md）；账号不符 = 空必选集
   const { initialScope, scopeKey } = useGuidResourceSelection(ownerKey);
-  return <ScopeChip key={`${scopeKey}:${ownerKey ?? ''}`} lang={current.language} projectId={projectId} initialScope={initialScope} />;
+  return (
+    <ScopeChip
+      key={`${scopeKey}:${ownerKey ?? ''}`}
+      lang={current.language}
+      projectId={projectId}
+      initialScope={initialScope}
+    />
+  );
 };
 
 /**
@@ -116,15 +128,22 @@ type CreateExtra = {
 /**
  * Mount point: before conversation.create, if a scope is selected for this turn, add the Bridge-issued
  * session MCP server (plan token) and workspace to `extra` (MyCowork ADR-0012).
- * No scope → `extra` unchanged. Bridge failure → throws, so the caller aborts instead of sending without scope.
+ * No scope → `extra` unchanged (scene assistants: an explicit empty plan, A197; pass the assistant id as 3rd argument). Bridge failure → throws, so the caller aborts instead of sending without scope.
  * [mycowork] D115：带范围的 Aion CLI 会话不以 YOLO 创建——aionrs 以 yolo 创建会把自动批准固定进会话配置，之后切回也不恢复；
  * 未指定时助手默认值可能是 yolo（固定值或“记住上次”），同样改成 default。调用方传入的 overrides 对象原地修改。
  */
 export const withGuidScope = async <T extends CreateExtra>(
   extra: T,
-  overrides?: { permission?: string }
+  overrides?: { permission?: string },
+  assistantId?: string
 ): Promise<T> => {
-  const scoped = await prepareScopedSession(i18n.language, (extra.default_files?.length ?? 0) > 0);
+  // [mycowork] A197: the scene assistant ("Report / PPT") also gets the Bridge tools with an explicit EMPTY scope plan when
+  // nothing is selected; any other assistant (or an unknown one) keeps the plain no-scope behaviour above.
+  const scoped = await prepareScopedSession(
+    i18n.language,
+    (extra.default_files?.length ?? 0) > 0,
+    isSceneAssistant(assistantId)
+  );
   if (!scoped) return extra;
   if (overrides && (!overrides.permission || overrides.permission === 'yolo')) overrides.permission = 'default';
   return {

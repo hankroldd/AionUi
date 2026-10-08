@@ -224,10 +224,10 @@ describe('OfficeResourcesSlot', () => {
     expect(within(weekly).getByText('青禾库')).toBeInTheDocument();
     expect(within(weekly).getAllByText('今天 10:13').length).toBeGreaterThan(0);
     expect(within(weekly).getByText('AI 可引用')).toBeInTheDocument();
-    expect(within(draft).getByText('导入')).toBeInTheDocument();
+    expect(within(draft).getByText('我上传的')).toBeInTheDocument();
     expect(within(draft).getByRole('button', { name: '工作稿.pptx' })).toHaveAttribute('type', 'button');
     expect(screen.queryByText(/个版本/)).toBeNull(); // 版本数在版本与变化页看（D146）
-    expect(within(draft).getByText('存档（AI 不引用）')).toBeInTheDocument();
+    expect(within(draft).getByText('仅存档')).toBeInTheDocument();
     expect(within(draft).getByText('风险')).toBeInTheDocument();
     expect(screen.queryByText(/T\d\d:\d\d/)).toBeNull(); // 不直出 ISO
   });

@@ -52,7 +52,7 @@ it('旧state请求晚到不能覆盖新的type筛选', async () => {
   );
   render(<ResourcesPage lang='zh-CN' />);
   await screen.findByRole('button', { name: '第一页-1.md', exact: true });
-  await choose('状态', '入库失败');
+  await choose('状态', '不可用');
   await waitFor(() => expect(lastQuery().get('state')).toBe('failed'));
   await choose('类型', 'PDF');
   await screen.findByRole('button', { name: '新PDF.pdf' });
@@ -118,7 +118,7 @@ it('input变化当帧隐藏旧列表，300ms窗口内旧filter响应不能显示
   );
   render(<ResourcesPage lang='zh-CN' />);
   await screen.findByRole('button', { name: '第一页-1.md', exact: true });
-  await choose('状态', '入库失败');
+  await choose('状态', '不可用');
   fireEvent.change(input(), { target: { value: '新查询' } });
   expect(screen.queryByTestId('mycowork-resource-item')).toBeNull();
   const before = reads().length;

@@ -27,7 +27,11 @@ vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover',
     onConversationSelect: () => void;
   }) => renderTrigger({ onClick: onConversationSelect }),
 }));
-import SecondaryHeader, { mycoworkSiderId, useMyCoworkSecondaryCollapse } from '@/renderer/mycowork-secondary';
+import SecondaryHeader, {
+  mycoworkNoSiderRoute,
+  mycoworkSiderId,
+  useMyCoworkSecondaryCollapse,
+} from '@/renderer/mycowork-secondary';
 
 beforeEach(() => {
   localStorage.clear();
@@ -87,6 +91,13 @@ describe('secondary header', () => {
     expect(mycoworkSiderId('/scheduledx')).toBeNull();
     for (const path of ['/office/resources/res_fixture/versions', '/office/imports', '/office/knowledge'])
       expect(mycoworkSiderId(path)).toBeNull();
+  });
+
+  it('routes without secondary content are route-collapsed on desktop: scheduled, versions and edit pages; not Home, Space or Memory', () => {
+    for (const path of ['/scheduled', '/scheduled/job-1', '/office/resources/res_1/versions', '/office/edit/eds_1'])
+      expect(mycoworkNoSiderRoute(path), path).toBe(true);
+    for (const path of ['/guid', '/conversation/c1', '/office/space', '/office/trash', '/office/memory', '/scheduledx'])
+      expect(mycoworkNoSiderRoute(path), path).toBe(false);
   });
 
   it('Home uses native search selection and the Layout collapse action', () => {

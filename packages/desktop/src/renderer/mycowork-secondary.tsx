@@ -1,7 +1,7 @@
 /**
  * 文件：renderer/mycowork-secondary.tsx
  * 职责：原生二级栏头部与桌面收起偏好适配，复用会话搜索和既有抽屉。
- * 边界：手机开关不覆盖桌面偏好；空间/记忆内容在对应切片接入；定时任务只放一句说明（W4-8，不显示首页会话列表）。
+ * 边界：手机开关不覆盖桌面偏好；空间/记忆内容在对应切片接入；定时任务在桌面不显示二级栏（由 Layout 按路由临时收起），手机抽屉里只放一句说明（W4-8，不显示首页会话列表）。
  * 关联：ADR-0022；PR11 W4-2。
  */
 import { Button, Tooltip } from '@arco-design/web-react';
@@ -15,7 +15,7 @@ import { MYCOWORK_SCHEDULED_SIDER_ID } from '@renderer/mycowork-sider-ids';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import ConversationSearchPopover from '@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover';
 
-export { mycoworkSiderId } from '@renderer/mycowork-sider-ids';
+export { mycoworkNoSiderRoute, mycoworkSiderId } from '@renderer/mycowork-sider-ids';
 
 const COLLAPSE_KEY = 'mycowork:sider-collapsed';
 

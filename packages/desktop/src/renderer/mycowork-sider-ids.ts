@@ -16,3 +16,10 @@ export const mycoworkSiderId = (path: string): string | null =>
       : /^\/scheduled(\/|$)/.test(path)
         ? MYCOWORK_SCHEDULED_SIDER_ID
         : null;
+
+/**
+ * 桌面上不显示二级栏的路由（按路由临时收起，不写用户的收起偏好）：没有自己二级内容的 Office 页（版本页、编辑页、导入记录等）
+ * 与定时任务页（任务列表与新建都在 AionUi 原生主区，W4-8）。
+ */
+export const mycoworkNoSiderRoute = (path: string): boolean =>
+  (path.startsWith('/office/') && mycoworkSiderId(path) === null) || /^\/scheduled(\/|$)/.test(path);

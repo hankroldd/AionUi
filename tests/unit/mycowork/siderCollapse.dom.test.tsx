@@ -103,6 +103,17 @@ describe('[mycowork] sidebar collapse', () => {
     }
   );
 
+  it.each(['/scheduled', '/scheduled/job-1', '/office/resources/res_1/versions'])(
+    'desktop %s is shown without the secondary sider: route-collapsed, not written to the preference',
+    (path) => {
+      shortcut.pathname = path;
+      const { container } = render(<Layout sider={<SiderStub />} />);
+      const sider = container.querySelector('.layout-sider') as HTMLElement;
+      expect(sider.style.visibility).toBe('hidden');
+      expect(localStorage.getItem('mycowork:sider-collapsed')).not.toBe('true');
+    }
+  );
+
   it.each([
     [237, '0px'],
     [238, '238px'],

@@ -12,7 +12,7 @@ import WindowControls from '../WindowControls';
 import { WORKSPACE_STATE_EVENT, dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
 import type { WorkspaceStateDetail } from '@renderer/utils/workspace/workspaceEvents';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
-import { isMyCoworkHomeRoute, mycoworkSiderId } from '@/renderer/mycowork-secondary';
+import { isMyCoworkHomeRoute, mycoworkNoSiderRoute } from '@/renderer/mycowork-secondary';
 import { useNavigationHistory } from '@/renderer/hooks/context/NavigationHistoryContext';
 import { useFeedback } from '@/renderer/hooks/context/FeedbackContext';
 import { resolveFeedbackModule } from '@/renderer/services/feedback/resolveFeedbackModule';
@@ -150,7 +150,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   // 统一在标题栏左侧展示主侧栏开关 / Always expose sidebar toggle on titlebar left side
   const showSiderToggle =
     Boolean(layout?.setSiderCollapsed) &&
-    (layout?.isMobile || !location.pathname.startsWith('/office/') || mycoworkSiderId(location.pathname) !== null);
+    (layout?.isMobile || !mycoworkNoSiderRoute(location.pathname));
   const showBackToChatButton = Boolean(layout?.isMobile && isSettingsRoute);
   const siderTooltip = layout?.siderCollapsed
     ? t('common.expandMore', { defaultValue: 'Expand sidebar' })

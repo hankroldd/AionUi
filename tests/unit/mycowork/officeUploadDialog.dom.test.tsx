@@ -145,7 +145,7 @@ describe('上传弹窗', () => {
     expect(bodyOf().source_id).toBeUndefined();
     expect(bodyOf().secret).toBeUndefined();
     expect(bodyOf().tag_ids).toBeUndefined();
-    expect((await within(dialog).findAllByText('仅存档')).length).toBeGreaterThan(0);
+    expect(await within(dialog).findByText('仅存档')).toBeInTheDocument();
     await waitFor(() => expect(reads().length).toBeGreaterThan(before));
   });
 
@@ -204,7 +204,7 @@ describe('上传弹窗', () => {
     const before = reads().length;
     fireEvent.click(within(dialog).getByRole('button', { name: '立即重试' }));
     await flush(0);
-    expect(within(dialog).getAllByText('仅存档').length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('已完成')).toBeInTheDocument();
     expect(reads().length).toBeGreaterThan(before);
   });
 

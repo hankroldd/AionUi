@@ -205,7 +205,7 @@ describe('ZIP 导入入口', () => {
     expect(screen.queryByText(/已在待确认队列里/)).toBeNull();
   });
 
-  it('入库状态按去向分：进知识库的写“AI 可引用”，仅存档的写“仅存档”', async () => {
+  it('入库状态按去向分：进知识库的写“AI 可引用”，仅存档的写“已完成”（去向说明另写“仅存档”，同一行不重复同一个词）', async () => {
     bridge({
       created: batch([row({ seq: 0, source_id: 'src_a', upload_id: 'up_1' }), row({ seq: 1, source_id: null, upload_id: 'up_2', file_name: '乙.md' })]),
     });
@@ -215,6 +215,8 @@ describe('ZIP 导入入口', () => {
     fireEvent.click(confirmButton());
     const items = await screen.findAllByTestId('import-item');
     expect(items[0]).toHaveTextContent('AI 可引用');
-    expect(items[1]).toHaveTextContent('仅存档');
+    expect(items[1]).toHaveTextContent('已完成');
+    expect(items[1]?.querySelector('.arco-tag')).toHaveTextContent(/^已完成$/);
+    expect(within(items[1] as HTMLElement).getAllByText('仅存档')).toHaveLength(1);
   });
 });

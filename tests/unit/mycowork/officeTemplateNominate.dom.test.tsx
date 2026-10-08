@@ -373,11 +373,7 @@ describe('result', () => {
     expect(rows[7]).toHaveTextContent('备注或批注未能检查');
     const zone = await within(result).findByTestId('asset-transitions'); // 审批区已加载
     expect(zone).toHaveTextContent('还有 8 条去事实化标记，不能批准');
-    expect(
-      within(zone)
-        .getAllByRole('button')
-        .map((b) => b.textContent)
-    ).toEqual(['退回草稿']); // 只有接口列的退回
+    expect(within(zone).queryByRole('button')).toBeNull(); // 带标记永远批准不了，退回草稿也清不掉标记：一个按钮都不给
     expect(within(result).queryByRole('button', { name: '批准' })).toBeNull();
   });
 
@@ -392,11 +388,7 @@ describe('result', () => {
     const zone = await within(dialog).findByTestId('asset-transitions');
     expect(zone).toHaveTextContent('不能批准');
     expect(within(zone).queryByRole('button', { name: '批准' })).toBeNull();
-    expect(
-      within(zone)
-        .getAllByRole('button')
-        .map((b) => b.textContent)
-    ).toEqual(['退回草稿']); // 合同允许的退回（A231）仍给
+    expect(within(zone).queryByRole('button')).toBeNull(); // 带标记永远批准不了，退回草稿也清不掉标记：一个按钮都不给
   });
 
   it('waiting note is only for a non-owner on a candidate that is neither approved nor deprecated; an owner with buttons does not see it', async () => {

@@ -153,4 +153,10 @@ describe('home scope chip for the scene assistant', () => {
     chip(SCENE);
     expect(screen.getByRole('button', { name: '资料范围：产品库' })).toBeInTheDocument();
   });
+
+  it('an empty required file set is not "no sources selected": the chip keeps the plain wording', () => {
+    setScopeSelection([], [], []);
+    chip(SCENE);
+    expect(screen.getByRole('button', { name: '资料范围：未选择' })).toBeInTheDocument();
+  });
 });

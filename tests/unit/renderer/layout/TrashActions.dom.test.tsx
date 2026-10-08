@@ -438,3 +438,25 @@ it.each([
   expect(screen.queryByText('回收站是空的')).toBeNull();
   expect(screen.getByRole('button', { name: '清空回收站' })).toBeDisabled();
 });
+
+it.each([
+  ['永久删除 虚构资料1.md', 'zh-CN', '如果它进过存档库，那里的副本也会一并删除；删除前已被解析过一次的内容无法追回。'],
+  ['清空回收站', 'zh-CN', '如果它进过存档库，那里的副本也会一并删除；删除前已被解析过一次的内容无法追回。'],
+  [
+    'Delete permanently 虚构资料1.md',
+    'en-US',
+    'If it was ever in the archive, its copy there is deleted too; content already parsed once before deletion cannot be recovered.',
+  ],
+  [
+    'Empty trash',
+    'en-US',
+    'If it was ever in the archive, its copy there is deleted too; content already parsed once before deletion cannot be recovered.',
+  ],
+])('confirmation of %s says archive copies go too and parsed content is unrecoverable', async (name, lang, hint) => {
+  render(<TrashPage lang={lang} onBack={vi.fn()} />);
+  await screen.findByText('虚构资料1.md');
+  const target = name.includes('虚构') ? row(1) : within(document.body);
+  fireEvent.click(target.getByRole('button', { name }));
+  await waitFor(() => expect(dialog().getByText(hint)).toBeTruthy());
+  expect(calls('/purge')).toHaveLength(0);
+});

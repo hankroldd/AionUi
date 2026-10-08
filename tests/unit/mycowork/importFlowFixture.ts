@@ -72,5 +72,6 @@ export async function addFiles(container: HTMLElement, ...files: File[]) {
   await act(async () => fireEvent.change(input, { target: { files } }));
 }
 export const md = (name: string, text = 'hello') => new File([text], name, { type: 'text/markdown' });
-export const zip = (name: string, modified = 1) => new File(['PK'], name, { type: 'application/zip', lastModified: modified });
+export const zip = (name: string, modified = 1, body = 'PK') =>
+  new File([body], name, { type: 'application/zip', lastModified: modified });
 export const confirmButton = (lang = 'zh-CN') => screen.getByRole('button', { name: lang === 'en' ? 'Confirm import' : '确认导入' });

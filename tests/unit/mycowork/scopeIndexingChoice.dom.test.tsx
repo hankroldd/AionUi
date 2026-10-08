@@ -40,7 +40,7 @@ const TOKEN = {
   session_mcp_server: { id: 'mycowork_bridge', name: 'mycowork_bridge', transport: { type: 'streamable_http', url: 'http://x/mcp', headers: {} } },
   workspace: '/data/ws/1',
 };
-const USE_READY = '先用已就绪的 5 份（还有 3 份处理中，不会被引用）';
+const USE_READY = '先用已就绪的 5 份（另有 3 份处理中，现在读不到）';
 const urls = () => fetchMock.mock.calls.map(([u]) => String(u));
 
 function bridge(p: object) {
@@ -149,6 +149,26 @@ describe('发送前：资料还在处理中', () => {
     await waitFor(() => expect(document.activeElement).toBe(box));
   });
 
+  it('用户在答复前后把焦点放到了别处：不抢回来', async () => {
+    bridge(plan([2, 1], [3, 2]));
+    const box = document.body.appendChild(document.createElement('textarea'));
+    const other = document.body.appendChild(document.createElement('input'));
+    box.focus();
+    const { result, dialog } = await send();
+    fireEvent.click(within(dialog).getByRole('button', { name: '等全部就绪再问' }));
+    await act(async () => void (await result));
+    other.focus();
+    await new Promise((r) => setTimeout(r, 450));
+    expect(document.activeElement).toBe(other);
+  });
+
+  it('确认框带 mcw-modal 类名（窄屏不撑破视口）', async () => {
+    bridge(plan([2, 1], [3, 2]));
+    const { dialog } = await send();
+    expect(dialog).toHaveClass('mcw-modal');
+    fireEvent.click(within(dialog).getByRole('button', { name: '等全部就绪再问' }));
+  });
+
   it('范围在弹窗期间被改动：不安装计划，按范围已变化拒发', async () => {
     bridge(plan([2, 1], [3, 2]));
     const { result, settled, dialog } = await send();
@@ -163,14 +183,14 @@ describe('发送前：资料还在处理中', () => {
     lang.value = 'en';
     bridge(plan([2, 1], [3, 2]));
     const { result, settled, dialog } = await send();
-    expect(within(dialog).getByRole('button', { name: 'Use the 5 ready now (3 still processing, will not be cited)' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Use the 5 ready now (3 more still processing, cannot be read yet)' })).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Wait until all are ready' }));
     await act(async () => void (await result));
     expect(settled()).toContain('Not sent: Some sources are still processing');
   });
 });
 
-describe('范围条：本轮未包含处理中的资料', () => {
+describe('范围条：发送时有资料还在处理中', () => {
   const context = (...groups: Array<[number, number]>) => ({
     ...plan(...groups),
     used: [],
@@ -183,14 +203,14 @@ describe('范围条：本轮未包含处理中的资料', () => {
     return screen.findByTestId('mycowork-scope-strip');
   }
 
-  it('有处理中的资料：如实写“本轮未包含 M 份处理中的资料”', async () => {
+  it('有处理中的资料：如实写“发送时有 M 份资料还在处理中（处理完后本轮可能读到）”', async () => {
     const el = await strip(context([5, 1], [2, 2]));
-    await waitFor(() => expect(el).toHaveTextContent('本轮未包含 3 份处理中的资料'));
+    await waitFor(() => expect(el).toHaveTextContent('发送时有 3 份资料还在处理中（处理完后本轮可能读到）'));
   });
 
   it('全部就绪：不写这句', async () => {
     const el = await strip(context([5, 0]));
     await waitFor(() => expect(el).toHaveTextContent('AI 可引用 5'));
-    expect(el).not.toHaveTextContent('本轮未包含');
+    expect(el).not.toHaveTextContent('发送时有');
   });
 });

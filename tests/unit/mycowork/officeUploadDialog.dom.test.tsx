@@ -106,7 +106,7 @@ describe('上传弹窗', () => {
     const dialog = await openDialog();
     expect(window.location.hash).not.toContain('imports');
     expect(within(dialog).getByText('上传文件')).toBeInTheDocument();
-    expect(selectedKb(dialog)).toBe('不选知识库（存档，AI 不引用）');
+    expect(selectedKb(dialog)).toBe('不选知识库（仅存档）');
     expect(within(dialog).getByLabelText('标签（可选）')).toBeInTheDocument();
     expect(within(dialog).getByRole('checkbox', { name: /设为 Secret：只存本机，不进知识库和存档库，AI 读不到/ })).toBeInTheDocument();
     for (const purpose of ['参考材料', '可编辑工作文件', '模板或优秀样例', '图示素材', '临时分析'])
@@ -145,7 +145,7 @@ describe('上传弹窗', () => {
     expect(bodyOf().source_id).toBeUndefined();
     expect(bodyOf().secret).toBeUndefined();
     expect(bodyOf().tag_ids).toBeUndefined();
-    expect(await within(dialog).findByText('存档（AI 不引用）')).toBeInTheDocument();
+    expect((await within(dialog).findAllByText('仅存档')).length).toBeGreaterThan(0);
     await waitFor(() => expect(reads().length).toBeGreaterThan(before));
   });
 
@@ -194,7 +194,7 @@ describe('上传弹窗', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: '只重试失败项' }));
     await waitFor(() => expect(calls('POST', '/retry')).toHaveLength(1));
     expect(JSON.parse(String(calls('POST', '/retry')[0]?.[1]?.body))).toEqual({ expected_revision: 1 });
-    expect(await within(dialog).findByText('就绪')).toBeInTheDocument();
+    expect(await within(dialog).findByText('AI 可引用')).toBeInTheDocument();
   });
 
   it('读取失败后手动“立即重试”读到完成：空间列表也重读', async () => {
@@ -204,7 +204,7 @@ describe('上传弹窗', () => {
     const before = reads().length;
     fireEvent.click(within(dialog).getByRole('button', { name: '立即重试' }));
     await flush(0);
-    expect(within(dialog).getByText('就绪')).toBeInTheDocument();
+    expect(within(dialog).getAllByText('仅存档').length).toBeGreaterThan(0);
     expect(reads().length).toBeGreaterThan(before);
   });
 
@@ -265,7 +265,7 @@ describe('上传弹窗', () => {
     bridge();
     const dialog = await openDialog('en');
     expect(within(dialog).getByText('Upload files')).toBeInTheDocument();
-    expect(dialog.querySelector('.arco-select-view-value')?.textContent).toBe('No knowledge base (archive, not used by AI)');
+    expect(dialog.querySelector('.arco-select-view-value')?.textContent).toBe('No knowledge base (archive only)');
     expect(within(dialog).getByRole('checkbox', { name: /Mark as Secret: kept on this machine only/ })).toBeInTheDocument();
   });
 

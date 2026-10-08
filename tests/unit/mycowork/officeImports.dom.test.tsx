@@ -114,7 +114,7 @@ describe('OfficeImportsSlot', () => {
       items: [{ upload_id: 'up_1', purpose: 'reference', duplicate_action: 'reference_existing' }],
     });
     expect(sent.secret).toBeUndefined();
-    expect(await screen.findByText('就绪', {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByText('AI 可引用', {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '查看原件' })).toHaveAttribute(
       'href',
       '/bridge/v1/resources/res_1/preview'
@@ -140,7 +140,7 @@ describe('OfficeImportsSlot', () => {
     render(<OfficeImportsSlot />);
     await drop();
     expect(await screen.findByText('与你已导入的 1 个资源内容相同')).toBeInTheDocument();
-    expect(screen.getByText('不选知识库（存档，AI 不引用）')).toBeInTheDocument();
+    expect(screen.getByText('不选知识库（仅存档）')).toBeInTheDocument();
     fireEvent.click(screen.getByText('另登记为独立来源'));
     await waitFor(() => expect(screen.getByRole('button', { name: '确认导入' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
@@ -148,7 +148,7 @@ describe('OfficeImportsSlot', () => {
     const body = JSON.parse(String(calls('POST', '/import-batches')[0]?.[1]?.body));
     expect(body.items[0]).toMatchObject({ purpose: 'working', duplicate_action: 'register_separately' });
     expect(body.source_id).toBeUndefined();
-    expect(await screen.findByText('存档（AI 不引用）')).toBeInTheDocument();
+    expect(await screen.findByText('仅存档')).toBeInTheDocument();
   });
 
   it('shows the Bridge limit when an upload is too large, and cannot confirm', async () => {
@@ -221,7 +221,7 @@ describe('OfficeImportsSlot', () => {
       await tick(4000); // 退避后再读，成功
       expect(reads()).toHaveLength(2);
       expect(screen.queryByText('读取进度失败，正在重试')).toBeNull();
-      expect(screen.getByText('就绪')).toBeInTheDocument();
+      expect(screen.getByText('AI 可引用')).toBeInTheDocument();
       await tick(60_000);
       expect(reads()).toHaveLength(2); // 完成后不再读
     });
@@ -236,7 +236,7 @@ describe('OfficeImportsSlot', () => {
       fireEvent.click(screen.getByRole('button', { name: '立即重试' }));
       await tick(0);
       expect(reads()).toHaveLength(6);
-      expect(screen.getByText('就绪')).toBeInTheDocument();
+      expect(screen.getByText('AI 可引用')).toBeInTheDocument();
     });
 
     it('unmount stops polling', async () => {

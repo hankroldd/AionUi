@@ -98,7 +98,7 @@ describe('ZIP 导入入口', () => {
     await screen.findByText('已上传，待确认');
     fireEvent.click(confirmButton());
     const report = await screen.findByTestId('import-archive');
-    expect(within(report).getByRole('alert')).toHaveTextContent('包里有指向包外的路径，已整包拒绝');
+    expect(within(report).getByRole('alert')).toHaveTextContent('包里有不安全的路径或文件名（指向包外、绝对路径，或含控制 / 欺骗显示的字符），已整包拒绝');
     expect(within(report).getByText('整包拒绝，没有展开任何文件')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '只重试失败项' })).toBeNull();
     expect(screen.getByRole('button', { name: '再导入一批' })).toBeInTheDocument();
@@ -147,5 +147,74 @@ describe('ZIP 导入入口', () => {
     fireEvent.click(confirmButton('en'));
     expect(within(await screen.findByTestId('import-archive')).getByRole('alert')).toHaveTextContent('abnormal compression ratio');
     expect(screen.getByText('Rejected as a whole; nothing was extracted')).toBeInTheDocument();
+  });
+
+  it('未知原因码不显示空白：整包拒绝与跳过各有带原因码的兜底说明；archives 条目缺 skipped 不抛异常', async () => {
+    const odd = { upload_id: 'up_1', file_name: '怪包.zip', outcome: 'rejected', reject_reason: 'future_reason', extracted: 0 };
+    bridge({ created: batch([rejectedItem], [odd as object]) });
+    render(<ImportsPage lang='zh-CN' />);
+    await addFiles(inFlow(), zip('怪包.zip'));
+    await screen.findByText('已上传，待确认');
+    fireEvent.click(confirmButton());
+    expect(within(await screen.findByTestId('import-archive')).getByRole('alert')).toHaveTextContent(
+      '这个压缩包未通过安全检查，已整包拒绝（原因码：future_reason）',
+    );
+  });
+
+  it('未知跳过原因显示“已跳过（原因码：X）”', async () => {
+    const odd = { ...expanded, skipped: [{ path: 'a/b.bin', reason: 'future_skip' }] };
+    bridge({ created: batch([archiveItem('docs/a.md')], [odd]) });
+    render(<ImportsPage lang='zh-CN' />);
+    await addFiles(inFlow(), zip('资料包.zip'));
+    await screen.findByText('已上传，待确认');
+    fireEvent.click(confirmButton());
+    expect(await screen.findByText(/已跳过（原因码：future_skip）/)).toBeInTheDocument();
+  });
+
+  it('批次里有两个 ZIP：各项的包内路径按 upload_id 对应到各自的 ZIP', async () => {
+    const second = { ...expanded, upload_id: 'up_2', file_name: '第二包.zip', extracted: 1, skipped: [] };
+    bridge({
+      created: batch(
+        [
+          archiveItem('a/甲.md'),
+          row({ seq: 1, upload_id: 'up_y', file_name: '乙.md', archive: { upload_id: 'up_2', path: 'b/乙.md', notice: null } }),
+        ],
+        [expanded, second],
+      ),
+    });
+    render(<ImportsPage lang='zh-CN' />);
+    await addFiles(inFlow(), zip('资料包.zip'), zip('第二包.zip', 5));
+    await waitFor(() => expect(screen.getAllByText('已上传，待确认')).toHaveLength(2));
+    fireEvent.click(confirmButton());
+    expect(await screen.findByText('来自 资料包.zip：a/甲.md')).toBeInTheDocument();
+    expect(screen.getByText('来自 第二包.zip：b/乙.md')).toBeInTheDocument();
+  });
+
+  it('只有大小不同的同名 ZIP 不算同一个；“再导入一批”清掉指纹后同一个 ZIP 可再加入', async () => {
+    bridge({ created: batch([archiveItem('docs/a.md')], [expanded]) });
+    render(<ImportsPage lang='zh-CN' />);
+    await addFiles(inFlow(), zip('资料包.zip', 1, 'PK'));
+    await screen.findByText('已上传，待确认');
+    await addFiles(inFlow(), zip('资料包.zip', 1, 'PKxx'));
+    await waitFor(() => expect(screen.getAllByTestId('import-draft')).toHaveLength(2));
+    fireEvent.click(confirmButton());
+    await screen.findByTestId('import-archive');
+    fireEvent.click(screen.getByRole('button', { name: '再导入一批' }));
+    await addFiles(inFlow(), zip('资料包.zip', 1, 'PK'));
+    await waitFor(() => expect(screen.getAllByTestId('import-draft')).toHaveLength(1));
+    expect(screen.queryByText(/已在待确认队列里/)).toBeNull();
+  });
+
+  it('入库状态按去向分：进知识库的写“AI 可引用”，仅存档的写“仅存档”', async () => {
+    bridge({
+      created: batch([row({ seq: 0, source_id: 'src_a', upload_id: 'up_1' }), row({ seq: 1, source_id: null, upload_id: 'up_2', file_name: '乙.md' })]),
+    });
+    render(<ImportsPage lang='zh-CN' />);
+    await addFiles(inFlow(), md('甲.md'), md('乙.md'));
+    await waitFor(() => expect(screen.getAllByText('已上传，待确认')).toHaveLength(2));
+    fireEvent.click(confirmButton());
+    const items = await screen.findAllByTestId('import-item');
+    expect(items[0]).toHaveTextContent('AI 可引用');
+    expect(items[1]).toHaveTextContent('仅存档');
   });
 });

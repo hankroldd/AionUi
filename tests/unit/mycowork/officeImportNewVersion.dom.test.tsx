@@ -12,7 +12,14 @@ import { ImportsPage } from '@mycowork/ui';
 import { addFiles, batch, bodyOf, bridge, confirmButton, fetchMock, md, posts, reply, row, zip, type Opts } from './importFlowFixture';
 
 const inFlow = () => screen.getByTestId('mycowork-upload-flow');
-const res = (id: string, name: string, over: object = {}) => ({ resource_id: id, file_name: name, secret: false, ...over });
+const res = (id: string, name: string, over: object = {}) => ({
+  resource_id: id,
+  file_name: name,
+  secret: false,
+  source_id: null,
+  updated_at: '2026-10-01T02:00:00Z',
+  ...over,
+});
 const found = (...items: object[]): Opts['resources'] => () => ({ page: 1, page_size: 50, total: items.length, items });
 const lookups = () =>
   fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/bridge/v1/resources?')).map(([url]) => new URLSearchParams(String(url).split('?')[1]));
@@ -33,7 +40,7 @@ describe('作为新版本导入', () => {
   it('有本人同名资源：出三选一，默认“另存为独立资料”，请求不带 target_resource_id', async () => {
     bridge({ resources: found(res('res_old', '周报.md')) });
     await add();
-    expect(screen.getByText('你已有同名资料“周报.md”，内容不同')).toBeInTheDocument();
+    expect(screen.getByText(/你已有同名资料“周报.md”，内容不同/)).toBeInTheDocument();
     const group = screen.getByRole('radiogroup');
     expect(within(group).getAllByRole('radio').map((r) => r.parentElement?.textContent)).toEqual([
       '作为“周报.md”的新版本',
@@ -159,9 +166,73 @@ describe('作为新版本导入', () => {
     render(<ImportsPage lang='en' />);
     await addFiles(inFlow(), md('r.md'));
     await screen.findByText('Uploaded, awaiting confirmation');
-    expect(screen.getByText('You already have a resource named “r.md” with different content')).toBeInTheDocument();
+    expect(screen.getByText(/You already have a resource named “r.md” with different content/)).toBeInTheDocument();
     fireEvent.click(within(screen.getByRole('radiogroup')).getByText('As a new version of “r.md”'));
     fireEvent.click(confirmButton('en'));
     expect(await screen.findByText('Became version 2 of “r.md”')).toBeInTheDocument();
+  });
+
+  it('后端拒绝新版本项（目标已删 / 无权，404）：提示改选独立资料；改选后结果不写“已成为”', async () => {
+    bridge({ resources: found(res('res_old', '周报.md')), created: batch([row({ resource_id: 'res_old' })]) });
+    const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<unknown>;
+    let first = true;
+    fetchMock.mockImplementation(async (u: string, i?: RequestInit) => {
+      if (u === '/bridge/v1/import-batches' && i?.method === 'POST' && first) {
+        first = false;
+        return reply(404, { error: { code: 'NOT_FOUND', message: 'x' } });
+      }
+      return base(u, i);
+    });
+    await add();
+    fireEvent.click(choice(/新版本/));
+    fireEvent.click(confirmButton());
+    expect(await screen.findByText('要更新的同名资料已不在或无权更新，请改选“另存为独立资料”')).toBeInTheDocument();
+    expect(screen.queryByText(/请重试/)).toBeNull();
+    fireEvent.click(choice('另存为独立资料'));
+    fireEvent.click(confirmButton());
+    expect(await screen.findByTestId('import-item')).toBeInTheDocument();
+    expect(screen.queryByTestId('import-version')).toBeNull();
+    expect(bodyOf(1).items[0]).toEqual({ upload_id: 'up_1', purpose: 'working', duplicate_action: 'register_separately' });
+  });
+
+  it('新版本项原件没保存成功，或后端落到的不是目标资源：不写“已成为”', async () => {
+    const failedStep = { received: 'done', stored: 'failed', parse: 'skipped', index: 'skipped' };
+    bridge({
+      resources: found(res('res_old', '周报.md')),
+      created: batch([row({ resource_id: 'res_old', status: 'failed', steps: failedStep, error: 'blob_missing' })]),
+    });
+    await add();
+    fireEvent.click(choice(/新版本/));
+    fireEvent.click(confirmButton());
+    expect(await screen.findByTestId('import-item')).toBeInTheDocument();
+    expect(screen.queryByTestId('import-version')).toBeNull();
+  });
+
+  it('后端落到别的资源：不写“已成为”', async () => {
+    bridge({ resources: found(res('res_old', '周报.md')), created: batch([row({ resource_id: 'res_other' })]) });
+    await add();
+    fireEvent.click(choice(/新版本/));
+    fireEvent.click(confirmButton());
+    expect(await screen.findByTestId('import-item')).toBeInTheDocument();
+    expect(screen.queryByTestId('import-version')).toBeNull();
+  });
+
+  it('选项旁写明最近更新时间与所在库 / 仅存档，多份同名时看得出是哪一份', async () => {
+    bridge({ resources: found(res('res_old', '周报.md')) });
+    await add();
+    expect(screen.getByText(/最近更新于 .*，仅存档/)).toBeInTheDocument();
+  });
+
+  it('同名候选在第 2 页才出现也找得到', async () => {
+    const filler = Array.from({ length: 50 }, (_, n) => res(`res_f${n}`, `周报.md.副本${n}`));
+    bridge({
+      resources: (q) =>
+        q.get('page') === '2'
+          ? { page: 2, page_size: 50, total: 51, items: [res('res_p2', '周报.md')] }
+          : { page: 1, page_size: 50, total: 51, items: filler },
+    });
+    await add();
+    expect(screen.getByRole('radiogroup')).toBeInTheDocument();
+    expect(lookups().map((q) => q.get('page'))).toEqual(['1', '2']);
   });
 });

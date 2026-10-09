@@ -12,7 +12,12 @@ import { goEditReturn } from '@mycowork/ui/pages/office-editor/edit-return.ts';
 import { installBridge } from './versionsFixture';
 
 configure({ asyncUtilTimeout: 4000 });
-const response = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => body, text: async () => '' });
+const response = (status: number, body: unknown) => ({
+  status,
+  ok: status < 300,
+  json: async () => body,
+  text: async () => '',
+});
 const mk = (i: number, file_name: string) => ({
   resource_id: `res_${i}`,
   file_name,
@@ -39,7 +44,8 @@ function spaceBridge() {
       const items = all.filter((r) => r.file_name.includes(q));
       return response(200, { items, page: 1, page_size: 50, total: items.length });
     }
-    if (/\/res_\d+\/(office\/html|preview)$/.test(url)) return { ...response(200, null), text: async () => '<html><body>虚构</body></html>' };
+    if (/\/res_\d+\/(office\/html|preview)$/.test(url))
+      return { ...response(200, null), text: async () => '<html><body>虚构</body></html>' };
     return response(404, { error: { code: 'NOT_FOUND' } });
   });
 }

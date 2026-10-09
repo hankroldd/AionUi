@@ -18,7 +18,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 const mount = () => render(<VersionsPage resourceId='resource-1' lang='zh-CN' renderMarkdown={(s) => <p>{s}</p>} />);
-const changed = () => act(async () => void window.dispatchEvent(new CustomEvent(RESOURCE_CHANGED, { detail: { resourceId: RES } })));
+const changed = () =>
+  act(async () => void window.dispatchEvent(new CustomEvent(RESOURCE_CHANGED, { detail: { resourceId: RES } })));
 const pub = {
   publication_id: 'pub-1',
   resource_id: RES,
@@ -84,7 +85,9 @@ describe('发布记录', () => {
     installBridge({
       total: 3,
       publications: () =>
-        state === 'ok' ? json({ items: [pub], total: 1, page: 1, page_size: 50 }) : json({ error: { code: 'INTERNAL' } }, 500),
+        state === 'ok'
+          ? json({ items: [pub], total: 1, page: 1, page_size: 50 })
+          : json({ error: { code: 'INTERNAL' } }, 500),
     });
     mount();
     await screen.findByTestId('version-publication');

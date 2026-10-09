@@ -13,7 +13,10 @@ export type Hooks = {
   fileName?: string;
   failPages?: Set<number>; // 这些页码读不到（503）
   diff?: (from: string, to: string) => Response | Promise<Response>;
-  restore?: (body: { submission_id: string; expected_current_revision_id: string }, rev: string) => Response | Promise<Response>;
+  restore?: (
+    body: { submission_id: string; expected_current_revision_id: string },
+    rev: string
+  ) => Response | Promise<Response>;
   editing?: () => Response | Promise<Response>;
   publications?: () => Response | Promise<Response>;
   preview?: () => Response | Promise<Response>;
@@ -68,16 +71,20 @@ export function installBridge(h: Hooks) {
     const tl = /\/revisions(?:\?page=(\d+))?$/.exec(url);
     if (tl && method === 'GET') {
       const page = Number(tl[1] ?? 1);
-      return hooks.failPages?.has(page) ? json({ error: { code: 'UPSTREAM_UNAVAILABLE' } }, 503) : json(timelinePage(page));
+      return hooks.failPages?.has(page)
+        ? json({ error: { code: 'UPSTREAM_UNAVAILABLE' } }, 503)
+        : json(timelinePage(page));
     }
     const rs = /\/revisions\/([^/]+)\/restore$/.exec(url);
-    if (rs && method === 'POST') return hooks.restore?.(body, decodeURIComponent(rs[1] ?? '')) ?? json({ error: { code: 'INTERNAL' } }, 500);
+    if (rs && method === 'POST')
+      return hooks.restore?.(body, decodeURIComponent(rs[1] ?? '')) ?? json({ error: { code: 'INTERNAL' } }, 500);
     const ch = /\/changes\?from=([^&]+)&to=([^&]+)/.exec(url);
     if (ch) {
       const [from, to] = [decodeURIComponent(ch[1] ?? ''), decodeURIComponent(ch[2] ?? '')];
       return hooks.diff ? hooks.diff(from, to) : json(diffOf(from, to));
     }
-    if (url.includes('/publications?')) return hooks.publications?.() ?? json({ items: [], total: 0, page: 1, page_size: 50 });
+    if (url.includes('/publications?'))
+      return hooks.publications?.() ?? json({ items: [], total: 0, page: 1, page_size: 50 });
     if (url.endsWith('/scopes')) return json({ sources: [], projects: [] });
     if (url.endsWith('/metadata')) return hooks.metadata?.() ?? json({ secret: false });
     if (url.endsWith('/edit-sessions')) return hooks.editing?.() ?? json({ items: [] });

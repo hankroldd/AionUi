@@ -20,16 +20,29 @@ afterEach(() => {
 });
 const page = <VersionsPage resourceId='resource-1' lang='zh-CN' renderMarkdown={(s) => <p>{s}</p>} />;
 const title = () => screen.queryByTestId('versions-compare-title')?.textContent;
-const diffUrls = (b: ReturnType<typeof installBridge>) => b.calls.filter((c) => c.url.includes('/changes?')).map((c) => c.url.split('?')[1]);
+const diffUrls = (b: ReturnType<typeof installBridge>) =>
+  b.calls.filter((c) => c.url.includes('/changes?')).map((c) => c.url.split('?')[1]);
 const withChange = (from: string, to: string, text: string) => ({
   ...diffOf(from, to),
-  changes: [{ kind: 'modified', node_type: 'paragraph', to_path: '/body/p[1]', aspects: ['text'], text_before: '旧', text_after: text }],
+  changes: [
+    {
+      kind: 'modified',
+      node_type: 'paragraph',
+      to_path: '/body/p[1]',
+      aspects: ['text'],
+      text_before: '旧',
+      text_after: text,
+    },
+  ],
 });
 async function choose(label: '对比起点' | '对比终点', option: RegExp) {
   fireEvent.click(screen.getByRole('combobox', { name: label }));
   fireEvent.click(await screen.findByText(option, { selector: '.arco-select-option' }));
 }
-const pick = (n: number) => within(screen.getByTestId('version-timeline')).getAllByTestId('version-item')[n]!.querySelector('button.mcw-ver-pick')!;
+const pick = (n: number) => {
+  const items = within(screen.getByTestId('version-timeline')).getAllByTestId('version-item');
+  return items[n]!.querySelector('button.mcw-ver-pick')!;
+};
 
 describe('改选作废在途对比', () => {
   it('自动对比还没回来时在下拉里改选：旧结果迟到也不渲染，也不会把选择改回去', async () => {
@@ -75,7 +88,8 @@ describe('改选作废在途对比', () => {
     let release!: (r: Response) => void;
     installBridge({
       total: 4,
-      diff: (from, to) => (to === 'rev-4' ? new Promise<Response>((r) => (release = r)) : json(withChange(from, to, `改成${to}`))),
+      diff: (from, to) =>
+        to === 'rev-4' ? new Promise<Response>((r) => (release = r)) : json(withChange(from, to, `改成${to}`)),
     });
     render(page);
     await waitFor(() => expect(release).toBeTypeOf('function'));
@@ -89,16 +103,14 @@ describe('改选作废在途对比', () => {
 });
 
 describe('新版本到来', () => {
-  const publish = (b: ReturnType<typeof installBridge>, total: number) => {
-    b.hooks.total = total;
-  };
-  const changed = () => act(async () => void window.dispatchEvent(new CustomEvent(RESOURCE_CHANGED, { detail: { resourceId: RES } })));
+  const changed = () =>
+    act(async () => void window.dispatchEvent(new CustomEvent(RESOURCE_CHANGED, { detail: { resourceId: RES } })));
 
   it('没手动选过：跟随到“上一版 → 最新版”并重新对比', async () => {
     const b = installBridge({ total: 3 });
     render(page);
     await waitFor(() => expect(title()).toBe('v2 → v3'));
-    publish(b, 4);
+    b.hooks.total = 4;
     await changed();
     await waitFor(() => expect(title()).toBe('v3 → v4'));
     expect(diffUrls(b).at(-1)).toBe('from=rev-3&to=rev-4');
@@ -116,7 +128,7 @@ describe('新版本到来', () => {
     fireEvent.click(screen.getByRole('button', { name: '对比这两个版本' }));
     await waitFor(() => expect(title()).toBe('v1 → v2'));
     const calls = diffUrls(b).length;
-    publish(b, 4);
+    b.hooks.total = 4;
     await changed();
     const hint = await screen.findByRole('button', { name: '有新版本 v4，查看最新变化' });
     expect(title()).toBe('v1 → v2');
@@ -131,7 +143,7 @@ describe('新版本到来', () => {
     const b = installBridge({ total: 3 });
     render(page);
     await waitFor(() => expect(title()).toBe('v2 → v3'));
-    publish(b, 4);
+    b.hooks.total = 4;
     await act(async () => void vi.advanceTimersByTime(30_000));
     await waitFor(() => expect(title()).toBe('v3 → v4'));
   });

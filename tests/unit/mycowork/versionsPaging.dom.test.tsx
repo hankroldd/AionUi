@@ -22,8 +22,12 @@ const open = (total: number, extra: Partial<Parameters<typeof installBridge>[0]>
   return bridge;
 };
 const timeline = () => screen.getByTestId('version-timeline');
-const labels = () => within(timeline()).getAllByTestId('version-item').map((el) => el.querySelector('strong')?.textContent);
-const diffCalls = (b: ReturnType<typeof installBridge>) => b.calls.filter((c) => c.url.includes('/changes?')).map((c) => c.url.split('?')[1]);
+const labels = () =>
+  within(timeline())
+    .getAllByTestId('version-item')
+    .map((el) => el.querySelector('strong')?.textContent);
+const diffCalls = (b: ReturnType<typeof installBridge>) =>
+  b.calls.filter((c) => c.url.includes('/changes?')).map((c) => c.url.split('?')[1]);
 
 describe('历史分页', () => {
   it.each([1, 50])('%i 个版本：不出现“加载更早的版本”，显示“已到最早的版本”', async (total) => {

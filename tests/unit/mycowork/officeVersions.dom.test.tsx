@@ -142,11 +142,16 @@ function bridge(opts: Opts = {}) {
         secret: opts.secret === true,
       });
     if (url.includes('/changes?'))
-      return opts.diffStatus ? reply(opts.diffStatus, { error: { code: 'UPSTREAM_TIMEOUT', message: 'x' } }) : reply(200, { ...(opts.diff ?? partialDiff), ...pairOf(url) });
+      return opts.diffStatus
+        ? reply(opts.diffStatus, { error: { code: 'UPSTREAM_TIMEOUT', message: 'x' } })
+        : reply(200, { ...(opts.diff ?? partialDiff), ...pairOf(url) });
     if (url.endsWith('/restore'))
       return opts.restoreStatus
         ? reply(opts.restoreStatus, { error: { code: 'EDIT_LEASE_HELD', message: 'x' } })
-        : reply(201, { created: true, revision: rev('rev_dddddddd', { origin: 'restore', restored_from: 'rev_aaaaaaaa', current: true }) });
+        : reply(201, {
+            created: true,
+            revision: rev('rev_dddddddd', { origin: 'restore', restored_from: 'rev_aaaaaaaa', current: true }),
+          });
     if (url === '/bridge/v1/publications' && method === 'POST') {
       const code = codes.shift();
       if (code) return reply(409, { error: { code, message: 'x' } });
@@ -235,7 +240,10 @@ describe('OfficeVersionsSlot', () => {
     expect(screen.getByText('形状')).toBeInTheDocument();
     expect(screen.getByText('文字、位置与大小')).toBeInTheDocument();
     expect(screen.getByText('比较范围：整份文件（/）')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '查看原件' })).toHaveAttribute('href', '/bridge/v1/resources/res_1/preview');
+    expect(screen.getByRole('link', { name: '查看原件' })).toHaveAttribute(
+      'href',
+      '/bridge/v1/resources/res_1/preview'
+    );
     expect(screen.queryByTestId('version-diff-unknown')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '查看未覆盖项（1）' }));
     expect(screen.getByText('未覆盖项')).toBeInTheDocument();

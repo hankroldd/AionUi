@@ -18,11 +18,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 const posts = (b: ReturnType<typeof installBridge>) => b.calls.filter((c) => c.method === 'POST');
-const item = (n: number) => within(screen.getByTestId('version-timeline')).getAllByTestId('version-item')[n]!;
 const created = (rev: string, from: string, total: number) =>
-  json({ created: true, revision: revItem(total, total, { revision_id: rev, origin: 'restore', restored_from: from }) }, 201);
+  json(
+    { created: true, revision: revItem(total, total, { revision_id: rev, origin: 'restore', restored_from: from }) },
+    201
+  );
 async function openRestore(label: string) {
-  fireEvent.click(within(await screen.findByTestId('version-timeline')).getByRole('button', { name: `更多操作 ${label}` }));
+  fireEvent.click(
+    within(await screen.findByTestId('version-timeline')).getByRole('button', { name: `更多操作 ${label}` })
+  );
   fireEvent.click(await screen.findByRole('menuitem', { name: '恢复为新版本' }));
   return screen.findByRole('dialog');
 }
@@ -55,7 +59,9 @@ describe('恢复确认框', () => {
     await act(async () => release(created('rev-4', 'rev-1', 4)));
     expect(await screen.findByText('已恢复为新版本 v4（内容与 v1 相同）')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    await waitFor(() => expect(within(screen.getByTestId('version-timeline')).getAllByTestId('version-item')).toHaveLength(4));
+    await waitFor(() =>
+      expect(within(screen.getByTestId('version-timeline')).getAllByTestId('version-item')).toHaveLength(4)
+    );
     await waitFor(() => expect(screen.getByTestId('versions-compare-title')).toHaveTextContent('v3 → v4'));
     expect(posts(b)[0]?.body).toMatchObject({ expected_current_revision_id: 'rev-3' });
   });
@@ -94,7 +100,9 @@ describe('恢复确认框', () => {
     b.hooks.total = 4; // 第一次其实已经成功（服务端幂等重放）
     fireEvent.click(within(dialog).getByRole('button', { name: '重试' }));
     await screen.findByText(/已恢复为新版本/);
-    const [first, second] = posts(b).map((c) => c.body as { submission_id: string; expected_current_revision_id: string });
+    const [first, second] = posts(b).map(
+      (c) => c.body as { submission_id: string; expected_current_revision_id: string }
+    );
     expect(second).toEqual(first);
     // 重新发起一次新的恢复：新 id
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -111,7 +119,13 @@ describe('恢复确认框', () => {
       total: 3,
       restore: () => {
         if (++n === 1) throw new TypeError('network down');
-        return json({ created: false, revision: revItem(4, 4, { revision_id: 'rev-4', origin: 'restore', restored_from: 'rev-1' }) }, 200);
+        return json(
+          {
+            created: false,
+            revision: revItem(4, 4, { revision_id: 'rev-4', origin: 'restore', restored_from: 'rev-1' }),
+          },
+          200
+        );
       },
     });
     mount();
@@ -126,15 +140,18 @@ describe('恢复确认框', () => {
   it('要恢复的版本和当前版本内容相同：直接说不需要恢复，确认按钮不可用', async () => {
     const b = installBridge({ total: 3 });
     const tl = b.timelinePage;
-    vi.stubGlobal('fetch', ((orig) => async (url: string, init?: RequestInit) => {
-      if (/\/revisions$/.test(url) && !init?.method) {
-        const t = tl(1);
-        t.items[0] = { ...t.items[0]!, content_sha256: 'same' };
-        t.items[1] = { ...t.items[1]!, content_sha256: 'same' };
-        return json(t);
-      }
-      return orig(url, init);
-    })(globalThis.fetch));
+    vi.stubGlobal(
+      'fetch',
+      ((orig) => async (url: string, init?: RequestInit) => {
+        if (url.endsWith('/revisions') && !init?.method) {
+          const t = tl(1);
+          t.items[0] = { ...t.items[0]!, content_sha256: 'same' };
+          t.items[1] = { ...t.items[1]!, content_sha256: 'same' };
+          return json(t);
+        }
+        return orig(url, init);
+      })(globalThis.fetch)
+    );
     mount();
     const dialog = await openRestore('v2');
     expect(within(dialog).getByText('这一版和当前版本内容相同，不需要恢复。')).toBeInTheDocument();

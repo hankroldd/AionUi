@@ -36,18 +36,23 @@ const diff = (over: object) => ({
   unknown_parts: [],
   ...over,
 });
+// 响应回显请求里的版本对（界面只渲染与当前选择一致的结果，C06）
+const pairOf = (url: string) => {
+  const q = new URL(url, 'http://x').searchParams;
+  return { from_revision_id: q.get('from'), to_revision_id: q.get('to') };
+};
 function bridge(d: object) {
   fetchMock.mockImplementation(async (url: string) => {
     if (url.endsWith('/revisions'))
       return reply(200, {
         resource_id: 'res_1',
         current_revision_id: 'rev_b',
-        items: [rev('rev_b', { current: true }), rev('rev_a', { origin: 'original' })],
+        items: [rev('rev_b', { current: true, parent_id: 'rev_a' }), rev('rev_a', { origin: 'original' })],
         page: 1,
         page_size: 50,
         total: 2,
       });
-    if (url.includes('/changes?')) return reply(200, d);
+    if (url.includes('/changes?')) return reply(200, { ...d, ...pairOf(url) });
     if (url.startsWith('/bridge/v1/publications?')) return reply(200, { items: [] });
     if (url === '/bridge/v1/scopes') return reply(200, { sources: [], projects: [] });
     if (url.endsWith('/office/html'))

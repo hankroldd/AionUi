@@ -44,6 +44,11 @@ const rev = (id: string, over: object = {}) => ({
   current: false,
   ...over,
 });
+// 响应回显请求里的版本对（界面只渲染与当前选择一致的结果，C06）
+const pairOf = (url: string) => {
+  const q = new URL(url, 'http://x').searchParams;
+  return { from_revision_id: q.get('from'), to_revision_id: q.get('to') };
+};
 const calls = (method: string, part: string) =>
   fetchMock.mock.calls.filter(([url, init]) => (init?.method ?? 'GET') === method && String(url).includes(part));
 const bodyOf = (method: string, part: string, i = 0) => JSON.parse(String(calls(method, part)[i]?.[1]?.body));
@@ -137,7 +142,7 @@ function bridge(opts: Opts = {}) {
         secret: opts.secret === true,
       });
     if (url.includes('/changes?'))
-      return opts.diffStatus ? reply(opts.diffStatus, { error: { code: 'UPSTREAM_TIMEOUT', message: 'x' } }) : reply(200, opts.diff ?? partialDiff);
+      return opts.diffStatus ? reply(opts.diffStatus, { error: { code: 'UPSTREAM_TIMEOUT', message: 'x' } }) : reply(200, { ...(opts.diff ?? partialDiff), ...pairOf(url) });
     if (url.endsWith('/restore'))
       return opts.restoreStatus
         ? reply(opts.restoreStatus, { error: { code: 'EDIT_LEASE_HELD', message: 'x' } })

@@ -347,6 +347,7 @@ describe('上传弹窗读知识库', () => {
       return reply(404, {});
     });
     render(<OfficeImportsSlot />);
+    fireEvent.click(screen.getByRole('button', { name: '导入资料' })); // 上传流程在导入记录页的“导入资料”弹窗里
     await screen.findByText(/知识库和标签没读到/);
     down = false;
     fireEvent.click(screen.getByRole('button', { name: '立即重试' }));

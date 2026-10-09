@@ -54,7 +54,7 @@ const search = () => screen.getByRole('textbox', { name: '搜索文件名或标�
 const scroller = () => document.querySelector<HTMLElement>('.mcw-rc-main')!;
 
 /** 在空间里搜“备忘”、打开 res_1 的预览、滚到 120；然后离开空间并在版本页点“返回”。 */
-async function leaveSpaceAndGoBackFromVersions() {
+async function leaveSpaceAndGoBackFromVersions(versionsId = 'res_1', ageMs = 0) {
   const first = space();
   fireEvent.change(search(), { target: { value: '备忘' } });
   fireEvent.click(await screen.findByRole('button', { name: '虚构备忘.txt' }));
@@ -62,8 +62,9 @@ async function leaveSpaceAndGoBackFromVersions() {
   scroller().scrollTop = 120;
   fireEvent.scroll(scroller());
   first.unmount();
+  if (ageMs) vi.spyOn(Date, 'now').mockReturnValue(Date.now() + ageMs);
   installBridge({ total: 2 });
-  const versions = render(<VersionsPage resourceId='res_1' lang='zh-CN' renderMarkdown={(s) => <p>{s}</p>} />);
+  const versions = render(<VersionsPage resourceId={versionsId} lang='zh-CN' renderMarkdown={(s) => <p>{s}</p>} />);
   fireEvent.click(await screen.findByRole('button', { name: '返回空间' }));
   versions.unmount();
   spaceBridge();
@@ -79,6 +80,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -110,6 +112,21 @@ describe('从版本页返回空间', () => {
     await waitFor(() => expect(search()).toHaveValue('备忘'));
     await screen.findByRole('button', { name: '虚构备忘汇报.pptx' });
     expect(screen.queryByRole('dialog', { name: '当前内容预览' })).toBeNull();
+  });
+
+  it('回来的不是离开时去的那份资源（从别处进了另一份文件的版本页）：不恢复旧视图', async () => {
+    await leaveSpaceAndGoBackFromVersions('res_9');
+    space();
+    await screen.findByRole('button', { name: '虚构汇报.pptx' });
+    expect(search()).toHaveValue('');
+    expect(screen.queryByRole('dialog', { name: '当前内容预览' })).toBeNull();
+  });
+
+  it('快照超过 30 分钟：不恢复', async () => {
+    await leaveSpaceAndGoBackFromVersions('res_1', 31 * 60_000);
+    space();
+    await screen.findByRole('button', { name: '虚构汇报.pptx' });
+    expect(search()).toHaveValue('');
   });
 
   it('换了账号不恢复上一个账号的快照', async () => {
@@ -145,7 +162,7 @@ describe('编辑页“保存并返回”回空间', () => {
     fireEvent.change(search(), { target: { value: '备忘' } });
     await screen.findByRole('button', { name: '虚构备忘.txt' });
     first.unmount();
-    goEditReturn({ kind: 'space' });
+    goEditReturn({ kind: 'space', id: 'res_1' });
     expect(window.location.hash).toBe('#/office/space');
     space();
     await waitFor(() => expect(search()).toHaveValue('备忘'));

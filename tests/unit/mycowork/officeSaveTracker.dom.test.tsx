@@ -97,7 +97,7 @@ describe('保存并返回', () => {
   });
 
   it('有来处：立刻回来处；页面卸载后跟踪器照常报告“已保存”，并通知版本页重新取数；只提示一次', async () => {
-    requestEditReturn({ kind: 'space' });
+    requestEditReturn({ kind: 'space', id: 'res_1' });
     polls('eds_1', session('editing'), session('closed', { saved_revision_id: 'rev_b' }));
     const changed = vi.fn();
     window.addEventListener(RESOURCE_CHANGED, changed);

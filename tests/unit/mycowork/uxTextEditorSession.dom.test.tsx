@@ -85,7 +85,7 @@ afterEach(() => {
 });
 
 it('保存并返回 → 断网 → 继续输入 → 重试：发的是失败那次的内容，成功后不自动返回，新输入还在、标签仍是未保存', async () => {
-  requestEditReturn({ kind: 'space' });
+  requestEditReturn({ kind: 'space', id: 'res_1' });
   bridge(['lost', 'ok'], { base: 'rev_b', content: '' });
   render(<OfficeTextEditSlot />);
   const editor = await edit('第一版');

@@ -273,7 +273,7 @@ describe('写回结果与自动返回（审查补丁：警告类写回不丢）'
       ? reply(200, { revision_id: 'rev_b', created: true, base_revision_id: 'rev_b', workspace_writeback: writeback })
       : undefined;
   const editText = async () => {
-    requestEditReturn({ kind: 'space' });
+    requestEditReturn({ kind: 'space', id: 'res_1' });
     window.location.hash = '#/office/edit-text/res_md';
     render(<OfficeTextEditSlot />);
     const editor = (await screen.findByTestId('md-editor')) as HTMLTextAreaElement;

@@ -212,7 +212,7 @@ describe('OfficeVersionsSlot', () => {
     fireEvent.click(screen.getByRole('button', { name: '对比这两个版本' })); // 同一对再比一次也是真实调用
     await waitFor(() => expect(calls('GET', '/changes?')).toHaveLength(2));
     expect(calls('GET', '/changes?')[1]?.[0]).toContain('from=rev_bbbbbbbb&to=rev_cccccccc');
-    expect(screen.getByText('新')).toBeInTheDocument();
+    expect(await screen.findByText('新')).toBeInTheDocument(); // 重新对比的结果渲染出来再往下断言
     expect(screen.getByText('修改 1')).toBeInTheDocument();
     expect(screen.getByText('未覆盖 1')).toBeInTheDocument();
     expect(screen.getByText('第 1 页 · 1')).toBeInTheDocument();

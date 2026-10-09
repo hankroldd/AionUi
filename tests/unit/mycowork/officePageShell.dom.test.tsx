@@ -2,7 +2,7 @@
  * [mycowork] ADR-0011: every `/office/*` page uses the MyCowork page skeleton (MyCowork .claude/rules/ui.md "页面骨架",
  * aligned with AionUi's Scheduled/Assistants pages): the root fills the layout content (flex 1, min-height 0, overflow hidden);
  * the body below the header is the page's own scroll container (flex 1, min-height 0, overflow-y auto), so long content scrolls
- * instead of being cut off; content is centred with a 1024px max width. The versions page timeline scrolls on its own.
+ * instead of being cut off; content is centred with a 1024px max width (the versions page is `wide`: it fills the content area like the Space main panel). The versions page timeline scrolls on its own.
  * jsdom has no layout, so this checks the styles that make scrolling possible and that long content sits inside the scroller;
  * the real-browser scroll check is in MyCowork verification/PR11/*-ui-redesign.
  * Only the Bridge boundary is mocked (fetch).
@@ -80,7 +80,7 @@ function bridge() {
 }
 
 /** Root fills the content area; the body is the page's own vertical scroller with a centred 1024px column. */
-function expectSkeleton(testId: string): HTMLElement {
+function expectSkeleton(testId: string, maxWidth = '1024px'): HTMLElement {
   const root = screen.getByTestId(testId);
   expect(root.style.flex).toBe('1 1 0%');
   expect(root.style.minHeight).toBe('0px');
@@ -90,7 +90,7 @@ function expectSkeleton(testId: string): HTMLElement {
   expect(scroller.style.flex).toBe('1 1 0%');
   expect(scroller.style.minHeight).toBe('0px');
   const column = scroller.firstElementChild as HTMLElement;
-  expect(column.style.maxWidth).toBe('1024px');
+  expect(column.style.maxWidth).toBe(maxWidth);
   expect(column.style.margin).toBe('0px auto');
   return scroller;
 }
@@ -111,7 +111,7 @@ describe('office page skeleton', () => {
 
   it('versions: the page scrolls and the timeline scrolls on its own, holding all versions', async () => {
     render(<OfficeVersionsSlot />);
-    const scroller = expectSkeleton('mycowork-versions');
+    const scroller = expectSkeleton('mycowork-versions', 'none'); // 负责人 2026-10-09：版本页与空间主面板同宽（PageShell wide）
     const timeline = within(scroller).getByTestId('mycowork-versions-timeline');
     expect(timeline.style.overflowY).toBe('auto');
     expect(await within(timeline).findByText('v40')).toBeInTheDocument();

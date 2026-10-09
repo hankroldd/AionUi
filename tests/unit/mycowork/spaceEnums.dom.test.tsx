@@ -24,6 +24,7 @@ const UI = process.env['MYCOWORK_UI_DIR'] ?? resolve(import.meta.dirname, '../..
 type Case = {
   name: string;
   origin: Resource['origin'];
+  original_origin?: string;
   state: Resource['state'];
   secret: boolean;
   source_group: string;
@@ -58,10 +59,16 @@ describe('来源与状态枚举', () => {
   it.each(CASES.map((c) => [c.name, c] as const))(
     '映射表 %s：行上显示的分组 = 表里的分组（只落在一个来源组、一个状态组）',
     (_name, c) => {
-      const r = res({ origin: c.origin, state: c.state, secret: c.secret });
-      expect(sourceGroupOf(r.origin)).toBe(c.source_group);
+      // 发布出来的副本的来源组由 Bridge 按原件算好放在 origin_group（A330）；其余按 origin 推
+      const r = res({
+        origin: c.origin,
+        state: c.state,
+        secret: c.secret,
+        ...(c.original_origin ? { origin_group: c.source_group as Resource['origin_group'] } : {}),
+      });
+      expect(sourceGroupOf(r)).toBe(c.source_group);
       expect(stateGroupOf(r)).toBe(c.status_group);
-      expect(SOURCE_GROUPS.filter((g) => g === sourceGroupOf(r.origin))).toHaveLength(1);
+      expect(SOURCE_GROUPS.filter((g) => g === sourceGroupOf(r))).toHaveLength(1);
       render(<StateTag r={r} text={text} />);
       expect(document.querySelector('.mcw-rc-state')).toHaveAttribute('data-status', c.status_group);
     }

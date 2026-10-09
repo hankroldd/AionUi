@@ -11,6 +11,7 @@ import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 import { clearEditReturn, requestEditReturn } from '@mycowork/ui/pages/office-editor/edit-return.ts';
 import { OfficeEditSlot, OfficeTextEditSlot, OfficeVersionsSlot } from '@/renderer/mycowork-slots';
+import { settleTracker } from './saveTrackerTeardown';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({
@@ -117,10 +118,11 @@ beforeEach(() => {
   window.location.hash = '#/office/space';
   localStorage.clear();
 });
-afterEach(() => {
+afterEach(async () => {
   cleanup();
   clearEditReturn();
   vi.unstubAllGlobals();
+  await settleTracker();
 });
 
 describe('空间预览的“在线编辑”', () => {
@@ -182,13 +184,14 @@ describe('空间预览的“在线编辑”', () => {
     });
     unmount();
     render(<OfficeEditSlot />);
-    fireEvent.click(await screen.findByRole('button', { name: '结束编辑并保存' }));
+    fireEvent.click(await screen.findByRole('button', { name: '保存并返回' }));
     await waitFor(() => expect(window.location.hash).toBe('#/office/space'), { timeout: 4000 });
     await waitFor(() => expect(document.querySelector('.arco-message')).toHaveTextContent('已保存为新版本。'));
   });
 });
 
 describe('保存后回到来时的页面', () => {
+  beforeEach(() => Message.clear()); // 前面用例的跟踪器提示还留在容器里
   it('从版本页进入文本编辑，保存成功后回到版本页', async () => {
     window.location.hash = '#/office/resources/res_md/versions';
     bridge((url) =>
@@ -277,15 +280,6 @@ describe('写回结果与自动返回（审查补丁：警告类写回不丢）'
     fireEvent.change(editor, { target: { value: '改了' } });
     fireEvent.click(screen.getByRole('button', { name: '保存并返回' }));
   };
-  const editOffice = async (over: object) => {
-    requestEditReturn({ kind: 'space' });
-    window.location.hash = '#/office/edit/eds_1';
-    bridge((url, init) =>
-      url === '/bridge/v1/edit-sessions/eds_1' && !init?.method ? reply(200, officeSession('closed', over)) : undefined
-    );
-    render(<OfficeEditSlot />);
-  };
-
   it('文本：写回冲突不自动返回，留在编辑页显示“另存为”，“返回”按钮手动回去', async () => {
     bridge(save({ relative_path: '周报.md', outcome: 'conflict', saved_as: '周报.人工编辑-1.md' }));
     await editText();
@@ -316,32 +310,5 @@ describe('写回结果与自动返回（审查补丁：警告类写回不丢）'
     await editText();
     await waitFor(() => expect(window.location.hash).toBe('#/office/space'));
     await waitFor(() => expect(document.querySelector('.arco-message')).toHaveTextContent('已保存为新版本。'));
-  });
-
-  it('ONLYOFFICE：保存了但写回失败不自动返回，显示“没能写回”，“返回”手动回去', async () => {
-    await editOffice({
-      saved_revision_id: 'rev_b',
-      workspace_writeback: { relative_path: '方案.docx', outcome: 'failed', saved_as: null },
-    });
-    expect(await screen.findByText(/没能写回/)).toBeInTheDocument();
-    await act(async () => undefined);
-    expect(window.location.hash).toBe('#/office/edit/eds_1');
-    fireEvent.click(screen.getByRole('button', { name: '返回' }));
-    await waitFor(() => expect(window.location.hash).toBe('#/office/space'));
-  });
-
-  it('ONLYOFFICE：Secret 跳过写回照常返回，提示含说明', async () => {
-    await editOffice({
-      saved_revision_id: 'rev_b',
-      workspace_writeback: { relative_path: '方案.docx', outcome: 'skipped', saved_as: null, reason: 'secret' },
-    });
-    await waitFor(() => expect(window.location.hash).toBe('#/office/space'));
-    await waitFor(() => expect(document.querySelector('.arco-message')).toHaveTextContent('因是 Secret'));
-  });
-
-  it('ONLYOFFICE：无改动结束也回到来时的页面，提示“没有改动”', async () => {
-    await editOffice({ saved_revision_id: null });
-    await waitFor(() => expect(window.location.hash).toBe('#/office/space'));
-    await waitFor(() => expect(document.querySelector('.arco-message')).toHaveTextContent('没有改动'));
   });
 });

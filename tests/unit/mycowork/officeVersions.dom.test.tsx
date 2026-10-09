@@ -14,6 +14,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { settleTracker } from './saveTrackerTeardown';
 import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeVersionsSlot } from '@/renderer/mycowork-slots';
@@ -184,7 +185,10 @@ describe('OfficeVersionsSlot', () => {
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await settleTracker();
+  });
 
   it('groups the timeline by local day with local clock times, badges and no ISO strings', async () => {
     bridge();

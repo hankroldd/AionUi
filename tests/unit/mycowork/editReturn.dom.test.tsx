@@ -6,9 +6,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Message } from '@arco-design/web-react';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
-import { clearEditReturn } from '@mycowork/ui/pages/office-editor/edit-return.ts';
+import { clearEditReturn, requestEditReturn } from '@mycowork/ui/pages/office-editor/edit-return.ts';
 import { OfficeEditSlot, OfficeTextEditSlot, OfficeVersionsSlot } from '@/renderer/mycowork-slots';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
@@ -259,5 +260,88 @@ describe('保存后回到来时的页面', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
     expect(await screen.findByText('已保存为新版本。')).toBeInTheDocument();
     expect(window.location.hash).toBe('#/office/edit-text/res_md');
+  });
+});
+
+describe('写回结果与自动返回（审查补丁：警告类写回不丢）', () => {
+  beforeEach(() => Message.clear()); // 提示容器跨用例保留，清掉上一个用例的，免得断言读到旧提示
+  const save = (writeback?: object) => (url: string) =>
+    url.endsWith('/save')
+      ? reply(200, { revision_id: 'rev_b', created: true, base_revision_id: 'rev_b', workspace_writeback: writeback })
+      : undefined;
+  const editText = async () => {
+    requestEditReturn({ kind: 'space' });
+    window.location.hash = '#/office/edit-text/res_md';
+    render(<OfficeTextEditSlot />);
+    const editor = (await screen.findByTestId('md-editor')) as HTMLTextAreaElement;
+    fireEvent.change(editor, { target: { value: '改了' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存并返回' }));
+  };
+  const editOffice = async (over: object) => {
+    requestEditReturn({ kind: 'space' });
+    window.location.hash = '#/office/edit/eds_1';
+    bridge((url, init) =>
+      url === '/bridge/v1/edit-sessions/eds_1' && !init?.method ? reply(200, officeSession('closed', over)) : undefined
+    );
+    render(<OfficeEditSlot />);
+  };
+
+  it('文本：写回冲突不自动返回，留在编辑页显示“另存为”，“返回”按钮手动回去', async () => {
+    bridge(save({ relative_path: '周报.md', outcome: 'conflict', saved_as: '周报.人工编辑-1.md' }));
+    await editText();
+    expect(await screen.findByText(/另存为 周报\.人工编辑-1\.md/)).toBeInTheDocument();
+    await act(async () => undefined);
+    expect(window.location.hash).toBe('#/office/edit-text/res_md');
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
+    await waitFor(() => expect(window.location.hash).toBe('#/office/space'));
+  });
+
+  it('文本：写回失败同样不自动返回', async () => {
+    bridge(save({ relative_path: '周报.md', outcome: 'failed', saved_as: null }));
+    await editText();
+    expect(await screen.findByText(/没能写回/)).toBeInTheDocument();
+    await act(async () => undefined);
+    expect(window.location.hash).toBe('#/office/edit-text/res_md');
+  });
+
+  it('文本：Secret 跳过写回照常返回，跨页面提示含说明', async () => {
+    bridge(save({ relative_path: '周报.md', outcome: 'skipped', saved_as: null, reason: 'secret' }));
+    await editText();
+    await waitFor(() => expect(window.location.hash).toBe('#/office/space'));
+    await waitFor(() => expect(document.querySelector('.arco-message')).toHaveTextContent('因是 Secret'));
+  });
+
+  it('文本：写回成功照常返回', async () => {
+    bridge(save({ relative_path: '周报.md', outcome: 'written', saved_as: null }));
+    await editText();
+    await waitFor(() => expect(window.location.hash).toBe('#/office/space'));
+    await waitFor(() => expect(document.querySelector('.arco-message')).toHaveTextContent('已保存为新版本。'));
+  });
+
+  it('ONLYOFFICE：保存了但写回失败不自动返回，显示“没能写回”，“返回”手动回去', async () => {
+    await editOffice({
+      saved_revision_id: 'rev_b',
+      workspace_writeback: { relative_path: '方案.docx', outcome: 'failed', saved_as: null },
+    });
+    expect(await screen.findByText(/没能写回/)).toBeInTheDocument();
+    await act(async () => undefined);
+    expect(window.location.hash).toBe('#/office/edit/eds_1');
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
+    await waitFor(() => expect(window.location.hash).toBe('#/office/space'));
+  });
+
+  it('ONLYOFFICE：Secret 跳过写回照常返回，提示含说明', async () => {
+    await editOffice({
+      saved_revision_id: 'rev_b',
+      workspace_writeback: { relative_path: '方案.docx', outcome: 'skipped', saved_as: null, reason: 'secret' },
+    });
+    await waitFor(() => expect(window.location.hash).toBe('#/office/space'));
+    await waitFor(() => expect(document.querySelector('.arco-message')).toHaveTextContent('因是 Secret'));
+  });
+
+  it('ONLYOFFICE：无改动结束也回到来时的页面，提示“没有改动”', async () => {
+    await editOffice({ saved_revision_id: null });
+    await waitFor(() => expect(window.location.hash).toBe('#/office/space'));
+    await waitFor(() => expect(document.querySelector('.arco-message')).toHaveTextContent('没有改动'));
   });
 });

@@ -11,6 +11,7 @@ import { ItemMenu, StateTag, type ItemActions } from '@mycowork/ui/pages/resourc
 import { rowActionText } from '@mycowork/ui/pages/resources/row-action-messages.ts';
 import { OutputPublication, OutputSourceLine, PublishedMark } from '@mycowork/ui/pages/resources/OutputParts.tsx';
 import { resourceText } from '@mycowork/ui/pages/resources/messages.ts';
+import { versionsText } from '@mycowork/ui/pages/versions/messages.ts';
 import { useOutputConversations } from '@mycowork/ui/pages/resources/use-output-conversations.ts';
 import { useResources } from '@mycowork/ui/pages/resources/use-resources.ts';
 import { ResourceItems } from '@mycowork/ui/pages/resources/ResourceItems.tsx';
@@ -101,6 +102,22 @@ describe('产物展示边界', () => {
     expect(screen.getByTestId('mycowork-published-mark')).toHaveTextContent('已发布到 库a +1');
     rerender(<PublishedMark r={output()} text={text} kbName={(id) => id} />);
     expect(screen.queryByTestId('mycowork-published-mark')).toBeNull();
+  });
+  it('已发布标记的悬停与变化清单的并列分隔符跟界面语言：中文用顿号 / 全角冒号，英文用半角', async () => {
+    const r = output({
+      published_to: [
+        { publication_id: 'a', source_id: 'src-a', status: 'published', has_published: true },
+        { publication_id: 'b', source_id: 'src-b', status: 'published', has_published: true },
+      ],
+    });
+    const en = resourceText('en');
+    render(<PublishedMark r={r} text={en} kbName={(id) => `KB-${id.slice(-1)}`} />);
+    fireEvent.mouseEnter(screen.getByTestId('mycowork-published-mark'));
+    const tip = await screen.findByText(/^KB-a, KB-b: /);
+    expect(tip.textContent).not.toMatch(/[、：]/);
+    expect(text.output.publishedTip(['库a', '库b'], '说明')).toBe('库a、库b：说明');
+    expect(versionsText('en').listJoin(['text', 'geometry'])).toBe('text, geometry');
+    expect(versionsText('zh-CN').listJoin(['文字', '位置'])).toBe('文字、位置');
   });
   it('来源空名只时间，有解析名称显示来源副标题', () => {
     const { rerender } = render(<OutputSourceLine r={output()} name=' ' lang='zh-CN' text={text} />);

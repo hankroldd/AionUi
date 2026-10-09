@@ -180,4 +180,17 @@ describe('OfficeTextEditSlot', () => {
     await waitFor(() => expect(window.location.hash).toBe('#/office/edit-text/res_1'));
     expect(calls('/edit-sessions')).toHaveLength(0);
   });
+
+  it('a resource without editable content shows its own message and no retry (A355)', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/bridge/v1/text-edit-sessions') return reply(422, { error: { code: 'UNSUPPORTED_FORMAT', message: 'x' } });
+      return reply(204, null);
+    });
+    render(<OfficeTextEditSlot />);
+    expect(await screen.findByText(/这份资料不能在这里编辑/)).toBeInTheDocument();
+    expect(screen.queryByText(/docx/)).toBeNull();
+    expect(screen.queryByRole('button', { name: '重试' })).toBeNull();
+    expect(screen.getByRole('button', { name: '版本与变化' })).toBeInTheDocument();
+    expect(calls('/text-edit-sessions')).toHaveLength(1);
+  });
 });

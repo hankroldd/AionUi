@@ -91,12 +91,13 @@ function bridge(opts: Opts = {}) {
             current_revision_id: 'rev_cccccccc',
             items: [
               rev('rev_cccccccc', {
+                parent_id: 'rev_bbbbbbbb',
                 current: true,
                 origin: 'restore',
                 restored_from: 'rev_aaaaaaaa',
                 created_at: today,
               }),
-              rev('rev_bbbbbbbb', { origin: 'edit', created_at: yesterday }),
+              rev('rev_bbbbbbbb', { parent_id: 'rev_aaaaaaaa', origin: 'edit', created_at: yesterday }),
               rev('rev_aaaaaaaa'),
             ],
             page: 1,

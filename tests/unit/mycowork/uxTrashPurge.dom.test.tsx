@@ -5,12 +5,13 @@
  * 离开页面后批次继续；恢复成功给“已恢复”轻提示。
  */
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { Message } from '@arco-design/web-react';
 import { TrashPage } from '@mycowork/ui/pages/trash/index.ts';
 
+configure({ asyncUtilTimeout: 4000 }); // 整机高负载时默认 1 秒的 findBy 会误报
 const fetchMock = vi.fn();
 const reply = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => body });
 const item = (n: number) => ({

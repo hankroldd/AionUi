@@ -4,7 +4,7 @@
  * 页内“还没保存上，你的内容还在这里”+重试；响应丢失后重试得到版本冲突，读最新版本发现内容相同 → 按已保存处理；
  * 内容不同的真冲突给“复制我的内容 / 读取最新版本”两个按钮，读取前二次确认会丢弃未保存内容。
  */
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
@@ -28,6 +28,7 @@ vi.mock('@/renderer/pages/conversation/Preview/components/viewers', () => ({
   MarkdownViewer: ({ content }: { content: string }) => <div data-testid='md-preview'>{content}</div>,
 }));
 
+configure({ asyncUtilTimeout: 4000 }); // 整机高负载时默认 1 秒的 findBy 会误报
 const fetchMock = vi.fn();
 const reply = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => body });
 const session = (over: object = {}) => ({

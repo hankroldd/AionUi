@@ -5,7 +5,7 @@
  * 结果未知（断网）与 503 留在轻提示里，“重试（不会重复发布）”重发的是同一个 submission_id。
  */
 import React, { useState } from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, configure } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { Message } from '@arco-design/web-react';

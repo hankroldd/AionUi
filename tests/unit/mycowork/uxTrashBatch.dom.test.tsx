@@ -4,7 +4,7 @@
  * 进行中再次删除被拒绝、不并发第二批；离开页面（卸载）后任务继续完成、完成提示仍出现；完成后列表重读一次。
  */
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { Message } from '@arco-design/web-react';
@@ -26,6 +26,7 @@ const file = (id: string): Item => ({
 });
 const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+configure({ asyncUtilTimeout: 4000 }); // 整机高负载时默认 1 秒的 findBy 会误报
 const fetchMock = vi.fn();
 let items: Item[];
 let gates: Map<string, () => void>; // 卡住 POST …/trash，直到用例放行

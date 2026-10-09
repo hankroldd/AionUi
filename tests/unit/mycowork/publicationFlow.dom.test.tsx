@@ -7,6 +7,7 @@ import React, { useState, type ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
+import { Message } from '@arco-design/web-react';
 import type { Publication, PublicationRequest } from '@mycowork/contracts';
 import { PublicationDialog, VersionsPage, retryPublication } from '@mycowork/ui/pages/versions/index.ts';
 
@@ -117,6 +118,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  Message.clear(); // 发布提示是全局的，不清掉会被后一个用例当成自己的
   vi.unstubAllGlobals();
 });
 

@@ -107,11 +107,12 @@ describe('空间页：重读同一查询不闪屏', () => {
     const rows = () => list([item('res_1', '第一页-1.md', { state: indexing ? 'indexing' : 'ready' })], 1);
     fixture(() => hold?.promise ?? rows());
     await mount();
-    expect(pending()).toEqual([5000]);
+    // 行渲染出来之后轮询的定时器才排上（effect 在提交之后跑）：等它出现再往下，高负载下立刻断言会落空
+    await waitFor(() => expect(pending()).toEqual([5000]), { timeout: 4000 });
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
     await fire();
     expect(reads()).toHaveLength(1);
-    expect(pending()).toEqual([5000]); // 不可见：这一拍不读，照旧排下一拍
+    await waitFor(() => expect(pending()).toEqual([5000]), { timeout: 4000 }); // 不可见：这一拍不读，照旧排下一拍
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     await fire();
     await waitFor(() => expect(reads()).toHaveLength(2), { timeout: 4000 });

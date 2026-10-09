@@ -151,7 +151,7 @@ describe('Guid scope chip entered from a project', () => {
     bridge(() => reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'x' } }));
     renderGuid({ mycoworkProjectId: 'proj-1' });
     expect(
-      await screen.findByRole('button', { name: '资料范围（项目默认）：未能读取，发送时由资料服务按项目默认解析' })
+      await screen.findByRole('button', { name: '资料范围（项目默认）：暂时没读到；发送时仍会按项目默认处理' })
     ).toBeInTheDocument();
     await withGuidScope({});
     expect(planBodies()).toEqual([

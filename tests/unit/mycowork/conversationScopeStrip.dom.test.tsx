@@ -61,7 +61,7 @@ const CONTEXT = {
   withheld: 1,
   superseded: false,
 };
-const SUMMARY = '项目A资料 + 产品库；公网关闭；AI 可引用 8 · 处理中 1 · 不可用 2；发送时有 1 份资料还在处理中（处理完后本轮可能读到）'; // D145 文案 + W4-9 ③
+const SUMMARY = '项目A资料 + 产品库；不联网搜索；AI 可引用 8 · 处理中 1 · 不可用 2；发送时有 1 份资料还在处理中（处理完后本轮可能读到）'; // D145 文案 + W4-9 ③
 
 const emit = (m: StreamMessage) => act(() => streamListeners.forEach((fn) => fn(m)));
 
@@ -101,7 +101,7 @@ describe('ConversationScopeSlot', () => {
     expect(screen.getByText('产品手册.md')).toBeInTheDocument();
     expect(screen.getByText(/产品库 · 读取 2 次/)).toBeInTheDocument();
     expect(screen.getByText('另有 1 项因授权撤销不再列出')).toBeInTheDocument();
-    expect(screen.getByText('只统计工具已返回的内容，不代表都已进入模型上下文')).toBeInTheDocument();
+    expect(screen.getByText('这里列的是 AI 本轮翻阅过的资料，AI 不一定用到了每一份')).toBeInTheDocument();
   });
 
   it('refetches when an assistant turn of this conversation finishes, not for other conversations', async () => {
@@ -128,7 +128,7 @@ describe('ConversationScopeSlot', () => {
   it('treats a malformed context as a failure', async () => {
     fetchMock.mockResolvedValue(reply(200, { ...CONTEXT, used: [{ resource_id: 'r1' }] }));
     render(<ConversationScopeSlot conversation_id='conv-1' />);
-    expect(await screen.findByText('资料范围处理失败（invalid context response）')).toBeInTheDocument();
+    expect(await screen.findByText('没能处理资料范围，请稍后重试（详情：invalid context response）')).toBeInTheDocument();
   });
 
   it('marks an empty-scope plan and a web-allowed policy', async () => {
@@ -139,14 +139,14 @@ describe('ConversationScopeSlot', () => {
     };
     fetchMock.mockResolvedValue(reply(200, empty));
     render(<ConversationScopeSlot conversation_id='conv-1' />);
-    expect(await screen.findByText(/所选资料当前不可检索；可补充公开资料/)).toBeInTheDocument();
+    expect(await screen.findByText(/所选资料当前不可检索；可联网补充公开资料/)).toBeInTheDocument();
   });
 
   it('shows the superseded notice without a change action, and the hand-off summary of a narrowed conversation', async () => {
     fetchMock.mockResolvedValueOnce(reply(200, { ...CONTEXT, superseded: true }));
     const { unmount } = render(<ConversationScopeSlot conversation_id='conv-old' />);
     expect(
-      await screen.findByText(/本会话的资料范围已严格收缩：不能再检索资料；如需继续，请新建会话/)
+      await screen.findByText(/这个对话的资料范围已减少，不能再检索资料；想继续，请新开一个对话/)
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '更改范围' })).toBeNull();
     unmount();
@@ -155,7 +155,7 @@ describe('ConversationScopeSlot', () => {
       reply(200, { ...CONTEXT, handoff: { from_plan_id: 'plan_0', carried, removed: 2, removed_revoked: 0 } })
     );
     render(<ConversationScopeSlot conversation_id='conv-new' />);
-    expect(await screen.findByText(/由严格收缩新建：带入 1 份仍在范围内的已读资料，移出 2 份/)).toBeInTheDocument();
+    expect(await screen.findByText(/因减少资料新开的对话：带入 1 份仍在范围内、已读过的资料，移出 2 份/)).toBeInTheDocument();
   });
 
   describe('change sources', () => {

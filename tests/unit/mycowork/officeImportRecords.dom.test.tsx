@@ -309,7 +309,7 @@ describe('步骤“等待 / 处理中”', () => {
     const states = (name: string) =>
       [...(screen.getAllByTestId('import-item').find((x) => x.textContent?.includes(name)) as HTMLElement).querySelectorAll('.arco-steps-item-description')].map((e) => e.textContent);
     expect(states('run.md')).toEqual(['完成', '处理中', '等待', '等待']);
-    expect(states('bad.md')).toEqual(['完成', expect.stringContaining('原件已不在'), '等待', '等待']);
+    expect(states('bad.md')).toEqual(['完成', expect.stringContaining('原件找不到了'), '等待', '等待']);
   });
 });
 

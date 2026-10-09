@@ -1,6 +1,6 @@
 /**
  * [mycowork] 文件：officeTemplateNominateDrawer.dom.test.tsx
- * 职责：P09 “查看原模板”抽屉里的审批区（MyCowork PR05 切片 g1，A168）：普通（非候选）资产不显示候选说明与按钮；owner 看被提名的候选时有审批按钮、不显示“等待 owner 审核”。
+ * 职责：P09 “查看原模板”抽屉里的审批区（MyCowork PR05 切片 g1，A168）：普通（非候选）资产不显示候选说明与按钮；owner 看被提名的候选时有审批按钮、不显示“等待管理员审核”。
  * 边界：真实 CompositionPage 与抽屉，只替换 Bridge HTTP（fetch，共用 templateBrowseFixture）。
  */
 import { fireEvent, render, screen, within } from '@testing-library/react';
@@ -57,20 +57,20 @@ describe('审批区 in the P09 detail drawer', () => {
   it('an ordinary asset shows no candidate note and no buttons', async () => {
     const dialog = await openDetail({ ...detail('n2'), approval: 'approved' });
     expect(within(dialog).queryByTestId('asset-transitions')).toBeNull();
-    expect(dialog.textContent).not.toMatch(/等待 owner 审核|已批准，可在/);
+    expect(dialog.textContent).not.toMatch(/等待管理员审核|已批准，可在/);
   });
 
   it('the owner looking at a nominated candidate gets the next-step button and no waiting note', async () => {
     const dialog = await openDetail({ ...candidate, transitions: ['validating'] });
     const zone = await within(dialog).findByTestId('asset-transitions');
     expect(within(zone).getByRole('button', { name: '开始校验' })).toBeEnabled();
-    expect(zone.textContent).not.toContain('等待 owner 审核');
+    expect(zone.textContent).not.toContain('等待管理员审核');
   });
 
   it('a non-owner nominee sees the waiting note and no buttons', async () => {
     const dialog = await openDetail({ ...candidate, transitions: [] });
     const zone = await within(dialog).findByTestId('asset-transitions');
-    expect(zone).toHaveTextContent('等待 owner 审核');
+    expect(zone).toHaveTextContent('等待管理员审核');
     expect(within(zone).queryByRole('button')).toBeNull();
   });
 });

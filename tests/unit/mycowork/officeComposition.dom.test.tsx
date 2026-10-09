@@ -111,7 +111,7 @@ describe('OfficeCompositionSlot', () => {
     render(<OfficeCompositionSlot />);
     await screen.findByText('表格对比');
     fireEvent.click(screen.getAllByRole('button', { name: '选这个结构' })[1] as HTMLElement);
-    await screen.findByText('决策版本 v2');
+    await screen.findByText('方案第 2 版');
     const body = JSON.parse(String(posts()[0]?.[1]?.body));
     expect(posts()[0]?.[0]).toBe('/bridge/v1/template-decisions/dec_1/choices');
     expect(body).toMatchObject({ page_no: 4, asset_id: 'pat.b' });

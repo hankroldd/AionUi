@@ -168,7 +168,7 @@ it.each(['secret', 'bridge-only', 'catalog-failed', 'source-revoked'])(
         reason === 'secret'
           ? /Secret，无法提问/
           : reason === 'bridge-only'
-            ? /没有普通知识库来源/
+            ? /不属于任何知识库/
             : reason === 'catalog-failed'
               ? /无法确认可选知识库/
               : /已不在当前授权范围/

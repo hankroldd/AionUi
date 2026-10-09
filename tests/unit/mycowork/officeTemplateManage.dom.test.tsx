@@ -207,10 +207,10 @@ describe('A231 deprecate / return to draft in the detail drawer', () => {
   });
 
   it.each([
-    ['FORBIDDEN', 403, '只有 owner 能审核模板'],
+    ['FORBIDDEN', 403, '只有管理员能审核模板'],
     ['REVISION_CONFLICT', 409, '状态刚在别处被改过'],
     ['NOT_FOUND', 404, '已不可用'],
-    ['INVALID_REQUEST', 400, '不被允许'],
+    ['INVALID_REQUEST', 400, '现在不能这样操作'],
   ])('弃用失败 %s：role=alert 如实说明；409 / 400 会重读详情', async (code, status, text) => {
     transitionReply = () => err(status, code);
     serveCandidate();

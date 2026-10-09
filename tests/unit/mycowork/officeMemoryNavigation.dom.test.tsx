@@ -50,7 +50,7 @@ it('one portal owns the four real statuses; selection and collapse use separate 
         .getAllByRole('button')
         .map((b) => b.textContent)
     ).toEqual(['', '待确认', '已生效', '已停用', '已拒绝']);
-    expect(within(nav).getByText('以后增强').closest('section')?.querySelector('button')).toBeNull();
+    expect(within(nav).queryByText('以后增强')).toBeNull();
     fireEvent.click(within(nav).getByRole('button', { name: '已停用' }));
     await screen.findByText('记忆状态（虚构） disabled');
     expect(onSelect).toHaveBeenCalledOnce();

@@ -1,7 +1,7 @@
 /**
  * [mycowork] 文件：officeTemplateNominate.dom.test.tsx
  * 职责：空间行“···→存为模板候选”（MyCowork PR05 切片 g1，A168、R034）：菜单项出现条件、提名请求体与幂等、无标记 / 有标记（含备注、批注、未能检查）
- *       两种结果的呈现、owner 在详情里推进审批与非 owner 的“等待 owner 审核”、各错误码提示、对话框语义与焦点归还。
+ *       两种结果的呈现、owner 在详情里推进审批与非 owner 的“等待管理员审核”、各错误码提示、对话框语义与焦点归还。
  * 边界：真实资源页与 Arco，只替换 Bridge HTTP（fetch）；不 mock 菜单、对话框或审批逻辑。
  */
 import React from 'react';
@@ -246,7 +246,7 @@ describe('nomination dialog', () => {
     [fail(400, 'INVALID_REQUEST', 'only 16:9 and 4:3 slides can become templates'), '画幅不是 16:9 / 4:3'],
     [fail(400, 'INVALID_REQUEST', 'secret resources cannot become template assets'), '已标为 Secret'],
     [fail(400, 'INVALID_REQUEST', 'something unexpected'), '请求无效'],
-    [fail(409, 'SUBMISSION_CONFLICT'), '同一编号提交的内容不同'],
+    [fail(409, 'SUBMISSION_CONFLICT'), '和刚才提交过的不一致'],
     [fail(503, 'UPSTREAM_UNAVAILABLE'), '资料服务暂不可用'],
   ])('translates a failed nomination: %#', async (res, text) => {
     nominateReply = () => res.clone();
@@ -329,19 +329,19 @@ describe('result', () => {
     expect(await within(dialog).findByTestId('nominate-guide')).toHaveTextContent('浏览全部 → 审批状态：待审核');
   });
 
-  it('no flags: says it can go to review, lists nothing, and a non-owner sees 等待 owner 审核 without buttons', async () => {
+  it('no flags: says it can go to review, lists nothing, and a non-owner sees 等待管理员审核 without buttons', async () => {
     mount();
     const { dialog } = await openNominate();
     fill(dialog);
     submit(dialog);
     const result = await within(dialog).findByTestId('nominate-result');
-    expect(result).toHaveTextContent('可以提交审核 / 批准');
-    expect(within(result).queryByRole('list', { name: '标记' })).toBeNull();
-    expect(await within(result).findByText(/等待 owner 审核/)).toBeInTheDocument();
+    expect(result).toHaveTextContent('可以提交审核');
+    expect(within(result).queryByRole('list', { name: '需清理的内容' })).toBeNull();
+    expect(await within(result).findByText(/等待管理员审核/)).toBeInTheDocument();
     expect(within(result).queryByRole('button', { name: /批准|校验|可预览/ })).toBeNull();
   });
 
-  it('flags: lists every kind with its path and the contract text, says it cannot be approved, offers no approve button even to the owner', async () => {
+  it('flags: lists every kind with its page (full path only in title) and the contract text, says it cannot be approved, offers no approve button even to the owner', async () => {
     findings = [
       { kind: 'date', path: '/slide[2]/shape[1]', text: '2026年3月' },
       { kind: 'number', path: '/slide[2]/shape[2]', text: '12%' },
@@ -361,18 +361,19 @@ describe('result', () => {
     submit(dialog);
     const result = await within(dialog).findByTestId('nominate-result');
     expect(result).toHaveTextContent('发现 8 条需要清理的内容');
-    expect(result).toHaveTextContent('有标记不能批准');
+    expect(result).toHaveTextContent('有需清理的内容就不能批准');
     expect(result).toHaveTextContent('重新导入再提名');
-    const list = within(result).getByRole('list', { name: '标记' });
+    const list = within(result).getByRole('list', { name: '需清理的内容' });
     const rows = within(list).getAllByRole('listitem');
     expect(rows.map((r) => r.getAttribute('data-kind'))).toEqual(findings.map((f) => f.kind));
-    expect(rows[0]).toHaveTextContent('日期 · /slide[2]/shape[1] · “2026年3月”');
-    expect(rows[5]).toHaveTextContent('演讲者备注 · /slide[2]/notes');
+    expect(rows[0]).toHaveTextContent('日期 · 第 2 页 · “2026年3月”');
+    expect(rows[0]).toHaveAttribute('title', '/slide[2]/shape[1]');
+    expect(rows[5]).toHaveTextContent('演讲者备注 · 第 2 页');
     expect(rows[5]).toHaveTextContent('（不显示内容）');
-    expect(rows[6]).toHaveTextContent('批注 · /slide[2]/comment[1]');
+    expect(rows[6]).toHaveTextContent('批注 · 第 2 页');
     expect(rows[7]).toHaveTextContent('备注或批注未能检查');
     const zone = await within(result).findByTestId('asset-transitions'); // 审批区已加载
-    expect(zone).toHaveTextContent('还有 8 条去事实化标记，不能批准');
+    expect(zone).toHaveTextContent('还有 8 条需要清理的内容，不能批准');
     expect(within(zone).queryByRole('button')).toBeNull(); // 带标记永远批准不了，退回草稿也清不掉标记：一个按钮都不给
     expect(within(result).queryByRole('button', { name: '批准' })).toBeNull();
   });
@@ -404,16 +405,16 @@ describe('result', () => {
       return text;
     };
     transitions = [];
-    expect(await note()).toContain('等待 owner 审核'); // 非 owner、草稿
+    expect(await note()).toContain('等待管理员审核'); // 非 owner、草稿
     approval = 'deprecated';
-    expect(await note()).not.toContain('等待 owner 审核');
+    expect(await note()).not.toContain('等待管理员审核');
     approval = 'approved';
     const approved = await note();
-    expect(approved).not.toContain('等待 owner 审核');
+    expect(approved).not.toContain('等待管理员审核');
     expect(approved).toContain('已批准');
     approval = 'draft';
     transitions = ['validating'];
-    expect(await note()).not.toContain('等待 owner 审核'); // owner 有按钮
+    expect(await note()).not.toContain('等待管理员审核'); // owner 有按钮
   });
 
   it('English labels for the notes / comments / notes_unchecked flags', async () => {
@@ -529,10 +530,10 @@ describe('owner approval in the same dialog', () => {
   });
 
   it.each([
-    [fail(409, 'DEFACTUALIZATION_REQUIRED'), '还有去事实化标记，不能批准', false],
+    [fail(409, 'DEFACTUALIZATION_REQUIRED'), '还有需要清理的内容，不能批准', false],
     [fail(409, 'REVISION_CONFLICT'), '刚在别处被改过，已重新读取', true],
-    [fail(403, 'FORBIDDEN'), '只有 owner 能审核模板', false],
-    [fail(400, 'INVALID_REQUEST'), '这一步迁移不被允许，已重新读取', true],
+    [fail(403, 'FORBIDDEN'), '只有管理员能审核模板', false],
+    [fail(400, 'INVALID_REQUEST'), '现在不能这样操作，已重新读取', true],
     [fail(503, 'UPSTREAM_UNAVAILABLE'), '资料服务暂不可用', false],
   ])('translates a refused transition: %#', async (res, text, rereads) => {
     transitions = ['validating'];

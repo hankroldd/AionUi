@@ -177,7 +177,7 @@ describe('selected resource questions', () => {
     pick();
     pick('B.md');
     expect(ask()).toBeDisabled();
-    expect(ask().getAttribute('title')).toContain('没有普通知识库来源');
+    expect(ask().getAttribute('title')).toContain('不属于任何知识库');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(onAskScope).not.toHaveBeenCalled();
     expect(within(bar()).getByText('已选 2 项')).toBeVisible();

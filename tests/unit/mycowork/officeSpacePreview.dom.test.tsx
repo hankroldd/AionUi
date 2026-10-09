@@ -108,7 +108,7 @@ describe('space preview toolbar', () => {
     await waitFor(() => expect(contentCalls()).toHaveLength(1));
     const reads = fetchMock.mock.calls.length;
     expect(dialog.querySelector('.mcw-space-preview-name')).toHaveTextContent(name);
-    expect(within(dialog).getByRole('link', { name: '下载当前内容' })).toHaveAttribute(
+    expect(within(dialog).getByRole('link', { name: '下载' })).toHaveAttribute(
       'href',
       '/bridge/v1/resources/res_0/preview'
     );
@@ -133,7 +133,7 @@ describe('space preview toolbar', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Current content preview' });
     for (const action of ['Zoom out', 'Zoom in', 'Reset zoom', 'Close preview'])
       expect(within(dialog).getByRole('button', { name: action })).toBeInTheDocument();
-    for (const action of ['Download current content', 'Versions and changes'])
+    for (const action of ['Download', 'Versions and changes'])
       expect(within(dialog).getByRole('link', { name: action })).toBeInTheDocument();
     expect(within(dialog).queryByRole('textbox')).toBeNull();
   });

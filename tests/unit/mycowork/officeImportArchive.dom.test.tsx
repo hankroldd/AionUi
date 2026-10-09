@@ -156,18 +156,18 @@ describe('ZIP 导入入口', () => {
     await screen.findByText('已上传，待确认');
     fireEvent.click(confirmButton());
     expect(within(await screen.findByTestId('import-archive')).getByRole('alert')).toHaveTextContent(
-      '这个压缩包未通过安全检查，已整包拒绝（原因码：future_reason）',
+      '这个压缩包未通过安全检查，已整包拒绝（详情：future_reason）',
     );
   });
 
-  it('未知跳过原因显示“已跳过（原因码：X）”', async () => {
+  it('未知跳过原因显示“已跳过（详情：X）”', async () => {
     const odd = { ...expanded, skipped: [{ path: 'a/b.bin', reason: 'future_skip' }] };
     bridge({ created: batch([archiveItem('docs/a.md')], [odd]) });
     renderImports('zh-CN');
     await addFiles(inFlow(), zip('资料包.zip'));
     await screen.findByText('已上传，待确认');
     fireEvent.click(confirmButton());
-    expect(await screen.findByText(/已跳过（原因码：future_skip）/)).toBeInTheDocument();
+    expect(await screen.findByText(/已跳过（详情：future_skip）/)).toBeInTheDocument();
   });
 
   it('批次里有两个 ZIP：各项的包内路径按 upload_id 对应到各自的 ZIP', async () => {

@@ -122,7 +122,7 @@ describe('ResourcesPage Secret (D116)', () => {
       expected_metadata_revision: 7,
       secret: false,
     });
-    expect(await screen.findByText('只有资源本人可以标记或取消 Secret')).toBeInTheDocument();
+    expect(await screen.findByText('只有文件的所有者可以标记或取消 Secret')).toBeInTheDocument();
   });
 
   it('English labels', async () => {

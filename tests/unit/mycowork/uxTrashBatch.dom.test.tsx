@@ -81,7 +81,7 @@ const bar = () => screen.getByRole('region', { name: '所选资料的操作' });
 async function trashSelected(...names: string[]) {
   await screen.findByRole('button', { name: names[0]!, exact: true });
   for (const n of names) pick(n);
-  fireEvent.click(within(bar()).getByRole('button', { name: '删除' }));
+  fireEvent.click(within(bar()).getByRole('button', { name: '移入回收站' }));
   const dialog = await screen.findByRole('dialog', { name: '移入回收站' });
   fireEvent.click(within(dialog).getByRole('button', { name: '移入回收站' }));
 }
@@ -156,7 +156,7 @@ describe('多选删除不锁人', () => {
     await trashSelected('A.md');
     await waitFor(() => expect(trashCalls('res_a')).toHaveLength(1));
     pick('B.md');
-    fireEvent.click(within(bar()).getByRole('button', { name: '删除' }));
+    fireEvent.click(within(bar()).getByRole('button', { name: '移入回收站' }));
     expect(await screen.findByText(/上一批还在处理/)).toBeInTheDocument();
     await waitFor(() => expect(dialogGone()).toBe(true));
     release('res_a');

@@ -1,7 +1,7 @@
 /**
  * [mycowork] PR11 W4-3b。文件：tests/unit/mycowork/officeKbManage.dom.test.tsx
  * 职责：空间“知识库”标题旁的 ⚙：只有 /scopes 标了 can_manage_kbs 的人才有；新建只问名称；改名；删除两步确认（第一步写明“移出该库 N 条资料并保留原件”
- *       与“删除期间不要在 WeKnora 自带界面向该库上传”，第二步才发请求，请求体再写一次库 id）；受理后显示进度、结束后重读目录；
+ *       与“删除期间不要从别处（如知识库服务自带的页面）向该库上传”，第二步才发请求，请求体再写一次库 id）；受理后显示进度、结束后重读目录；
  *       失败按原因说明库没有删并可重试；重名、保留前缀、非 owner 等服务端拒绝给出可读提示。
  * 边界：只替换 Bridge HTTP（按 OpenAPI 的 knowledge-bases 与 knowledge-removals 形状）；Arco、弹窗与行组件均实用，不调用上游或模型。
  */
@@ -172,7 +172,7 @@ describe('space: knowledge base management', () => {
     const step1 = await screen.findByTestId('mycowork-kb-delete-step1', undefined, LONG);
     await waitFor(() => expect(step1.textContent).toContain('移出该库 12 条资料并保留原件'), LONG);
     expect(step1.textContent).toContain('其他有权限的成员将不能再检索这些资料');
-    expect(step1.textContent).toContain('删除期间不要在 WeKnora 自带界面向该库上传');
+    expect(step1.textContent).toContain('删除期间不要从别处（如知识库服务自带的页面）向该库上传');
     expect(sent('DELETE')).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: '继续' }));
     expect(await screen.findByTestId('mycowork-kb-delete-step2', undefined, LONG)).toBeInTheDocument();
@@ -222,7 +222,7 @@ describe('space: knowledge base management', () => {
 
   it.each([
     [409, 'NAME_CONFLICT', undefined, '已有同名知识库'],
-    [400, 'INVALID_REQUEST', undefined, '不能以 mycowork-archive- 开头'],
+    [400, 'INVALID_REQUEST', undefined, '不能以系统保留的 mycowork-archive- 开头'],
     [403, 'FORBIDDEN', undefined, '只有管理员能管理知识库'],
     [409, 'REMOVAL_STATE_CONFLICT', 'removal_pending', '正在删除，或其中有资料正在移出'],
     [409, 'REMOVAL_STATE_CONFLICT', 'template_kb', '模板库，不能改名或删除'],

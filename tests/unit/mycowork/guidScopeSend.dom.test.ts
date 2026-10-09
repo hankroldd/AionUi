@@ -198,7 +198,7 @@ describe('withGuidScope', () => {
       .mockResolvedValueOnce(
         reply(201, { ...TOKEN, session_mcp_server: { ...SERVER, transport: { ...SERVER.transport, type: 'stdio' } } })
       );
-    await expect(withGuidScope({})).rejects.toThrow('资料范围处理失败（invalid token response）');
+    await expect(withGuidScope({})).rejects.toThrow('没能处理资料范围，请稍后重试（详情：invalid token response）');
   });
 });
 
@@ -312,7 +312,7 @@ describe('useGuidSend with a selected scope', () => {
       await result.current.handleSend();
     });
     expect(d.navigate).toHaveBeenCalledWith('/conversation/conv-1');
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('未能关联到会话'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('没能记到这个对话里'));
     warn.mockRestore();
   });
 

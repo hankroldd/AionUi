@@ -92,21 +92,21 @@ afterEach(() => {
 });
 
 describe('row ··· menu', () => {
-  it('knowledge-base rows can be asked about and downloaded but have no 删除', async () => {
+  it('knowledge-base rows can be asked about and downloaded but have no 移入回收站', async () => {
     mount();
     await openMenu('C.md');
     expect(await screen.findByRole('menuitem', { name: '用这份资料提问' })).not.toHaveClass('arco-dropdown-menu-disabled');
     expect(screen.getByRole('link', { name: '下载' })).toHaveAttribute('href', '/bridge/v1/resources/res_c/preview');
     expect(screen.getByRole('link', { name: '下载' })).toHaveAttribute('download', 'C.md');
-    expect(screen.queryByRole('menuitem', { name: '删除' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: '移入回收站' })).toBeNull();
   });
 
-  it('an imported file that already has a knowledge-base link has no 删除 either (the source manages it)', async () => {
+  it('an imported file that already has a knowledge-base link has no 移入回收站 either (the source manages it)', async () => {
     items = [file('res_e', { source_id: 'src_a', state: 'ready' })];
     mount();
     await openMenu('E.md');
     await screen.findByRole('menuitem', { name: '用这份资料提问' });
-    expect(screen.queryByRole('menuitem', { name: '删除' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: '移入回收站' })).toBeNull();
   });
 
   it('ask: a knowledge-base file hands exactly that file to the host; outputs and archived files are disabled with a reason', async () => {
@@ -155,7 +155,7 @@ describe('row ··· menu', () => {
   it('delete: cancelling the confirm writes nothing; confirming POSTs trash with the freshly read metadata revision', async () => {
     mount();
     await openMenu('A.md');
-    fireEvent.click(await screen.findByRole('menuitem', { name: '删除' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '移入回收站' }));
     const dialog = await confirmDialog();
     expect(dialog).toHaveTextContent('可在回收站恢复');
     fireEvent.click(within(dialog).getByRole('button', { name: '取消' }));
@@ -163,7 +163,7 @@ describe('row ··· menu', () => {
     expect(calls('POST', '/trash')).toHaveLength(0);
 
     await openMenu('A.md');
-    fireEvent.click(await screen.findByRole('menuitem', { name: '删除' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '移入回收站' }));
     fireEvent.click(within(await confirmDialog()).getByRole('button', { name: '移入回收站' }));
     await waitFor(() => expect(calls('POST', '/resources/res_a/trash')).toHaveLength(1));
     expect(JSON.parse(String((calls('POST', '/resources/res_a/trash')[0]?.[1] as RequestInit).body))).toEqual({
@@ -191,7 +191,7 @@ describe('multi-select bar', () => {
     mount();
     await screen.findByRole('button', { name: 'A.md', exact: true });
     for (const n of ['A.md', 'C.md', 'D.md']) pick(n);
-    fireEvent.click(within(bar()).getByRole('button', { name: '删除' }));
+    fireEvent.click(within(bar()).getByRole('button', { name: '移入回收站' }));
     const dialog = await confirmDialog();
     expect(dialog).toHaveTextContent('将 2 项移入回收站');
     expect(dialog).toHaveTextContent('另有 1 项不能移入回收站');
@@ -204,7 +204,7 @@ describe('multi-select bar', () => {
     mount();
     await screen.findByRole('button', { name: 'C.md', exact: true });
     pick('C.md');
-    expect(within(bar()).getByRole('button', { name: '删除' })).toBeDisabled();
+    expect(within(bar()).getByRole('button', { name: '移入回收站' })).toBeDisabled();
   });
 
   it('delete: a partial failure is reported by name (with a plain reason) and the rest still moved', async () => {
@@ -213,7 +213,7 @@ describe('multi-select bar', () => {
     await screen.findByRole('button', { name: 'A.md', exact: true });
     pick('A.md');
     pick('B.md');
-    fireEvent.click(within(bar()).getByRole('button', { name: '删除' }));
+    fireEvent.click(within(bar()).getByRole('button', { name: '移入回收站' }));
     fireEvent.click(within(await confirmDialog()).getByRole('button', { name: '移入回收站' }));
     expect(await screen.findByText(/已移入 1 项；1 项没移成功：B\.md/)).toBeInTheDocument();
     expect(calls('POST', '/resources/res_a/trash')).toHaveLength(1);

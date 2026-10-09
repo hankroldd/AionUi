@@ -248,15 +248,15 @@ describe('space selection and batch tags', () => {
     await choose(dialog);
     metadata.res_b.metadata_revision += 1;
     metadata.res_b.tag_ids.push('tag_keep');
-    fireEvent.click(within(dialog).getByRole('button', { name: '应用预览' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: '应用' }));
     await within(dialog).findByText('此文件已被别处改动；点“重试失败项”会先重新读取，再按同样的增删应用。');
     expect(within(dialog).getByText('已完成')).toBeInTheDocument();
     expect(body('res_a')).toEqual({ expected_metadata_revision: 3, tags: { add: ['tag_new'], remove: [] } });
     expect(body('res_b')).toEqual({ expected_metadata_revision: 4, tags: { add: ['tag_new'], remove: [] } });
     expect(calls('PATCH', 'res_i')).toHaveLength(0);
     expect(metadata.res_a.secret).toBe(true);
-    // 失败后主按钮就是“重试失败项”（可点），不再要先点“重新读取”再点“应用预览”
-    expect(within(dialog).queryByRole('button', { name: '应用预览' })).toBeNull();
+    // 失败后主按钮就是“重试失败项”（可点），不再要先点“重新读取”再点“应用”
+    expect(within(dialog).queryByRole('button', { name: '应用' })).toBeNull();
     expect(within(dialog).queryByRole('button', { name: '重新读取失败项' })).toBeNull();
     const retry = within(dialog).getByRole('button', { name: '重试失败项' });
     expect(retry).toBeEnabled();
@@ -275,7 +275,7 @@ describe('space selection and batch tags', () => {
     fireEvent.click(within(dialog).getByLabelText('移除标签'));
     await choose(dialog, '原标签');
     expect(within(dialog).getByText('原标签 → 无标签')).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole('button', { name: '应用预览' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: '应用' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(body('res_i')).toEqual({ expected_metadata_revision: 2, tags: { add: [], remove: ['tag_keep'] } });
     expect(metadata.res_a.tag_ids).toEqual(['tag_keep']);
@@ -287,12 +287,12 @@ describe('space selection and batch tags', () => {
     await screen.findByRole('button', { name: 'A.md' });
     const dialog = await openBulk();
     await choose(dialog);
-    expect(within(dialog).getByRole('button', { name: '应用预览' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: '应用' })).toBeDisabled();
     expect(within(dialog).getByText('B.md')).toBeInTheDocument();
     expect(calls('PATCH')).toHaveLength(0);
     blockedRead = undefined;
     fireEvent.click(within(dialog).getByRole('button', { name: '重新读取失败项' }));
-    await waitFor(() => expect(within(dialog).getByRole('button', { name: '应用预览' })).toBeEnabled());
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: '应用' })).toBeEnabled());
     expect(calls('GET', 'res_a')).toHaveLength(1);
     expect(calls('GET', 'res_b')).toHaveLength(2);
     expect(calls('PATCH')).toHaveLength(0);
@@ -309,7 +309,7 @@ describe('space selection and batch tags', () => {
     const wrapper = document.querySelector('.arco-modal-wrapper')!;
     fireEvent.mouseDown(wrapper);
     fireEvent.click(wrapper);
-    fireEvent.click(within(dialog).getByRole('button', { name: '应用预览' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: '应用' }));
     await waitFor(() => expect(calls('PATCH')).toHaveLength(2));
     expect(within(dialog).queryByRole('button', { name: 'Close' })).toBeNull();
     expect(within(dialog).getByRole('button', { name: '取消' })).toBeDisabled();
@@ -327,7 +327,7 @@ describe('space selection and batch tags', () => {
     const dialog = await openBulk();
     await choose(dialog);
     metadata.res_b.metadata_revision += 1;
-    fireEvent.click(within(dialog).getByRole('button', { name: '应用预览' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: '应用' }));
     const retry = await within(dialog).findByRole('button', { name: '重试失败项' });
     let release!: () => void;
     delayRead = new Promise<void>((r) => {

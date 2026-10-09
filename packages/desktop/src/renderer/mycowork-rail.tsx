@@ -9,7 +9,7 @@ import { Button, Dropdown, Message, Tooltip } from '@arco-design/web-react';
 import { AllApplication, Brain, Home, More, Time, User } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { navigationText } from '@mycowork/ui';
+import { navigationText, resetAccountScopedState } from '@mycowork/ui';
 import { useSpaceNavigationState } from '@/renderer/mycowork-resource-navigation';
 import { DARK_THEME_ID, LIGHT_THEME_ID, SYSTEM_THEME_ID } from '@/common/theme/constants';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
@@ -219,6 +219,8 @@ function useRailActions(mobile: boolean, lang: string) {
       await logout();
       // PreviewProvider 跨登录仍挂载；只清磁盘会被存活的 tabs 状态重新写回。
       clearPreviewForScope();
+      // [mycowork] 删除 / 永久删除 / 发布的后台任务状态与提示带着上一个账号的文件名，登出后清掉
+      resetAccountScopedState();
       if (mobile) layout?.setSiderCollapsed(true);
     } catch {
       Message.error(text.logoutFailed);

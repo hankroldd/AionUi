@@ -207,7 +207,7 @@ describe('multi-select bar', () => {
     expect(within(bar()).getByRole('button', { name: '删除' })).toBeDisabled();
   });
 
-  it('delete: a partial failure is reported by name and the rest still moved', async () => {
+  it('delete: a partial failure is reported by name (with a plain reason) and the rest still moved', async () => {
     failTrash = new Set(['res_b']);
     mount();
     await screen.findByRole('button', { name: 'A.md', exact: true });
@@ -215,7 +215,7 @@ describe('multi-select bar', () => {
     pick('B.md');
     fireEvent.click(within(bar()).getByRole('button', { name: '删除' }));
     fireEvent.click(within(await confirmDialog()).getByRole('button', { name: '移入回收站' }));
-    expect(await screen.findByText(/已移入 1 项；1 项没有成功：B\.md/)).toBeInTheDocument();
+    expect(await screen.findByText(/已移入 1 项；1 项没移成功：B\.md/)).toBeInTheDocument();
     expect(calls('POST', '/resources/res_a/trash')).toHaveLength(1);
   });
 

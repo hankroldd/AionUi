@@ -93,7 +93,7 @@ const deepHeadings = (el: Element | ShadowRoot): string[] => [
 const urls = () => fetchMock.mock.calls.map(([url]) => String(url));
 // 时间线读到之前右下是同一 testid 的骨架占位；等到带标题的预览本体
 const preview = async () =>
-  (await screen.findByText('当前内容预览')).closest('[data-testid="versions-preview"]') as HTMLElement;
+  (await screen.findByText(/^当前内容预览 · v/)).closest('[data-testid="versions-preview"]') as HTMLElement;
 
 describe('OfficeVersionsSlot — current version preview (D138)', () => {
   beforeEach(() => {
@@ -115,7 +115,7 @@ describe('OfficeVersionsSlot — current version preview (D138)', () => {
     });
     expect(frame.getAttribute('sandbox')).toBe('allow-scripts'); // 不带 allow-same-origin：碰不到 AionUi 的 cookie 与页面
     expect(frame.getAttribute('srcdoc')).toContain('第一页（虚构）');
-    expect(within(box).getByText('当前内容预览')).toBeInTheDocument();
+    expect(within(box).getByText(/^当前内容预览 · v/)).toBeInTheDocument();
     expect(within(box).getByText('只读')).toBeInTheDocument();
     expect(urls()).toContain('/bridge/v1/resources/res_1/office/html');
   });
@@ -238,7 +238,7 @@ describe('OfficeVersionsSlot — current version preview (D138)', () => {
     heads.unshift('rev_c'); // 在线编辑保存登记了新版本
     bridge({ preview: () => page('<html><head></head><body>第二版（虚构）</body></html>') });
     fireEvent.click(within(box).getByRole('button', { name: '刷新预览' }));
-    expect(await within(box).findByText('当前内容预览')).toBeInTheDocument(); // timeline序号不绑定当前GET正文
+    expect(await within(box).findByText(/^当前内容预览 · v/)).toBeInTheDocument(); // timeline序号不绑定当前GET正文
     await waitFor(() => expect(box.querySelector('iframe')?.getAttribute('srcdoc')).toContain('第二版（虚构）'));
     expect(within(box).queryByText('编辑中')).toBeNull();
   });

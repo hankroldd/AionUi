@@ -9,6 +9,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 // Same as renderer/main.tsx: Arco's global Message needs the React 19 adapter (tests load the CJS lib build).
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ConversationScopeSlot, withGuidScope } from '@/renderer/mycowork-slots';
@@ -64,6 +65,9 @@ const SUMMARY = '项目A资料 + 产品库；公网关闭；AI 可引用 8 · �
 
 const emit = (m: StreamMessage) => act(() => streamListeners.forEach((fn) => fn(m)));
 
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+readRetry.delays = [0, 0];
+
 describe('ConversationScopeSlot', () => {
   beforeEach(() => {
     streamListeners.clear();
@@ -77,9 +81,10 @@ describe('ConversationScopeSlot', () => {
     fetchMock.mockResolvedValue(reply(200, CONTEXT));
     render(<ConversationScopeSlot conversation_id='conv 1' />);
     expect(await screen.findByText(SUMMARY)).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith('/bridge/v1/conversations/conv%201/context', {
-      credentials: 'same-origin',
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/bridge/v1/conversations/conv%201/context',
+      expect.objectContaining({ credentials: 'same-origin' }),
+    );
   });
 
   it('says "plain chat only" when the conversation has no plan (404)', async () => {

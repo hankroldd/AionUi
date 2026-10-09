@@ -6,6 +6,7 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 
@@ -178,6 +179,9 @@ const draftBody = (revision: number) => ({
   name: '用户草稿',
   filter: { tag_ids: ['tag_a', 'tag_b'], source_ids: ['src_fixture'], include_descendants: false },
 });
+
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+readRetry.delays = [0, 0];
 
 describe('智能分组条件编辑冲突恢复', () => {
   beforeEach(() => {

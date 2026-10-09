@@ -7,6 +7,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { PreviewBody, versionsText, type RenderMarkdown } from '@mycowork/ui';
 
@@ -33,6 +34,9 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
 });
 afterEach(() => vi.unstubAllGlobals());
+
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+readRetry.delays = [0, 0];
 
 describe('shared preview body — format and safety', () => {
   it.each(['docx', 'PPTX', 'xlsx'])(
@@ -140,15 +144,13 @@ describe('shared preview body — failures and retry', () => {
   );
 
   it('retries a failed read with a fresh signal and never creates an editor session, plan or write', async () => {
-    fetchMock
-      .mockResolvedValueOnce(response(503, {}))
-      .mockResolvedValueOnce(page('<html><body>重试成功（虚构）</body></html>'));
+    fetchMock.mockResolvedValueOnce(response(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'x' } }));
+    fetchMock.mockResolvedValueOnce(page('<html><body>重试成功（虚构）</body></html>'));
     render(<PreviewBody {...props} />);
     fireEvent.click(await screen.findByRole('button', { name: '重试' }));
     await waitFor(() => expect(frame()).toHaveAttribute('srcdoc', expect.stringContaining('重试成功')));
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(Array(2).fill('/bridge/v1/resources/res_a/office/html'));
-    expect(signalAt(0).aborted).toBe(true);
-    expect(signalAt(1).aborted).toBe(false);
+    expect(signalAt(1).aborted).toBe(false); // 第一次已结束，不再有需要取消的在途请求（在途取消见下面的用例）
     expect(signalAt(0)).not.toBe(signalAt(1));
     expect(fetchMock.mock.calls.every(([, init]) => !init.body && !init.method)).toBe(true);
   });

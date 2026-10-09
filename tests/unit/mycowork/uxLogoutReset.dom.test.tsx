@@ -7,11 +7,13 @@ import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { Message } from '@arco-design/web-react';
+import { Message, Notification } from '@arco-design/web-react';
 import { runTrashBatch } from '@mycowork/ui/pages/resources/trash-batch-notice.tsx';
 import { trashBatchState } from '@mycowork/ui/pages/resources/trash-batch.ts';
 import { purgeBatch, startPurge } from '@mycowork/ui/pages/trash/purge-batch.ts';
 import { publishNotice } from '@mycowork/ui/pages/versions/publication-notice.tsx';
+import { reportClosed } from '@mycowork/ui/pages/office-editor/save-notices.tsx';
+import { editorText } from '@mycowork/ui/pages/office-editor/messages.ts';
 
 configure({ asyncUtilTimeout: 4000 });
 const state = vi.hoisted(() => ({ logout: vi.fn(), closePreview: vi.fn(), clearPreviewForScope: vi.fn() }));
@@ -39,16 +41,28 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   Message.clear();
+  Notification.clear();
   vi.unstubAllGlobals();
 });
 
-it('退出登录后：失败提示消失、三类批次状态为空', async () => {
+it('退出登录后：失败提示与写回冲突通知消失、三类批次状态为空', async () => {
   runTrashBatch(
     [{ resource_id: 'res_x', file_name: '上一个账号的文件.md', origin: 'imports', source_id: null } as never],
     'zh-CN',
   );
   startPurge([{ resource_id: 'res_y', file_name: '另一个文件.md', metadata_revision: 1 } as never], false);
   publishNotice('publish:res_z').info('上一个账号的发布提示');
+  // 保存跟踪器：写回冲突的常驻通知里带上一个账号的文件名
+  reportClosed(editorText('zh-CN'), {
+    session_id: 'eds_x',
+    resource_id: 'res_w',
+    base_revision_id: 'rev_a',
+    saved_revision_id: 'rev_b',
+    state: 'closed',
+    workspace_writeback_status: 'conflict',
+    workspace_writeback: { relative_path: '上一个账号的写回.md', outcome: 'conflict', saved_as: '上一个账号的写回.人工编辑.md', reason: null },
+  } as never);
+  await screen.findByText(/上一个账号的写回\.人工编辑\.md/);
   await screen.findByText(/上一个账号的文件\.md/);
   await waitFor(() => expect(purgeBatch().failed).toHaveLength(1));
   render(
@@ -60,6 +74,7 @@ it('退出登录后：失败提示消失、三类批次状态为空', async () =
   fireEvent.click(await screen.findByRole('menuitem', { name: '退出登录' }));
   await waitFor(() => expect(screen.queryByText(/上一个账号的文件\.md/)).toBeNull());
   await waitFor(() => expect(screen.queryByText('上一个账号的发布提示')).toBeNull());
+  await waitFor(() => expect(screen.queryByText(/上一个账号的写回\.人工编辑\.md/)).toBeNull());
   expect(trashBatchState().failed).toHaveLength(0);
   expect(trashBatchState().total).toBe(0);
   expect(purgeBatch().total).toBe(0);

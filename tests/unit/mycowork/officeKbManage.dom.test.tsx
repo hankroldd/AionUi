@@ -68,7 +68,10 @@ function bridge() {
     if (path.startsWith('/bridge/v1/knowledge-bases')) {
       if (reject) return reply(reject.status, { error: { code: reject.code, message: reject.message ?? 'fixture' } });
       if (method === 'POST') {
-        sources = [...sources, { source_id: 'src_new', name: String(body['name']), provider: 'weknora', counts: counts(0) }];
+        sources = [
+          ...sources,
+          { source_id: 'src_new', name: String(body['name']), provider: 'weknora', counts: counts(0) },
+        ];
         return reply(201, { source_id: 'src_new', name: body['name'] });
       }
       if (method === 'PATCH') {
@@ -224,15 +227,18 @@ describe('space: knowledge base management', () => {
     [409, 'REMOVAL_STATE_CONFLICT', 'removal_pending', '正在删除，或其中有资料正在移出'],
     [409, 'REMOVAL_STATE_CONFLICT', 'template_kb', '模板库，不能改名或删除'],
     [503, 'UPSTREAM_UNAVAILABLE', undefined, '没有配置，或知识库服务暂时不可用'],
-  ])('maps the server rejection %s %s to a readable notice and sends no further request', async (status, code, message, text) => {
-    render(<OfficeResourcesSlot />);
-    const dialog = await open();
-    reject = { status, code, ...(message ? { message } : {}) };
-    void dialog;
-    create('某个名称');
-    expect(await screen.findByText(new RegExp(text), undefined, LONG)).toBeInTheDocument();
-    expect(sent('POST', '/knowledge-bases')).toHaveLength(1);
-  });
+  ])(
+    'maps the server rejection %s %s to a readable notice and sends no further request',
+    async (status, code, message, text) => {
+      render(<OfficeResourcesSlot />);
+      const dialog = await open();
+      reject = { status, code, ...(message ? { message } : {}) };
+      void dialog;
+      create('某个名称');
+      expect(await screen.findByText(new RegExp(text), undefined, LONG)).toBeInTheDocument();
+      expect(sent('POST', '/knowledge-bases')).toHaveLength(1);
+    }
+  );
 
   it('a rejected delete (403 / pending) shows the reason and does not poll', async () => {
     reject = { status: 409, code: 'REMOVAL_STATE_CONFLICT', message: 'removal_pending' };
@@ -274,5 +280,5 @@ describe('space: knowledge base management', () => {
     expect(await within(stale).findByText(/暂时读不到删除进度/, undefined, LONG)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '重新读取' })).toBeNull(); // 不需要手动：页面自己会接着读
     await waitFor(() => expect(screen.queryByText('渠道库')).toBeNull(), LONG);
-  });
+  }, 30_000); // 真实定时器：轮询 1.5 秒 + 失败后退避 3 秒，高负载下 10 秒不够
 });

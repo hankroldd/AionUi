@@ -68,7 +68,11 @@ const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
-  vi.stubGlobal('DocsAPI', { DocEditor: vi.fn(() => ({ destroyEditor: vi.fn() })) });
+  // 页面用 new DocsAPI.DocEditor(...)：箭头函数不能当构造器，会在页面里抛未处理的错误
+  const DocEditor = vi.fn(function (this: object) {
+    return { destroyEditor: vi.fn() };
+  });
+  vi.stubGlobal('DocsAPI', { DocEditor });
   window.location.hash = '#/office/space';
   clearEditReturn();
   readRetry.delays = [];

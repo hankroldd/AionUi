@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage, resetAccountScopedState } from '@mycowork/ui';
 import { VersionsPage } from '@mycowork/ui/pages/versions/index.ts';
+import { armSpaceRestore } from '@mycowork/ui/pages/resources/space-snapshot.ts';
 import { goEditReturn } from '@mycowork/ui/pages/office-editor/edit-return.ts';
 import { installBridge } from './versionsFixture';
 
@@ -93,6 +94,20 @@ describe('从版本页返回空间', () => {
     await screen.findByRole('dialog', { name: '当前内容预览' });
     await waitFor(() => expect(scroller().scrollTop).toBe(120));
     expect(lists.every((u) => u.includes('q=%E5%A4%87%E5%BF%98'))).toBe(true); // 第一次读列表就用恢复的搜索词，不先读一遍默认
+  });
+
+  it('预览工具栏的“版本与变化”先关预览再跳转：回来仍重开那份预览', async () => {
+    const first = space();
+    fireEvent.change(search(), { target: { value: '备忘' } });
+    fireEvent.click(await screen.findByRole('button', { name: '虚构备忘.txt' }));
+    await screen.findByRole('dialog', { name: '当前内容预览' });
+    fireEvent.click(screen.getByRole('button', { name: '关闭预览' })); // 预览先关
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '当前内容预览' })).toBeNull());
+    first.unmount(); // 随后地址已是 res_1 的版本页
+    armSpaceRestore('res_1');
+    space();
+    await waitFor(() => expect(search()).toHaveValue('备忘'));
+    await screen.findByRole('dialog', { name: '当前内容预览' });
   });
 
   it('没经“返回”（侧栏点空间等）不恢复：仍是默认入口', async () => {

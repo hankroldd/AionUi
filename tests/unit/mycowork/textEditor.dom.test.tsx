@@ -94,8 +94,9 @@ describe('OfficeTextEditSlot', () => {
     );
     const { container } = render(<OfficeTextEditSlot />);
     await screen.findByTestId('md-editor');
-    const primaries = container.querySelectorAll('.mcw-pill-primary');
+    const primaries = container.querySelectorAll('.arco-btn-primary:not(.arco-btn-status-danger)');
     expect(primaries).toHaveLength(1);
+    expect(primaries[0]).toHaveClass('mcw-pill-primary');
     expect(primaries[0]).toBe(screen.getByRole('button', { name: '保存' }));
     expect(screen.getByRole('button', { name: '关闭' })).toHaveClass('mcw-pill-secondary');
   });

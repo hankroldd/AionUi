@@ -47,8 +47,10 @@ describe('导入记录页', () => {
   it('页头只有一个主按钮且是近黑胶囊类；“查看”是轻按钮胶囊', async () => {
     const { container } = render(<ImportsPage lang='zh-CN' />);
     const rows = await screen.findAllByTestId('import-record');
-    const primaries = container.querySelectorAll('.mcw-pill-primary');
+    // 通用规则下任何非危险的 type=primary 都是近黑，所以数 arco-btn-primary，而不只数 mcw-pill-primary
+    const primaries = container.querySelectorAll('.arco-btn-primary:not(.arco-btn-status-danger)');
     expect(primaries).toHaveLength(1);
+    expect(primaries[0]).toHaveClass('mcw-pill-primary');
     expect(primaries[0]).toHaveTextContent('导入资料');
     expect(within(rows[0] as HTMLElement).getByRole('link', { name: '查看' })).toHaveClass('mcw-pill-light');
   });
@@ -90,6 +92,13 @@ describe('回收站', () => {
     await screen.findByText('虚构资料1.md');
     expect(screen.getByRole('button', { name: /^恢复/ })).toHaveClass('mcw-pill-light');
     expect(screen.getByRole('button', { name: /^永久删除/ })).toHaveClass('arco-btn-status-danger');
+  });
+
+  it('回收站里没有近黑主按钮（页头由空间壳持有，这里只有次要 / 危险操作）', async () => {
+    const { container } = render(<TrashPage lang='zh-CN' onBack={vi.fn()} />);
+    await screen.findByText('虚构资料1.md');
+    expect(container.querySelectorAll('.arco-btn-primary:not(.arco-btn-status-danger)')).toHaveLength(0);
+    expect(container.querySelector('.mcw-trash')).not.toBeNull(); // page-controls.css 靠这个类把通用规则套到空间壳内的回收站
   });
 
   it('永久删除确认框带 mcw-dialog，确认按钮保持危险色', async () => {

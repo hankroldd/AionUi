@@ -10,6 +10,7 @@ import { Message } from '@arco-design/web-react';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 import { clearEditReturn, requestEditReturn } from '@mycowork/ui/pages/office-editor/edit-return.ts';
+import { resetSpaceSnapshot } from '@mycowork/ui/pages/resources/space-snapshot.ts';
 import { OfficeEditSlot, OfficeTextEditSlot, OfficeVersionsSlot } from '@/renderer/mycowork-slots';
 import { settleTracker } from './saveTrackerTeardown';
 
@@ -116,6 +117,7 @@ beforeEach(() => {
     }),
   });
   window.location.hash = '#/office/space';
+  resetSpaceSnapshot(); // 空间快照是模块级的：上一个用例武装过却没被消费，会让这一例挂载空间页时重开上一个用例的预览
   localStorage.clear();
 });
 afterEach(async () => {

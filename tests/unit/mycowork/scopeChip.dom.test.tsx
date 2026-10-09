@@ -116,7 +116,7 @@ describe('ScopeChip', () => {
     route();
     render(<ScopeChip lang='zh-CN' />);
     await openDialog();
-    expect(await screen.findByText('共 12 份，8 份 AI 可引用，4 份入库中')).toBeInTheDocument();
+    expect(await screen.findByText('共 12 份，8 份 AI 可引用，4 份处理中')).toBeInTheDocument();
     expect(screen.getByText('共 3 份，3 份 AI 可引用')).toBeInTheDocument();
   });
 

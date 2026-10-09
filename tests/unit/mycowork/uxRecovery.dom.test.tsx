@@ -148,15 +148,20 @@ describe('空间预览：在线编辑读不到当前版本', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('显示置灰的“在线编辑”，Tooltip 说明原因，点击重试，读到后变成可用按钮', async () => {
+  it('读不到版本：按钮可点（不是 aria-disabled），名字写明“读取失败，点击重试”；重读时保留按钮并显示加载，读到后变回在线编辑', async () => {
     let timelineOk = false;
+    let gate: (() => void) | undefined;
     fetchMock.mockImplementation(async (url: string) => {
       if (url === '/bridge/v1/scopes') return reply(200, { sources: [], projects: [] });
       if (url === '/bridge/v1/tags') return reply(200, { tags: [] });
       if (url === '/bridge/v1/saved-views') return reply(200, { views: [] });
       if (url === '/bridge/v1/collections') return reply(200, { collections: [] });
       if (url.startsWith('/bridge/v1/resources?')) return reply(200, { items: rows, page: 1, page_size: 50, total: 1 });
-      if (url.endsWith('/revisions')) return timelineOk ? reply(200, timeline) : reply(500, { error: { code: 'X' } });
+      if (url.endsWith('/revisions')) {
+        if (!timelineOk) return reply(500, { error: { code: 'X' } });
+        await new Promise<void>((r) => (gate = r));
+        return reply(200, timeline);
+      }
       if (/\/(office\/html|preview)$/.test(url))
         return { status: 200, ok: true, text: async () => '<html><body>x</body></html>', json: async () => null };
       return reply(204, null);
@@ -164,12 +169,14 @@ describe('空间预览：在线编辑读不到当前版本', () => {
     render(<ResourcesPage lang="zh-CN" ownerKey="fixture_a" />);
     fireEvent.click(await screen.findByRole('button', { name: '周报.md' }));
     const dialog = await screen.findByRole('dialog', { name: '当前内容预览' });
-    const edit = await within(dialog).findByRole('button', { name: '在线编辑' });
-    expect(edit).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.mouseEnter(edit);
-    expect(await screen.findByText('读不到当前版本，暂时不能在线编辑；点击重试')).toBeInTheDocument();
+    const edit = await within(dialog).findByRole('button', { name: '在线编辑（读取失败，点击重试）' });
+    expect(edit).not.toHaveAttribute('aria-disabled');
+    expect(edit).toBeEnabled();
     timelineOk = true;
     fireEvent.click(edit);
-    await waitFor(() => expect(within(dialog).getByRole('button', { name: '在线编辑' })).not.toHaveAttribute('aria-disabled'));
+    const loading = await within(dialog).findByRole('button', { name: /在线编辑/ });
+    await waitFor(() => expect(loading.className).toContain('arco-btn-loading')); // 重读中按钮还在
+    await act(async () => gate?.());
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: '在线编辑' })).toBeInTheDocument());
   });
 });

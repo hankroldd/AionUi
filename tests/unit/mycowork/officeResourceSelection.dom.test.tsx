@@ -38,6 +38,7 @@ type Meta = { resource_id: string; metadata_revision: number; tag_ids: string[];
 let metadata: Record<string, Meta>,
   blockedRead: string | undefined,
   delayPatch: Promise<void> | undefined,
+  delayRead: Promise<void> | undefined,
   total = 2;
 let savedView: {
   view_id: string;
@@ -110,6 +111,7 @@ function fixture() {
     if (match) {
       const id = match[1],
         meta = metadata[id];
+      if (method === 'GET' && delayRead) await delayRead;
       if (method === 'GET')
         return id === blockedRead
           ? response(404, { error: { code: 'NOT_FOUND', message: 'fixture' } })
@@ -156,6 +158,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   blockedRead = undefined;
   delayPatch = undefined;
+  delayRead = undefined;
   total = 2;
   metadata = Object.fromEntries(
     ['i', 'a', 'b', 'c'].map((id, i) => [
@@ -317,5 +320,28 @@ describe('space selection and batch tags', () => {
     expect(screen.getByRole('dialog', { name: '批量编辑标签' })).toBeVisible();
     release();
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+  it('“重试失败项”的重读期间不能取消或关闭，重读返回后才写', async () => {
+    render(<OfficeResourcesSlot />);
+    await screen.findByRole('button', { name: 'A.md' });
+    const dialog = await openBulk();
+    await choose(dialog);
+    metadata.res_b.metadata_revision += 1;
+    fireEvent.click(within(dialog).getByRole('button', { name: '应用预览' }));
+    const retry = await within(dialog).findByRole('button', { name: '重试失败项' });
+    let release!: () => void;
+    delayRead = new Promise<void>((r) => {
+      release = r;
+    });
+    fireEvent.click(retry);
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: '取消' })).toBeDisabled());
+    expect(within(dialog).queryByRole('button', { name: 'Close' })).toBeNull();
+    fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape', keyCode: 27 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(screen.getByRole('dialog', { name: '批量编辑标签' })).toBeVisible();
+    const patchesBefore = calls('PATCH', 'res_b').length;
+    release();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(calls('PATCH', 'res_b').length).toBe(patchesBefore + 1);
   });
 });

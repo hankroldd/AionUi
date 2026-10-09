@@ -6,6 +6,7 @@
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { mycoworkDropIntercept, OfficeImportsSlot } from '@/renderer/mycowork-slots';
@@ -41,7 +42,7 @@ describe('mycoworkDropIntercept', () => {
     await waitFor(() => expect(document.activeElement).toBe(attach));
     expect(screen.getAllByText(/只给这一轮对话用/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/以后在资源里都能找到/).length).toBeGreaterThan(0);
-    fireEvent.click(attach); // 回车落在默认焦点按钮上即触发 click
+    await userEvent.keyboard('{Enter}'); // 真的按回车：落在默认焦点的“附加到本轮”上
     await expect(taken).resolves.toBe(false);
     expect(window.location.hash).toBe('#/guid');
   });

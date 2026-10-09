@@ -130,6 +130,8 @@ describe('OfficeImportsSlot', () => {
     await chooseTarget();
     fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
     expect(await screen.findByText('知识库解析失败')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '只重试失败项' }).className).toContain('arco-btn-primary');
+    expect(screen.getByRole('button', { name: '再导入一批' }).className).not.toContain('arco-btn-primary'); // 整页只有一个主按钮
     fireEvent.click(screen.getByRole('button', { name: '只重试失败项' }));
     await waitFor(() => expect(calls('POST', '/retry')).toHaveLength(1));
     expect(JSON.parse(String(calls('POST', '/retry')[0]?.[1]?.body))).toEqual({ expected_revision: 1 });

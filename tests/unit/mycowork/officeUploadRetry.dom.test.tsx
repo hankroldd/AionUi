@@ -38,7 +38,7 @@ const calls = (method: string, suffix: string) =>
 const nameOf = (init?: RequestInit) => decodeURIComponent(String((init?.headers as Record<string, string>)['x-file-name']));
 
 /** failFirst：这些文件名的第一次上传失败（Bridge 给人话），之后成功；hang：这些文件名的上传永不返回。 */
-function bridge(opts: { failFirst?: string[]; hang?: string[] } = {}) {
+function bridge(opts: { failFirst?: string[]; hang?: string[]; hangBatch?: boolean } = {}) {
   const base = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
   const seen = new Map<string, number>();
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -51,6 +51,7 @@ function bridge(opts: { failFirst?: string[]; hang?: string[] } = {}) {
       return reply(201, { upload_id: `up_${name}`, file_name: name, size: 5, sha256: name, duplicate_of: [] });
     }
     if (url === '/bridge/v1/import-batches' && init?.method === 'POST') {
+      if (opts.hangBatch) return new Promise(() => undefined);
       const sent = JSON.parse(String(init.body)).items as { upload_id: string }[];
       return reply(201, batch(sent.map((s, i) => row({ seq: i, upload_id: s.upload_id, file_name: s.upload_id.slice(3) }))));
     }
@@ -136,5 +137,39 @@ describe('上传弹窗：失败有出路', () => {
     expect(within(dialog).getByRole('button', { name: '再导入一批' }).className).not.toContain('arco-btn-primary');
     fireEvent.click(done);
     await waitFor(() => expect(screen.queryByText('上传文件', { selector: '.arco-modal-title' })).toBeNull());
+  });
+
+  it('带着失败行进入下一批：Secret、标签、知识库选择都沿用，重试后确认的请求体里仍是 Secret', async () => {
+    bridge({ failFirst: ['坏的.md'] });
+    const dialog = await openDialog();
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /设为 Secret/ }));
+    await addFiles(dialog, '好的.md', '坏的.md');
+    await within(dialog).findByText(/上传失败/);
+    const confirm = within(dialog).getByRole('button', { name: '确认导入' });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    fireEvent.click(confirm);
+    fireEvent.click(await within(dialog).findByRole('button', { name: '再导入一批' }));
+    await within(dialog).findByText('坏的.md');
+    expect(within(dialog).getByRole('checkbox', { name: /设为 Secret/ })).toBeChecked();
+    fireEvent.click(within(dialog).getByRole('button', { name: '重试 坏的.md' }));
+    await within(dialog).findByText('已上传，待确认');
+    fireEvent.click(within(dialog).getByRole('button', { name: '确认导入' }));
+    await waitFor(() => expect(calls('POST', '/import-batches')).toHaveLength(2));
+    const second = JSON.parse(String(calls('POST', '/import-batches')[1]?.[1]?.body));
+    expect(second.secret).toBe(true);
+    expect(second.items.map((x: { upload_id: string }) => x.upload_id)).toEqual(['up_坏的.md']);
+  });
+
+  it('确认进行中：失败行的“重试”和“移除”不可点', async () => {
+    bridge({ failFirst: ['坏的.md'], hangBatch: true });
+    const dialog = await openDialog();
+    await addFiles(dialog, '好的.md', '坏的.md');
+    await within(dialog).findByText(/上传失败/);
+    const confirm = within(dialog).getByRole('button', { name: '确认导入' });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    fireEvent.click(confirm);
+    await waitFor(() => expect(calls('POST', '/import-batches')).toHaveLength(1));
+    expect(within(dialog).getByRole('button', { name: '重试 坏的.md' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: '移除 坏的.md' })).toBeDisabled();
   });
 });

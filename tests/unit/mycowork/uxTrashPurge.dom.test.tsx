@@ -10,6 +10,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { Message } from '@arco-design/web-react';
 import { TrashPage } from '@mycowork/ui/pages/trash/index.ts';
+import { dismissPurge } from '@mycowork/ui/pages/trash/purge-batch.ts';
 
 configure({ asyncUtilTimeout: 4000 }); // 整机高负载时默认 1 秒的 findBy 会误报
 const fetchMock = vi.fn();
@@ -23,6 +24,7 @@ const item = (n: number) => ({
 });
 let rows: ReturnType<typeof item>[];
 let reject: Record<string, number>; // id → 明确的 HTTP 拒绝
+let lostNoop: Set<string>; // id → 响应丢了且服务端并没有执行
 let lost: Set<string>; // id → 服务端已执行但响应丢了（断线）
 let gates: Map<string, () => void>;
 let inFlight = 0;
@@ -35,6 +37,7 @@ beforeEach(() => {
   rows = [item(1), item(2), item(3)];
   reject = {};
   lost = new Set();
+  lostNoop = new Set();
   gates = new Map();
   inFlight = maxInFlight = 0;
   fetchMock.mockReset().mockImplementation(async (url: string, init?: RequestInit) => {
@@ -49,6 +52,7 @@ beforeEach(() => {
     try {
       if (gates.has(id)) await new Promise<void>((r) => gates.set(id, r));
       if (reject[id]) return reply(reject[id], { error: { code: reject[id] === 409 ? 'REVISION_CONFLICT' : 'NOT_FOUND' } });
+      if (lostNoop.has(id) && !url.endsWith('/untrash')) throw new TypeError('Failed to fetch');
       const row = rows.find((r) => r.resource_id === id);
       if (!row) return reply(404, { error: { code: 'NOT_FOUND' } });
       rows = rows.filter((r) => r.resource_id !== id);
@@ -65,6 +69,7 @@ afterEach(async () => {
   for (const id of [...gates.keys()]) gates.get(id)?.();
   gates.clear();
   await waitFor(() => expect(screen.queryByText(/已永久删除 \d+ \/ \d+/) === null || inFlight === 0).toBe(true));
+  dismissPurge();
   cleanup();
   Message.clear();
   vi.unstubAllGlobals();
@@ -180,4 +185,43 @@ it('恢复成功给“已恢复”轻提示', async () => {
   await screen.findByText('虚构资料1.md');
   fireEvent.click(within(screen.getByTestId('mycowork-trash-row-res_1')).getByRole('button', { name: '恢复 虚构资料1.md' }));
   expect(await screen.findByText(/已恢复「虚构资料1\.md」/)).toBeInTheDocument();
+});
+
+it('进度条被关掉后批次结束时有失败：重新显示', async () => {
+  hold('res_1');
+  reject.res_2 = 409;
+  mount();
+  await confirmAll();
+  fireEvent.click(await within(await screen.findByTestId('mycowork-purge-progress')).findByRole('button', { name: '关闭' }));
+  expect(screen.queryByTestId('mycowork-purge-progress')).toBeNull();
+  gates.get('res_1')?.();
+  expect(await screen.findByTestId('mycowork-purge-progress')).toHaveTextContent('虚构资料2.md');
+});
+
+it('结果未知的项被用户恢复：不再算“已永久删除”，确认结果的入口也没了', async () => {
+  lostNoop.add('res_1');
+  mount();
+  await confirmAll();
+  await screen.findByRole('button', { name: '确认结果' });
+  fireEvent.click(within(screen.getByTestId('mycowork-trash-row-res_1')).getByRole('button', { name: '恢复 虚构资料1.md' }));
+  await screen.findByText(/已恢复「虚构资料1\.md」/);
+  await waitFor(() => expect(screen.queryByRole('button', { name: '确认结果' })).toBeNull());
+  expect(panel()).toHaveTextContent('已永久删除 2 / 3');
+});
+
+it('被拒绝 + 未知混合：重试失败项不丢掉还没核对的未知项', async () => {
+  reject.res_1 = 409;
+  lostNoop.add('res_2');
+  mount();
+  await confirmAll();
+  const retry = await screen.findByRole('button', { name: '重试失败项' });
+  reject = {};
+  fireEvent.click(retry);
+  await screen.findByRole('dialog');
+  expect(dialog().queryByText('虚构资料2.md')).toBeNull();
+  acknowledge();
+  fireEvent.click(dialog().getByRole('button', { name: '确认永久删除' }));
+  await waitFor(() => expect(purges('res_1')).toHaveLength(2));
+  expect(await screen.findByRole('button', { name: '确认结果' })).toBeInTheDocument();
+  expect(panel()).toHaveTextContent('1 项没能确认结果');
 });

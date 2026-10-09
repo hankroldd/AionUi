@@ -30,7 +30,7 @@ configure({ asyncUtilTimeout: 4000 }); // 整机高负载时默认 1 秒的 find
 const fetchMock = vi.fn();
 let items: Item[];
 let gates: Map<string, () => void>; // 卡住 POST …/trash，直到用例放行
-let failOnce: Map<string, 'lease' | 'network'>;
+let failOnce: Map<string, 'lease' | 'network' | 'state' | 'rev'>;
 let inFlight = 0;
 let maxInFlight = 0;
 let listReads = 0;
@@ -62,7 +62,8 @@ function serve() {
         if (fail) {
           failOnce.delete(id);
           if (fail === 'network') throw new TypeError('Failed to fetch');
-          return reply(409, { error: { code: 'EDIT_LEASE_HELD', message: 'x' } });
+          const code = { lease: 'EDIT_LEASE_HELD', state: 'TRASH_STATE_CONFLICT', rev: 'REVISION_CONFLICT', network: '' }[fail];
+          return reply(409, { error: { code, message: 'x' } });
         }
         return reply(200, { resource_id: id, file_name: 'x', trashed_at: '2026-10-09T00:00:00Z' });
       } finally {
@@ -174,5 +175,24 @@ describe('多选删除不锁人', () => {
       release('res_b');
     });
     expect(await screen.findByText(/已移入回收站 2 项/)).toBeInTheDocument();
+  });
+});
+
+describe('失败原因与已完成', () => {
+  it('已经在回收站（状态冲突）算完成，不进失败项', async () => {
+    failOnce.set('res_b', 'state');
+    mount();
+    await trashSelected('A.md', 'B.md');
+    expect(await screen.findByText(/已移入回收站 2 项/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/没移成功/);
+  });
+
+  it('版本号冲突不说成“正在被编辑”', async () => {
+    failOnce.set('res_b', 'rev');
+    mount();
+    await trashSelected('A.md', 'B.md');
+    expect(await screen.findByText(/1 项没移成功/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/正在被编辑/);
+    expect(document.body.textContent).toMatch(/刚被改动过/);
   });
 });

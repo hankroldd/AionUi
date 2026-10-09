@@ -88,6 +88,19 @@ describe('OfficeTextEditSlot', () => {
     expect(body('/save', 1).expected_base_revision_id).toBe('rev_b');
   });
 
+  it('the page header has exactly one primary pill button (save) and a secondary close', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url === '/bridge/v1/text-edit-sessions' ? reply(201, session()) : reply(204, null),
+    );
+    const { container } = render(<OfficeTextEditSlot />);
+    await screen.findByTestId('md-editor');
+    const primaries = container.querySelectorAll('.arco-btn-primary:not(.arco-btn-status-danger)');
+    expect(primaries).toHaveLength(1);
+    expect(primaries[0]).toHaveClass('mcw-pill-primary');
+    expect(primaries[0]).toBe(screen.getByRole('button', { name: '保存' }));
+    expect(screen.getByRole('button', { name: '关闭' })).toHaveClass('mcw-pill-secondary');
+  });
+
   it('keeps the typed text when the base is no longer current (REVISION_CONFLICT)', async () => {
     fetchMock.mockImplementation(async (url: string) => {
       if (url === '/bridge/v1/text-edit-sessions') return reply(201, session());

@@ -106,11 +106,13 @@ describe('office page skeleton', () => {
   it('resources: a long list sits inside the page scroller', async () => {
     render(<OfficeResourcesSlot />);
     const scroller = expectSkeleton('mycowork-resources');
+    expect(screen.getByTestId('mycowork-resources')).toHaveClass('mcw-page--plain'); // 基准页不套 page-controls.css 的通用控件规则
     expect(await within(scroller).findByText('长列表资料49.pptx')).toBeInTheDocument();
   });
 
   it('versions: the page scrolls and the timeline scrolls on its own, holding all versions', async () => {
     render(<OfficeVersionsSlot />);
+    expect(screen.getByTestId('mycowork-versions')).toHaveClass('mcw-page--plain'); // 版本页有自己的一套，不套通用规则
     const scroller = expectSkeleton('mycowork-versions', 'none'); // 负责人 2026-10-09：版本页与空间主面板同宽（PageShell wide）
     const timeline = within(scroller).getByTestId('mycowork-versions-timeline');
     expect(timeline.style.overflowY).toBe('auto');

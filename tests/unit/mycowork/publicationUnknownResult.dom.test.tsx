@@ -1,6 +1,6 @@
 /**
  * [mycowork] PR11 W4-4o。文件：tests/unit/mycowork/publicationUnknownResult.dom.test.tsx
- * 职责：发布请求结果未知（断网）时锁定目标与文件名，重试沿用同一请求身份；只有显式开始新操作才换 submission_id。
+ * 职责：发布请求结果未知（断网）时锁定目标与文件名，重试沿用同一请求身份（后台发布：弹窗收起，重试在轻提示里，再点发布入口把弹窗请出来）；只有显式开始新操作才换 submission_id。
  * 边界：只替换 Bridge HTTP；React 状态与 Arco 控件为真实实现。
  */
 import React, { useState } from 'react';
@@ -54,15 +54,20 @@ function serve(reply: (request: PublicationRequest, index: number) => Response |
 }
 function Harness() {
   const [open, setOpen] = useState(true);
+  const [clicks, setClicks] = useState(1);
   return open ? (
-    <PublicationDialog
+    <>
+      <button onClick={() => setClicks((n) => n + 1)}>再点发布入口</button>
+      <PublicationDialog
       {...initial}
+      reopen={clicks}
       onAccepted={(p) => {
         accepted(p);
         setOpen(false);
       }}
       onCancel={() => setOpen(false)}
     />
+    </>
   ) : (
     <button onClick={() => setOpen(true)}>开始新的发布操作</button>
   );
@@ -119,7 +124,7 @@ describe('发布结果未知时冻结完整请求身份', () => {
     expect(requests[1]?.submission_id).not.toBe(requests[0]?.submission_id);
   });
 
-  it('fetch reject 后库和文件名仍锁定，同窗重复提交body及nonce完全相同', async () => {
+  it('fetch reject 后弹窗收起；再点发布入口弹窗回来，库和文件名仍锁定；重试沿用同一 body 及 nonce', async () => {
     serve((r, i) => {
       if (i === 0) throw new Error('fixture网络中断，是否受理未知');
       return json(publication(r), 201);
@@ -127,7 +132,8 @@ describe('发布结果未知时冻结完整请求身份', () => {
     render(<Harness />);
     await firstPublish();
     expect(accepted).not.toHaveBeenCalled();
-    const fileName = screen.getByLabelText('库里的文件名');
+    fireEvent.click(screen.getByRole('button', { name: '再点发布入口' }));
+    const fileName = await screen.findByLabelText('库里的文件名');
     const source = screen.getByLabelText('选择知识库').closest('.arco-select');
     expect(fileName).toHaveValue(originalTarget.file_name);
     expect(fileName).toBeDisabled();
@@ -184,7 +190,8 @@ describe('发布结果未知时冻结完整请求身份', () => {
     });
     render(<Harness />);
     await firstPublish();
-    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+    fireEvent.click(screen.getByRole('button', { name: '再点发布入口' }));
+    fireEvent.click(await screen.findByRole('button', { name: '取消' }));
     fireEvent.click(await screen.findByRole('button', { name: '开始新的发布操作' }));
     await choose('虚构新目标库');
     fireEvent.change(screen.getByLabelText('库里的文件名'), { target: { value: '用户明确新选择.txt' } });

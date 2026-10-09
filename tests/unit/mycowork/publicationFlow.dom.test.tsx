@@ -1,6 +1,6 @@
 /**
  * [mycowork] PR11 W4-4o。文件：tests/unit/mycowork/publicationFlow.dom.test.tsx
- * 职责：发布弹窗（空间与版本页共用）：受理后才关闭、409 两次确认沿用同一 submission_id、失败保留草稿、重试按原 publication_id。
+ * 职责：发布弹窗（空间与版本页共用）：受理后才通知父页关闭、点发布后弹窗收起并由轻提示说进度与失败、409 两次确认沿用同一 submission_id、重试按原 publication_id。
  * 边界：只替换 Bridge HTTP；React 状态与 Arco 控件为真实实现。
  */
 import React, { useState, type ComponentProps } from 'react';
@@ -135,20 +135,18 @@ describe('真实 React/Arco 共用发布弹窗', () => {
     });
   });
 
-  it('同步 404 保留知识库、文件名与错误，重发沿用同一身份', async () => {
+  it('同步 404：失败留在轻提示里，重试沿用同一身份', async () => {
     serve((r, i) => (i === 0 ? error('NOT_FOUND', 404) : json(publication(r), 201)));
     render(<Harness />);
     await publish();
     await screen.findByText('找不到这个资源或版本，或你没有权限查看。');
-    expect(screen.getByLabelText('库里的文件名')).toHaveValue('虚构成果.txt');
-    expect(screen.getByText('虚构知识库', { selector: '.arco-select-view-value' })).toBeVisible();
     expect(accepted).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '发布', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: '重试（不会重复发布）' }));
     await screen.findByText('已关闭');
     expect(requests[1]).toEqual(requests[0]);
   });
 
-  it('pending 禁止双击、取消、关闭图标、遮罩与 Esc', async () => {
+  it('点发布后弹窗收起，请求挂着时再点（含入口重复点击）也只发一个请求', async () => {
     let resolve!: (response: Response) => void;
     serve(
       () =>
@@ -158,22 +156,12 @@ describe('真实 React/Arco 共用发布弹窗', () => {
     );
     render(<Harness />);
     await publish();
-    const button = screen.getByRole('button', { name: '发布', exact: true });
-    fireEvent.click(button);
-    fireEvent.click(screen.getByRole('button', { name: '取消' }));
-    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape', keyCode: 27 });
-    const mask = document.querySelector('.arco-modal-mask');
-    const wrapper = document.querySelector('.arco-modal-wrapper');
-    if (mask) fireEvent.click(mask);
-    if (wrapper) fireEvent.click(wrapper);
-    expect(button).toBeDisabled();
-    expect(screen.getByRole('button', { name: '取消' })).toBeDisabled();
-    expect(document.querySelector('.arco-modal-close-icon')).toBeNull();
-    expect(screen.getByLabelText('库里的文件名')).toBeDisabled();
+    await waitFor(() => expect(document.querySelector('.arco-modal')).toBeNull());
     expect(requests).toHaveLength(1);
     expect(cancelled).not.toHaveBeenCalled();
     await act(async () => resolve(json(publication(requests[0]!), 201)));
     await screen.findByText('已关闭');
+    expect(requests).toHaveLength(1);
   });
 
   it('scope→hidden 两次确认保留 revision、head、目标和 submission_id', async () => {
@@ -196,15 +184,14 @@ describe('真实 React/Arco 共用发布弹窗', () => {
     );
   });
 
-  it('确认后的 503 保持草稿/错误，重试仍调用检查且不关闭', async () => {
+  it('确认后的 503 留在轻提示里，重试仍调用检查且不关闭', async () => {
     serve((_r, i) => (i === 0 ? error('HIDDEN_CONTENT_PRESENT') : error('UPSTREAM_UNAVAILABLE', 503)));
     render(<Harness />);
     await publish();
     fireEvent.click(await screen.findByRole('button', { name: '仍要发布' }));
     await screen.findByText(/确认也不能跳过检查/);
-    expect(screen.getByLabelText('库里的文件名')).toHaveValue('虚构成果.txt');
     expect(accepted).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '发布', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: '重试（不会重复发布）' }));
     await waitFor(() => expect(requests).toHaveLength(3));
     expect(requests[2]).toEqual(requests[1]);
     expect(requests[2]?.confirm_hidden_content).toBe(true);
@@ -240,10 +227,10 @@ describe('真实 React/Arco 共用发布弹窗', () => {
     await publish();
     await screen.findByText(/未收到发布结果/);
     mounted.rerender(<Harness overrides={{ revisionId: 'rev-2', headRevisionId: 'rev-2', versionLabel: 'v2' }} />);
-    expect(screen.getByText(/认可版本：v1/)).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: '发布', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: '重试（不会重复发布）' }));
     await screen.findByText('已关闭');
     expect(requests[1]).toEqual(requests[0]);
+    expect(requests[1]?.revision_id).toBe('rev-1');
   });
 
   it('Secret、无授权知识库与空文件名无发布请求', async () => {

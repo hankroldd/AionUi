@@ -8,8 +8,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
-import { ImportsPage } from '@mycowork/ui';
-import { addFiles, batch, bodyOf, bridge, confirmButton, fetchMock, md, posts, reply, row, zip, type Opts } from './importFlowFixture';
+import { addFiles, batch, bodyOf, bridge, confirmButton, fetchMock, md, posts, renderImports, reply, row, zip, type Opts } from './importFlowFixture';
 
 const inFlow = () => screen.getByTestId('mycowork-upload-flow');
 const res = (id: string, name: string, over: object = {}) => ({
@@ -24,11 +23,11 @@ const found = (...items: object[]): Opts['resources'] => () => ({ page: 1, page_
 const lookups = () =>
   fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/bridge/v1/resources?')).map(([url]) => new URLSearchParams(String(url).split('?')[1]));
 async function add(file: File = md('周报.md')) {
-  render(<ImportsPage lang='zh-CN' />);
+  renderImports('zh-CN');
   await addFiles(inFlow(), file);
   await screen.findByText('已上传，待确认');
 }
-const choice = (label: string | RegExp) => within(screen.getByRole('radiogroup')).getByText(label);
+const choice = (label: string | RegExp) => within(within(inFlow()).getByRole('radiogroup')).getByText(label);
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -41,7 +40,7 @@ describe('作为新版本导入', () => {
     bridge({ resources: found(res('res_old', '周报.md')) });
     await add();
     expect(screen.getByText(/你已有同名资料“周报.md”，内容不同/)).toBeInTheDocument();
-    const group = screen.getByRole('radiogroup');
+    const group = within(inFlow()).getByRole('radiogroup');
     expect(within(group).getAllByRole('radio').map((r) => r.parentElement?.textContent)).toEqual([
       '作为“周报.md”的新版本',
       '另存为独立资料',
@@ -75,6 +74,9 @@ describe('作为新版本导入', () => {
     expect(bodyOf().items[0]).toEqual({ upload_id: 'up_1', purpose: 'working', target_resource_id: 'res_old' });
     expect(await screen.findByText('已成为“周报.md”的第 3 版')).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([url]) => String(url) === '/bridge/v1/resources/res_old/revisions')).toBe(true);
+    // 成为新版本的项：除了“在空间中查看”，还给“查看版本与变化”（跳该资源的版本页）
+    expect(screen.getByRole('link', { name: '查看版本与变化' })).toHaveAttribute('href', '#/office/resources/res_old/versions');
+    expect(screen.getByRole('button', { name: '在空间中查看' })).toBeInTheDocument();
   });
 
   it('选“另存为独立资料”后结果里不出现“已成为”', async () => {
@@ -110,7 +112,7 @@ describe('作为新版本导入', () => {
   it('只是名称包含（不是精确同名）或候选是 Secret：不出选项', async () => {
     bridge({ resources: found(res('res_a', '周报.md.bak'), res('res_b', '周报.md', { secret: true })) });
     await add();
-    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(within(inFlow()).queryByRole('radiogroup')).toBeNull();
     expect(screen.queryByText(/你已有同名资料/)).toBeNull();
   });
 
@@ -125,7 +127,7 @@ describe('作为新版本导入', () => {
   it('ZIP 不查同名、不出新版本选项', async () => {
     bridge({ resources: found(res('res_old', '资料包.zip')) });
     await add(zip('资料包.zip'));
-    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(within(inFlow()).queryByRole('radiogroup')).toBeNull();
     expect(lookups()).toHaveLength(0);
   });
 
@@ -134,40 +136,64 @@ describe('作为新版本导入', () => {
     await add();
     fireEvent.click(choice(/新版本/));
     fireEvent.click(screen.getByRole('checkbox', { name: /设为 Secret/ }));
-    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(within(inFlow()).queryByRole('radiogroup')).toBeNull();
     fireEvent.click(confirmButton());
     await waitFor(() => expect(posts('/import-batches')).toHaveLength(1));
     expect(bodyOf().items[0]).toEqual({ upload_id: 'up_1', purpose: 'working', duplicate_action: 'register_separately' });
     expect(bodyOf().secret).toBe(true);
   });
 
-  it('同名查询失败：按没有候选处理，仍可导入', async () => {
-    bridge();
+  it('同名查询失败：单独提示“没能查到是否已有同名资料”并可重试，不当作没有；仍可导入', async () => {
+    bridge({ resources: found(res('res_old', '周报.md')) });
     const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<unknown>;
+    let down = true;
     fetchMock.mockImplementation(async (u: string, i?: RequestInit) =>
-      u.startsWith('/bridge/v1/resources?') ? reply(503, {}) : base(u, i),
+      u.startsWith('/bridge/v1/resources?') && down ? reply(503, {}) : base(u, i),
     );
     await add();
-    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(within(inFlow()).queryByRole('radiogroup')).toBeNull();
+    expect(screen.getByTestId('import-lookup-failed')).toHaveTextContent('没能查到是否已有同名资料');
     expect(confirmButton()).toBeEnabled();
+    down = false;
+    fireEvent.click(within(screen.getByTestId('import-lookup-failed')).getByRole('button', { name: '重试' }));
+    expect(await screen.findByText(/你已有同名资料“周报.md”/)).toBeInTheDocument();
+    expect(screen.queryByTestId('import-lookup-failed')).toBeNull();
   });
 
-  it('多个同名资源取列表里最近的一条（第一个精确匹配）', async () => {
-    bridge({ resources: found(res('res_new', '周报.md'), res('res_older', '周报.md')) });
+  it('多份精确同名：全部列出（各带库名 / 更新时间），默认仍是另存为独立资料，由用户选其中一份', async () => {
+    bridge({
+      resources: found(
+        res('res_new', '周报.md', { updated_at: '2026-10-03T02:00:00Z' }),
+        res('res_older', '周报.md', { updated_at: '2026-10-01T02:00:00Z' }),
+      ),
+    });
     await add();
-    fireEvent.click(choice(/新版本/));
+    expect(screen.getByText(/你已有 2 份同名资料“周报.md”/)).toBeInTheDocument();
+    const group = within(inFlow()).getByRole('radiogroup');
+    expect(within(group).getAllByRole('radio')).toHaveLength(4); // 两份候选 + 另存为 + 取消
+    expect(within(group).getByRole('radio', { name: '另存为独立资料' })).toBeChecked();
+    expect(within(group).getAllByText(/最近更新于 .*，仅存档/)).toHaveLength(2);
+    fireEvent.click(within(group).getAllByText(/作为“周报.md”的新版本/)[1] as HTMLElement); // 第二份：较早的
     fireEvent.click(confirmButton());
     await waitFor(() => expect(posts('/import-batches')).toHaveLength(1));
-    expect(bodyOf().items[0].target_resource_id).toBe('res_new');
+    expect(bodyOf().items[0].target_resource_id).toBe('res_older');
+  });
+
+  it('多份同名时不改选，请求仍是另存为独立资料（不替用户选目标）', async () => {
+    bridge({ resources: found(res('res_new', '周报.md'), res('res_older', '周报.md')) });
+    await add();
+    fireEvent.click(confirmButton());
+    await waitFor(() => expect(posts('/import-batches')).toHaveLength(1));
+    expect(bodyOf().items[0]).toEqual({ upload_id: 'up_1', purpose: 'working', duplicate_action: 'register_separately' });
   });
 
   it('英文界面', async () => {
     bridge({ resources: found(res('res_old', 'r.md')), created: batch([row({ resource_id: 'res_old' })]), revisionTotal: 2 });
-    render(<ImportsPage lang='en' />);
+    renderImports('en');
     await addFiles(inFlow(), md('r.md'));
     await screen.findByText('Uploaded, awaiting confirmation');
     expect(screen.getByText(/You already have a resource named “r.md” with different content/)).toBeInTheDocument();
-    fireEvent.click(within(screen.getByRole('radiogroup')).getByText('As a new version of “r.md”'));
+    fireEvent.click(within(within(inFlow()).getByRole('radiogroup')).getByText('As a new version of “r.md”'));
     fireEvent.click(confirmButton('en'));
     expect(await screen.findByText('Became version 2 of “r.md”')).toBeInTheDocument();
   });
@@ -232,7 +258,7 @@ describe('作为新版本导入', () => {
           : { page: 1, page_size: 50, total: 51, items: filler },
     });
     await add();
-    expect(screen.getByRole('radiogroup')).toBeInTheDocument();
+    expect(within(inFlow()).getByRole('radiogroup')).toBeInTheDocument();
     expect(lookups().map((q) => q.get('page'))).toEqual(['1', '2']);
   });
 });

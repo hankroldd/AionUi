@@ -855,7 +855,7 @@ describe('OfficeResourcesSlot', () => {
     fireEvent.click(buttons[0] as HTMLElement);
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '取消' }));
-    await waitFor(() => expect(screen.queryByText('上传文件', { selector: '.arco-modal-title' })).toBeNull());
+    await waitFor(() => expect(screen.queryByText('导入资料', { selector: '.arco-modal-title' })).toBeNull());
     const header = screen.getByTestId('mycowork-resources').querySelector('header') as HTMLElement;
     fireEvent.click(within(header).getByRole('button', { name: '新建' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: '上传文件' }));

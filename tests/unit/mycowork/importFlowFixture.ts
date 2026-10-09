@@ -3,8 +3,10 @@
  * 职责：导入页（ImportsPage）DOM 用例共用的虚构 Bridge 边界：按文件名返回上传结果、记录批次请求、按需返回批次与同名候选。
  * 边界：只替换 fetch；ImportsPage、UploadFlow、Arco 全是真实的。
  */
-import { act, fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import React from 'react';
 import { vi } from 'vitest';
+import { ImportsPage } from '@mycowork/ui';
 
 export const fetchMock = vi.fn();
 export const reply = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => body });
@@ -49,6 +51,8 @@ export function bridge(opts: Opts = {}) {
   let n = 0;
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     const u = new URL(url, 'http://fixture.invalid');
+    if (u.pathname === '/bridge/v1/import-batches' && init?.method !== 'POST')
+      return reply(200, { items: [], page: 1, page_size: 20, total: 0 });
     if (u.pathname === '/bridge/v1/scopes') return reply(200, { sources: [], projects: [] });
     if (u.pathname === '/bridge/v1/tags') return reply(200, { tags: [] });
     if (u.pathname === '/bridge/v1/uploads') {
@@ -65,6 +69,12 @@ export function bridge(opts: Opts = {}) {
     throw new Error(`未定义的虚构HTTP请求 ${init?.method ?? 'GET'} ${u.pathname}`);
   });
   vi.stubGlobal('fetch', fetchMock);
+}
+/** 渲染导入记录页并点“导入资料”打开上传弹窗（上传流程住在弹窗里，弹窗在 body 的 portal 中）。 */
+export function renderImports(lang = 'zh-CN') {
+  const view = render(React.createElement(ImportsPage, { lang }));
+  fireEvent.click(screen.getByRole('button', { name: lang === 'en' ? 'Import files' : '导入资料' }));
+  return view;
 }
 /** 选 / 拖入若干文件（Arco Upload 的 file input）。 */
 export async function addFiles(container: HTMLElement, ...files: File[]) {

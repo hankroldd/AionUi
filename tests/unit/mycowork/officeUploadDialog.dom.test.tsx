@@ -105,7 +105,7 @@ describe('上传弹窗', () => {
     bridge();
     const dialog = await openDialog();
     expect(window.location.hash).not.toContain('imports');
-    expect(within(dialog).getByText('上传文件')).toBeInTheDocument();
+    expect(within(dialog).getByText('导入资料')).toBeInTheDocument();
     expect(selectedKb(dialog)).toBe('不选知识库（仅存档）');
     expect(within(dialog).getByLabelText('标签（可选）')).toBeInTheDocument();
     expect(within(dialog).getByRole('checkbox', { name: /设为 Secret：只存本机，不进知识库和存档库，AI 读不到/ })).toBeInTheDocument();
@@ -255,7 +255,7 @@ describe('上传弹窗', () => {
     const dialog = await openDialog();
     await addFile(dialog);
     fireEvent.click(within(dialog).getByRole('button', { name: '取消' }));
-    await waitFor(() => expect(screen.queryByText('上传文件', { selector: '.arco-modal-title' })).toBeNull());
+    await waitFor(() => expect(screen.queryByText('导入资料', { selector: '.arco-modal-title' })).toBeNull());
     expect(calls('POST', '/import-batches')).toHaveLength(0);
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method && init.method !== 'GET' && init.method !== undefined)
       .map(([url]) => String(url)).filter((u) => u !== '/bridge/v1/uploads')).toEqual([]);
@@ -264,7 +264,7 @@ describe('上传弹窗', () => {
   it('英文界面：弹窗文案与知识库选项', async () => {
     bridge();
     const dialog = await openDialog('en');
-    expect(within(dialog).getByText('Upload files')).toBeInTheDocument();
+    expect(within(dialog).getByText('Import files')).toBeInTheDocument();
     expect(dialog.querySelector('.arco-select-view-value')?.textContent).toBe('No knowledge base (archive only)');
     expect(within(dialog).getByRole('checkbox', { name: /Mark as Secret: kept on this machine only/ })).toBeInTheDocument();
   });

@@ -67,6 +67,7 @@ function bridge(opts: { upload?: object; uploadStatus?: number; afterCreate: obj
     if (url.endsWith('/retry')) return reply(200, batch(opts.later ?? opts.afterCreate, 2));
     if (url === '/bridge/v1/import-batches/bat_1')
       return reply(200, batch(polls++ > 0 && opts.later ? opts.later : opts.afterCreate));
+    if (url.startsWith('/bridge/v1/import-batches?')) return reply(200, { items: [], page: 1, page_size: 20, total: 0 });
     return reply(404, {});
   });
 }
@@ -75,6 +76,8 @@ async function drop(name = '周报.md') {
   const input = document.querySelector('input[type=file]') as HTMLInputElement;
   await act(async () => fireEvent.change(input, { target: { files: [new File(['hello'], name)] } }));
 }
+
+const openImport = () => fireEvent.click(screen.getByRole('button', { name: '导入资料' })); // 导入记录页上的“导入资料”打开上传弹窗
 
 async function chooseTarget() {
   fireEvent.click(screen.getByLabelText('放进哪个知识库'));
@@ -91,6 +94,7 @@ describe('OfficeImportsSlot', () => {
   it('uploads on drop, has no purpose picker, confirms one batch as reference for a chosen base, polls to ready and links the original', async () => {
     bridge({ afterCreate: [item({})], later: [item({ status: 'ready', steps: steps('done') })] });
     render(<OfficeImportsSlot />);
+    openImport();
     await drop();
     await screen.findByText('周报.md');
     const [[, up]] = calls('POST', '/uploads');
@@ -125,6 +129,7 @@ describe('OfficeImportsSlot', () => {
     const failed = item({ status: 'failed', steps: steps('failed', 'pending'), error: 'parse_failed' });
     bridge({ afterCreate: [failed], later: [item({ status: 'ready', steps: steps('done') })] });
     render(<OfficeImportsSlot />);
+    openImport();
     await drop();
     await screen.findByText('周报.md');
     await chooseTarget();
@@ -140,6 +145,7 @@ describe('OfficeImportsSlot', () => {
   it('offers reference/register for duplicate content; no knowledge base sends working without a target', async () => {
     bridge({ upload: { duplicate_of: ['res_old'] }, afterCreate: [item({ purpose: 'working', source_id: null })] });
     render(<OfficeImportsSlot />);
+    openImport();
     await drop();
     expect(await screen.findByText('与你已导入的 1 个资源内容相同')).toBeInTheDocument();
     expect(screen.getByText('不选知识库（仅存档）')).toBeInTheDocument();
@@ -156,6 +162,7 @@ describe('OfficeImportsSlot', () => {
   it('shows the Bridge limit when an upload is too large, and cannot confirm', async () => {
     bridge({ uploadStatus: 413, afterCreate: [] });
     render(<OfficeImportsSlot />);
+    openImport();
     await drop();
     expect(await screen.findByText(/上传失败：单个文件不超过 50MB/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '确认导入' })).toBeDisabled();
@@ -164,6 +171,7 @@ describe('OfficeImportsSlot', () => {
   it('Secret: disables the knowledge base choice, hides the duplicate choice, sends secret=true as working', async () => {
     bridge({ upload: { duplicate_of: ['res_old'] }, afterCreate: [item({ purpose: 'working', source_id: null })] });
     render(<OfficeImportsSlot />);
+    openImport();
     await drop();
     await screen.findByText('与你已导入的 1 个资源内容相同');
     await chooseTarget(); // 先选了库，再勾 Secret：库选择不生效
@@ -200,6 +208,7 @@ describe('OfficeImportsSlot', () => {
         return base(url, init);
       });
       const view = render(<OfficeImportsSlot />);
+      openImport();
       await drop();
       await screen.findByText('周报.md');
       await chooseTarget();

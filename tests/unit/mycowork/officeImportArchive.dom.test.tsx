@@ -9,8 +9,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
-import { ImportsPage } from '@mycowork/ui';
-import { addFiles, batch, bodyOf, bridge, confirmButton, fetchMock, md, posts, row, steps, zip } from './importFlowFixture';
+import { addFiles, batch, bodyOf, bridge, confirmButton, fetchMock, md, posts, renderImports, row, steps, zip } from './importFlowFixture';
 
 const inFlow = () => screen.getByTestId('mycowork-upload-flow');
 const archiveItem = (path: string, over: object = {}) =>
@@ -55,7 +54,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe('ZIP 导入入口', () => {
   it('选 .zip 与普通文件同样上传并进入待确认队列', async () => {
     bridge();
-    render(<ImportsPage lang='zh-CN' />);
+    renderImports('zh-CN');
     await addFiles(inFlow(), zip('资料包.zip'));
     expect(await screen.findByText('资料包.zip')).toBeInTheDocument();
     await screen.findByText('已上传，待确认');
@@ -75,7 +74,7 @@ describe('ZIP 导入入口', () => {
         [expanded],
       ),
     });
-    render(<ImportsPage lang='zh-CN' />);
+    renderImports('zh-CN');
     await addFiles(inFlow(), zip('资料包.zip'));
     await screen.findByText('已上传，待确认');
     fireEvent.click(confirmButton());
@@ -93,7 +92,7 @@ describe('ZIP 导入入口', () => {
 
   it('整包拒绝：错误提示写人话原因；被拒的 ZIP 项不提供“只重试失败项”', async () => {
     bridge({ created: batch([rejectedItem], [rejected('unsafe_path')]) });
-    render(<ImportsPage lang='zh-CN' />);
+    renderImports('zh-CN');
     await addFiles(inFlow(), zip('坏包.zip'));
     await screen.findByText('已上传，待确认');
     fireEvent.click(confirmButton());
@@ -107,7 +106,7 @@ describe('ZIP 导入入口', () => {
   it('同批里另有可重试的失败项时，仍提供“只重试失败项”', async () => {
     const other = row({ seq: 1, upload_id: 'up_2', file_name: '乙.md', status: 'failed', error: 'upstream_failed', steps: steps('failed', 'pending') });
     bridge({ created: batch([rejectedItem, other], [rejected('encrypted')]) });
-    render(<ImportsPage lang='zh-CN' />);
+    renderImports('zh-CN');
     await addFiles(inFlow(), zip('坏包.zip'), md('乙.md'));
     await waitFor(() => expect(screen.getAllByText('已上传，待确认')).toHaveLength(2));
     fireEvent.click(confirmButton());
@@ -117,7 +116,7 @@ describe('ZIP 导入入口', () => {
 
   it('同一个 ZIP 重复选入：队列里只有一份并提示；改名或不同大小 / 时间的不算重复', async () => {
     bridge();
-    render(<ImportsPage lang='zh-CN' />);
+    renderImports('zh-CN');
     await addFiles(inFlow(), zip('资料包.zip'));
     await screen.findByText('已上传，待确认');
     await addFiles(inFlow(), zip('资料包.zip'));
@@ -130,7 +129,7 @@ describe('ZIP 导入入口', () => {
 
   it('移除后可以再次加入同一个 ZIP', async () => {
     bridge();
-    render(<ImportsPage lang='zh-CN' />);
+    renderImports('zh-CN');
     await addFiles(inFlow(), zip('资料包.zip'));
     await screen.findByText('已上传，待确认');
     fireEvent.click(screen.getByRole('button', { name: '移除 资料包.zip' }));
@@ -141,7 +140,7 @@ describe('ZIP 导入入口', () => {
 
   it('英文界面：报告与整包拒绝原因', async () => {
     bridge({ created: batch([rejectedItem], [rejected('compression_ratio')]) });
-    render(<ImportsPage lang='en' />);
+    renderImports('en');
     await addFiles(inFlow(), zip('坏包.zip'));
     await screen.findByText('Uploaded, awaiting confirmation');
     fireEvent.click(confirmButton('en'));
@@ -152,7 +151,7 @@ describe('ZIP 导入入口', () => {
   it('未知原因码不显示空白：整包拒绝与跳过各有带原因码的兜底说明；archives 条目缺 skipped 不抛异常', async () => {
     const odd = { upload_id: 'up_1', file_name: '怪包.zip', outcome: 'rejected', reject_reason: 'future_reason', extracted: 0 };
     bridge({ created: batch([rejectedItem], [odd as object]) });
-    render(<ImportsPage lang='zh-CN' />);
+    renderImports('zh-CN');
     await addFiles(inFlow(), zip('怪包.zip'));
     await screen.findByText('已上传，待确认');
     fireEvent.click(confirmButton());
@@ -164,7 +163,7 @@ describe('ZIP 导入入口', () => {
   it('未知跳过原因显示“已跳过（原因码：X）”', async () => {
     const odd = { ...expanded, skipped: [{ path: 'a/b.bin', reason: 'future_skip' }] };
     bridge({ created: batch([archiveItem('docs/a.md')], [odd]) });
-    render(<ImportsPage lang='zh-CN' />);
+    renderImports('zh-CN');
     await addFiles(inFlow(), zip('资料包.zip'));
     await screen.findByText('已上传，待确认');
     fireEvent.click(confirmButton());
@@ -182,7 +181,7 @@ describe('ZIP 导入入口', () => {
         [expanded, second],
       ),
     });
-    render(<ImportsPage lang='zh-CN' />);
+    renderImports('zh-CN');
     await addFiles(inFlow(), zip('资料包.zip'), zip('第二包.zip', 5));
     await waitFor(() => expect(screen.getAllByText('已上传，待确认')).toHaveLength(2));
     fireEvent.click(confirmButton());
@@ -192,7 +191,7 @@ describe('ZIP 导入入口', () => {
 
   it('只有大小不同的同名 ZIP 不算同一个；“再导入一批”清掉指纹后同一个 ZIP 可再加入', async () => {
     bridge({ created: batch([archiveItem('docs/a.md')], [expanded]) });
-    render(<ImportsPage lang='zh-CN' />);
+    renderImports('zh-CN');
     await addFiles(inFlow(), zip('资料包.zip', 1, 'PK'));
     await screen.findByText('已上传，待确认');
     await addFiles(inFlow(), zip('资料包.zip', 1, 'PKxx'));
@@ -209,7 +208,7 @@ describe('ZIP 导入入口', () => {
     bridge({
       created: batch([row({ seq: 0, source_id: 'src_a', upload_id: 'up_1' }), row({ seq: 1, source_id: null, upload_id: 'up_2', file_name: '乙.md' })]),
     });
-    render(<ImportsPage lang='zh-CN' />);
+    renderImports('zh-CN');
     await addFiles(inFlow(), md('甲.md'), md('乙.md'));
     await waitFor(() => expect(screen.getAllByText('已上传，待确认')).toHaveLength(2));
     fireEvent.click(confirmButton());

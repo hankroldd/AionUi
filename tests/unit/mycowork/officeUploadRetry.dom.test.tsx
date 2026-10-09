@@ -136,7 +136,7 @@ describe('上传弹窗：失败有出路', () => {
     expect(done.className).toContain('arco-btn-primary');
     expect(within(dialog).getByRole('button', { name: '再导入一批' }).className).not.toContain('arco-btn-primary');
     fireEvent.click(done);
-    await waitFor(() => expect(screen.queryByText('上传文件', { selector: '.arco-modal-title' })).toBeNull());
+    await waitFor(() => expect(screen.queryByText('导入资料', { selector: '.arco-modal-title' })).toBeNull());
   });
 
   it('带着失败行进入下一批：Secret、标签、知识库选择都沿用，重试后确认的请求体里仍是 Secret', async () => {

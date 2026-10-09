@@ -11,6 +11,7 @@ import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 import { clearEditReturn, requestEditReturn } from '@mycowork/ui/pages/office-editor/edit-return.ts';
 import { OfficeEditSlot, OfficeTextEditSlot, OfficeVersionsSlot } from '@/renderer/mycowork-slots';
+import { settleTracker } from './saveTrackerTeardown';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({
@@ -117,10 +118,11 @@ beforeEach(() => {
   window.location.hash = '#/office/space';
   localStorage.clear();
 });
-afterEach(() => {
+afterEach(async () => {
   cleanup();
   clearEditReturn();
   vi.unstubAllGlobals();
+  await settleTracker();
 });
 
 describe('空间预览的“在线编辑”', () => {

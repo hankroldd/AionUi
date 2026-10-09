@@ -13,8 +13,10 @@ import { Message, Notification } from '@arco-design/web-react';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { clearEditReturn, requestEditReturn } from '@mycowork/ui/pages/office-editor/edit-return.ts';
 import { RESOURCE_CHANGED, trackSave } from '@mycowork/ui/pages/office-editor/save-tracker.tsx';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import { editorText } from '@mycowork/ui/pages/office-editor/messages.ts';
 import { OfficeEditSlot, OfficeVersionsSlot } from '@/renderer/mycowork-slots';
+import { settleTracker } from './saveTrackerTeardown';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({
@@ -69,11 +71,13 @@ beforeEach(() => {
   Message.clear();
   Notification.clear();
 });
-afterEach(() => {
+afterEach(async () => {
   cleanup();
   vi.useRealTimers();
+  readRetry.delays = [300, 900];
   vi.unstubAllGlobals();
   window.innerWidth = 1024;
+  await settleTracker(); // 页面级跟踪器是模块级单例：上一例的轮询与通知不能漏到下一例
 });
 
 describe('保存并返回', () => {
@@ -118,7 +122,9 @@ describe('保存跟踪器', () => {
     polls('eds_t1', session('closing'));
     trackSave(text, 'eds_t1');
     trackSave(text, 'eds_t1');
-    await waitFor(() => expect(calls('GET', '/edit-sessions/eds_t1').length).toBeGreaterThanOrEqual(1), { timeout: 3000 });
+    await waitFor(() => expect(calls('GET', '/edit-sessions/eds_t1').length).toBeGreaterThanOrEqual(1), {
+      timeout: 3000,
+    });
     const n1 = calls('GET', '/edit-sessions/eds_t1').length;
     await new Promise((r) => setTimeout(r, 1700));
     const per = calls('GET', '/edit-sessions/eds_t1').length - n1;
@@ -139,6 +145,7 @@ describe('保存跟踪器', () => {
 
   it('网络失败：静默重试，不弹“连不上 MyCowork 服务”；连续超过约 15 秒才改提示；恢复后继续报告', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    readRetry.delays = []; // 读请求自带的真实退避不参与这里的假时钟推进
     let down = true;
     fetchMock.mockImplementation(async () => {
       if (down) throw new TypeError('Failed to fetch');
@@ -162,27 +169,29 @@ describe('保存跟踪器', () => {
   });
 
   it('写回冲突 / 失败：不自动关闭的通知完整显示，带“查看版本与变化”', async () => {
-    polls('eds_t5', 
+    polls(
+      'eds_t5',
       session('closed', {
         saved_revision_id: 'rev_b',
         workspace_writeback: { relative_path: '方案.docx', outcome: 'conflict', saved_as: '方案.人工编辑-1.docx' },
-      }),
+      })
     );
     trackSave(text, 'eds_t5');
     await waitFor(() => expect(body()).toHaveTextContent('另存为 方案.人工编辑-1.docx'), { timeout: 3000 });
     const n = document.querySelector('.arco-notification') as HTMLElement;
     expect(within(n).getByRole('link', { name: '查看版本与变化' }).getAttribute('href')).toBe(
-      '#/office/resources/res_1/versions',
+      '#/office/resources/res_1/versions'
     );
     await new Promise((r) => setTimeout(r, 1500));
     expect(document.querySelector('.arco-notification')).toHaveTextContent('另存为'); // 没有自动消失
     Notification.clear();
     Message.clear();
-    polls('eds_t5', 
+    polls(
+      'eds_t5',
       session('closed', {
         saved_revision_id: 'rev_c',
         workspace_writeback: { relative_path: '方案.docx', outcome: 'failed', saved_as: null },
-      }),
+      })
     );
     trackSave(text, 'eds_t5');
     await waitFor(() => expect(document.querySelector('.arco-notification')).toHaveTextContent('没能写回'), {
@@ -191,21 +200,23 @@ describe('保存跟踪器', () => {
   });
 
   it('Secret 跳过写回：说明并进成功提示；写回成功：成功提示带写回说明', async () => {
-    polls('eds_t6', 
+    polls(
+      'eds_t6',
       session('closed', {
         saved_revision_id: 'rev_b',
         workspace_writeback: { relative_path: '方案.docx', outcome: 'skipped', saved_as: null, reason: 'secret' },
-      }),
+      })
     );
     trackSave(text, 'eds_t6');
     await waitFor(() => expect(body()).toHaveTextContent('因是 Secret'), { timeout: 3000 });
     expect(document.querySelector('.arco-notification')).toBeNull();
     Message.clear();
-    polls('eds_t6', 
+    polls(
+      'eds_t6',
       session('closed', {
         saved_revision_id: 'rev_c',
         workspace_writeback: { relative_path: '方案.docx', outcome: 'written', saved_as: null },
-      }),
+      })
     );
     trackSave(text, 'eds_t6');
     await waitFor(() => expect(body()).toHaveTextContent('已写回会话工作目录中的 方案.docx'), { timeout: 3000 });
@@ -213,9 +224,9 @@ describe('保存跟踪器', () => {
 
   it('recovery_required：通知给“继续编辑 / 放弃这次修改”；继续编辑加入原会话并进编辑页', async () => {
     window.location.hash = '#/office/space';
-    polls('eds_t7', session('recovery_required'));
+    polls('eds_t7', session('recovery_required', { session_id: 'eds_t7' }));
     trackSave(text, 'eds_t7');
-    await waitFor(() => expect(document.querySelector('.arco-notification')).toHaveTextContent('你的修改没有丢'), {
+    await waitFor(() => expect(document.querySelector('.arco-notification')).toHaveTextContent('保存结果还没确认'), {
       timeout: 3000,
     });
     const n = document.querySelector('.arco-notification') as HTMLElement;
@@ -229,7 +240,7 @@ describe('保存跟踪器', () => {
 
   it('recovery_required：放弃要二次确认并写明后果；确认后调 discard，提示“已放弃”，不说“没有改动”、不返回', async () => {
     window.location.hash = '#/office/space';
-    polls('eds_t8', session('recovery_required'));
+    polls('eds_t8', session('recovery_required', { session_id: 'eds_t8' }));
     trackSave(text, 'eds_t8');
     await waitFor(() => expect(document.querySelector('.arco-notification')).toBeTruthy(), { timeout: 3000 });
     const n = document.querySelector('.arco-notification') as HTMLElement;
@@ -274,12 +285,15 @@ describe('编辑页与版本页的恢复态', () => {
         return reply(200, {
           resource_id: 'res_1',
           current_revision_id: 'rev_head',
-          items: [{ revision_id: 'rev_head', origin: 'original', current: true, created_at: '2026-09-26T00:00:00.000Z' }],
+          items: [
+            { revision_id: 'rev_head', origin: 'original', current: true, created_at: '2026-09-26T00:00:00.000Z' },
+          ],
         });
       }
       if (url.startsWith('/bridge/v1/publications?')) return reply(200, { items: [] });
       if (url === '/bridge/v1/scopes') return reply(200, { sources: [], projects: [] });
       if (url === '/bridge/v1/edit-sessions' && !init?.method) return reply(200, { items: editing, next_page: null });
+      if (url === '/bridge/v1/edit-sessions/eds_1' && !init?.method) return reply(200, session('recovery_required')); // 放弃 / 继续前先重读
       if (url.endsWith('/discard')) return reply(200, {});
       return reply(404, {});
     });
@@ -291,7 +305,7 @@ describe('编辑页与版本页的恢复态', () => {
       { session_id: 'eds_1', resource_id: 'res_1', base_revision_id: 'rev_a', state: 'recovery_required' },
     ]);
     render(<OfficeVersionsSlot />);
-    expect(await screen.findByText('保存还没完成，你的修改没有丢。')).toBeInTheDocument();
+    expect(await screen.findByText('保存结果还没确认。')).toBeInTheDocument();
     const before = revs();
     fireEvent.click(screen.getByRole('button', { name: '放弃这次修改' }));
     fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
@@ -300,10 +314,12 @@ describe('编辑页与版本页的恢复态', () => {
   });
 
   it('版本页：editing 或 closing 的会话不出现提示条；保存完成事件触发重新取数', async () => {
-    const revs = versionsApi([{ session_id: 'eds_1', resource_id: 'res_1', base_revision_id: 'rev_a', state: 'closing' }]);
+    const revs = versionsApi([
+      { session_id: 'eds_1', resource_id: 'res_1', base_revision_id: 'rev_a', state: 'closing' },
+    ]);
     render(<OfficeVersionsSlot />);
     await screen.findByRole('button', { name: '在线编辑' });
-    expect(screen.queryByText('保存还没完成，你的修改没有丢。')).toBeNull();
+    expect(screen.queryByText('保存结果还没确认。')).toBeNull();
     const before = revs();
     window.dispatchEvent(new CustomEvent(RESOURCE_CHANGED, { detail: { resourceId: 'res_other' } }));
     await act(async () => undefined);

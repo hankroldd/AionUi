@@ -14,6 +14,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
+import { settleTracker } from './saveTrackerTeardown';
 import { OfficeEditSlot, OfficeVersionsSlot } from '@/renderer/mycowork-slots';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
@@ -55,9 +56,10 @@ describe('OfficeEditSlot', () => {
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('DocsAPI', { DocEditor });
   });
-  afterEach(() => {
+  afterEach(async () => {
     vi.unstubAllGlobals();
     window.innerWidth = 1024;
+    await settleTracker();
   });
 
   it('creates the editor from the signed config; "save and return" closes first, leaves at once, and the tracker reports the save', async () => {
@@ -90,7 +92,7 @@ describe('OfficeEditSlot', () => {
       return reply(404, {});
     });
     render(<OfficeEditSlot />);
-    expect(await screen.findByText('保存还没完成，你的修改没有丢。可以继续编辑，或放弃这次修改。')).toBeInTheDocument();
+    expect(await screen.findByText('保存结果还没确认。可以继续编辑，或放弃这次修改。')).toBeInTheDocument();
     expect(DocEditor).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
     await waitFor(() => expect(DocEditor).toHaveBeenCalledTimes(1));

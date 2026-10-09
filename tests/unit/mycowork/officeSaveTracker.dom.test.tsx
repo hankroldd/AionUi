@@ -56,6 +56,7 @@ function polls(id: string, ...states: object[]) {
     if (url === `/bridge/v1/edit-sessions/${id}` && !init?.method)
       return reply(200, states[Math.min(i++, states.length - 1)]);
     if (url.endsWith('/discard') && init?.method === 'POST') return reply(200, {});
+    if (/\/resources\/[^/]+\/revisions/.test(url)) return reply(200, { items: [], current_revision_id: 'rev_a' }); // 继续编辑前核当前版本
     if (url === '/bridge/v1/edit-sessions' && init?.method === 'POST') return reply(200, session('editing'));
     return reply(404, {});
   });

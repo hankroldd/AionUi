@@ -85,8 +85,43 @@ describe('OfficeEditSlot', () => {
     await waitFor(() => expect(document.body).toHaveTextContent('已保存为新版本。'), { timeout: 4000 });
   });
 
+  it('recovery page: "continue editing" with a head that moved on does not reopen — shows the notice and stays', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (/\/resources\/[^/]+\/revisions/.test(url)) return reply(200, { items: [], current_revision_id: 'rev_b' });
+      if (url === '/bridge/v1/edit-sessions' && init?.method === 'POST') return reply(200, session('editing'));
+      if (url === '/bridge/v1/edit-sessions/eds_1') return reply(200, session('recovery_required'));
+      return reply(404, {});
+    });
+    render(<OfficeEditSlot />);
+    fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+    expect(await screen.findByText('这份文件已经有更新的版本，不能再接着这次编辑；请到版本页查看。')).toBeInTheDocument();
+    expect(calls('POST', '/bridge/v1/edit-sessions')).toHaveLength(0);
+    expect(DocEditor).not.toHaveBeenCalled();
+  });
+
+  it('"close and return" when the change was already saved (409 EDIT_ALREADY_SAVED): says so in plain words, no raw code', async () => {
+    vi.stubGlobal('DocsAPI', undefined);
+    const append = vi.spyOn(document.head, 'appendChild').mockImplementation((node) => {
+      setTimeout(() => (node as HTMLScriptElement).onerror?.(new Event('error')), 0);
+      return node;
+    });
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/close') && init?.method === 'POST') return reply(202, session('closing'));
+      if (url.endsWith('/discard') && init?.method === 'POST')
+        return reply(409, { error: { code: 'EDIT_ALREADY_SAVED', message: 'x' } });
+      if (url === '/bridge/v1/edit-sessions/eds_1') return reply(200, session('editing'));
+      return reply(404, {});
+    });
+    render(<OfficeEditSlot />);
+    fireEvent.click(await screen.findByRole('button', { name: '关闭并返回' }));
+    expect(await screen.findByText('这次修改已保存为新版本，已为你刷新。')).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('EDIT_ALREADY_SAVED');
+    append.mockRestore();
+  });
+
   it('a session needing recovery can rejoin the editor (same session)', async () => {
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (/\/resources\/[^/]+\/revisions/.test(url)) return reply(200, { items: [], current_revision_id: 'rev_a' }); // 继续编辑前核当前版本
       if (url === '/bridge/v1/edit-sessions' && init?.method === 'POST') return reply(200, session('editing'));
       if (url === '/bridge/v1/edit-sessions/eds_1') return reply(200, session('recovery_required'));
       return reply(404, {});
@@ -187,6 +222,7 @@ describe('OfficeEditSlot', () => {
       }
       if (url.endsWith('/discard') && init?.method === 'POST')
         return reply(409, { error: { code: 'EDIT_STATE_CONFLICT', message: 'x' } });
+      if (/\/resources\/[^/]+\/revisions/.test(url)) return reply(200, { items: [], current_revision_id: 'rev_a' }); // 继续编辑前核当前版本
       if (url === '/bridge/v1/edit-sessions' && init?.method === 'POST') return reply(200, session('editing'));
       if (url === '/bridge/v1/edit-sessions/eds_1') return reply(200, session(state));
       return reply(404, {});

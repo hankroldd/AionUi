@@ -100,8 +100,8 @@ export function fixture(resources: Responder = standard) {
   vi.stubGlobal('fetch', fetchMock);
 }
 export function standard(q: URLSearchParams): Reply {
-  if (q.get('state') === 'failed') return list([FAILED], 1);
-  if (q.get('origin_filter') === 'outputs') return list([OUTPUT], 1);
+  if (q.get('status_group') === 'unavailable') return list([FAILED], 1);
+  if (q.get('origin_group') === 'ai_generated') return list([OUTPUT], 1);
   if (q.getAll('file_type').includes('pdf')) return list([FAILED, OUTPUT], 2);
   if (q.get('q'))
     return list(

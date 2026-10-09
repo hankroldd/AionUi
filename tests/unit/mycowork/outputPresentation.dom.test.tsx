@@ -7,9 +7,9 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
-import { ItemMenu, type ItemActions } from '@mycowork/ui/pages/resources/ItemParts.tsx';
+import { ItemMenu, StateTag, type ItemActions } from '@mycowork/ui/pages/resources/ItemParts.tsx';
 import { rowActionText } from '@mycowork/ui/pages/resources/row-action-messages.ts';
-import { OutputPublication, OutputSourceLine } from '@mycowork/ui/pages/resources/OutputParts.tsx';
+import { OutputPublication, OutputSourceLine, PublishedMark } from '@mycowork/ui/pages/resources/OutputParts.tsx';
 import { resourceText } from '@mycowork/ui/pages/resources/messages.ts';
 import { useOutputConversations } from '@mycowork/ui/pages/resources/use-output-conversations.ts';
 import { useResources } from '@mycowork/ui/pages/resources/use-resources.ts';
@@ -38,6 +38,7 @@ const actions = (over: Partial<ItemActions> = {}): ItemActions => ({
   starred: () => false,
   originName: () => '产物',
   sourceName: () => '—',
+  kbName: (id) => (id === 'src-fictional' ? '虚构库' : id),
   onStar: vi.fn(),
   onEditTags: vi.fn(),
   onSecret: vi.fn(),
@@ -53,29 +54,53 @@ afterEach(() => {
 });
 
 describe('产物展示边界', () => {
-  it('历史成功与最近失败并列；产物胶囊不带存档文案', () => {
+  it('历史成功在名称旁显示“已发布到”小标记，最近失败的尝试另列；状态仍是仅存档', () => {
     const r = output({
       published_to: [
         { publication_id: 'pub-original', source_id: 'src-fictional', status: 'failed', has_published: true },
       ],
     });
-    render(<OutputPublication r={r} text={text} />);
-    expect(screen.getByText('已发布')).toBeInTheDocument();
+    render(
+      <>
+        <PublishedMark r={r} text={text} kbName={(id) => (id === 'src-fictional' ? '虚构库' : id)} />
+        <StateTag r={r} text={text} />
+        <OutputPublication r={r} text={text} />
+      </>
+    );
+    expect(screen.getByTestId('mycowork-published-mark')).toHaveTextContent('已发布到 虚构库');
+    expect(screen.getByText('仅存档')).toBeInTheDocument();
     expect(screen.getByText('发布失败')).toBeInTheDocument();
-    expect(screen.queryByText(/存档|AI 不引用/)).toBeNull();
-    expect(screen.queryByText('已生成')).toBeNull();
+    expect(screen.queryByText(/已生成|已发布成果/)).toBeNull();
   });
-  it('排队不显示成功；status不足以猜历史成功', () => {
+  it('排队不算成功：没有小标记，状态为仅存档；status 不足以猜历史成功', () => {
     const r = output({
       published_to: [
         { publication_id: 'pub-q', source_id: 'src-q', status: 'queued', has_published: false },
         { publication_id: 'pub-legacy', source_id: 'src-legacy', status: 'published' },
       ],
     });
-    render(<OutputPublication r={r} text={text} />);
-    expect(screen.getByText('已生成')).toBeInTheDocument();
+    render(
+      <>
+        <PublishedMark r={r} text={text} kbName={(id) => id} />
+        <StateTag r={r} text={text} />
+        <OutputPublication r={r} text={text} />
+      </>
+    );
+    expect(screen.queryByTestId('mycowork-published-mark')).toBeNull();
+    expect(screen.getByText('仅存档')).toBeInTheDocument();
     expect(screen.getByText('发布排队中')).toBeInTheDocument();
-    expect(screen.queryByText('已发布')).toBeNull();
+  });
+  it('多个库只写第一个加 +N；没有发布记录的产物不渲染小标记和尝试', () => {
+    const r = output({
+      published_to: [
+        { publication_id: 'a', source_id: 'src-a', status: 'published', has_published: true },
+        { publication_id: 'b', source_id: 'src-b', status: 'published', has_published: true },
+      ],
+    });
+    const { rerender } = render(<PublishedMark r={r} text={text} kbName={(id) => `库${id.slice(-1)}`} />);
+    expect(screen.getByTestId('mycowork-published-mark')).toHaveTextContent('已发布到 库a +1');
+    rerender(<PublishedMark r={output()} text={text} kbName={(id) => id} />);
+    expect(screen.queryByTestId('mycowork-published-mark')).toBeNull();
   });
   it('来源空名只时间，有解析名称显示来源副标题', () => {
     const { rerender } = render(<OutputSourceLine r={output()} name=' ' lang='zh-CN' text={text} />);
@@ -162,7 +187,7 @@ describe('产物展示边界', () => {
     rerender(<View layout='list' />);
     expect(screen.getByText('来自对话 ‹虚构会话›')).toBeInTheDocument();
     expect(document.querySelectorAll('.mcw-rc-time')).toHaveLength(1);
-    expect(screen.getByText('产物')).toHaveClass('mcw-rc-source');
+    expect(screen.getByText('产物')).toHaveClass('mcw-rc-source'); // originName 由宿主提供，这里替身返回“产物”
     expect(screen.getByText('—')).toHaveClass('mcw-rc-knowledge-base');
   });
 });

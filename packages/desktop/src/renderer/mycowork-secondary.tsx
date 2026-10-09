@@ -1,19 +1,21 @@
 /**
  * 文件：renderer/mycowork-secondary.tsx
  * 职责：原生二级栏头部与桌面收起偏好适配，复用会话搜索和既有抽屉。
- * 边界：手机开关不覆盖桌面偏好；空间/记忆内容在对应切片接入。
+ * 边界：手机开关不覆盖桌面偏好；空间/记忆内容在对应切片接入；定时任务在桌面不显示二级栏（由 Layout 按路由临时收起），手机抽屉里只放一句说明（W4-8，不显示首页会话列表）。
  * 关联：ADR-0022；PR11 W4-2。
  */
 import { Button, Tooltip } from '@arco-design/web-react';
 import { ExpandLeft, Search } from '@icon-park/react';
 import { navigationText } from '@mycowork/ui';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
+import { MYCOWORK_SCHEDULED_SIDER_ID } from '@renderer/mycowork-sider-ids';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import ConversationSearchPopover from '@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover';
 
-export { mycoworkSiderId } from '@renderer/mycowork-sider-ids';
+export { mycoworkNoSiderRoute, mycoworkSiderId } from '@renderer/mycowork-sider-ids';
 
 const COLLAPSE_KEY = 'mycowork:sider-collapsed';
 
@@ -56,31 +58,39 @@ export default function MyCoworkSecondaryHeader({ onConversationSelect }: { onCo
   const { t, i18n } = useTranslation();
   const text = navigationText(i18n.language);
   const searchLabel = t('conversation.historySearch.tooltip');
+  const scheduled = isScheduledRoute(pathname);
+  const [scheduledHost, setScheduledHost] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setScheduledHost(scheduled ? document.getElementById(MYCOWORK_SCHEDULED_SIDER_ID) : null);
+  }, [scheduled]);
   return (
-    <div className='mcw-secondary-header'>
-      <h2>{isScheduledRoute(pathname) ? text.scheduled : text.home}</h2>
-      {!layout?.siderCollapsed && isMyCoworkHomeRoute(pathname) && (
-        <ConversationSearchPopover
-          onConversationSelect={onConversationSelect}
-          onSessionClick={() => layout?.isMobile && layout.setSiderCollapsed(true)}
-          renderTrigger={({ onClick }) => (
-            <Tooltip content={searchLabel}>
-              <Button className='mcw-secondary-icon' aria-label={searchLabel} onClick={onClick}>
-                <Search size={18} />
-              </Button>
-            </Tooltip>
-          )}
-        />
-      )}
-      <Tooltip content={text.collapseSidebar}>
-        <Button
-          className='mcw-secondary-icon'
-          aria-label={text.collapseSidebar}
-          onClick={() => layout?.setSiderCollapsed(true)}
-        >
-          <ExpandLeft size={18} />
-        </Button>
-      </Tooltip>
-    </div>
+    <>
+      <div className='mcw-secondary-header'>
+        <h2>{scheduled ? text.scheduled : text.home}</h2>
+        {!layout?.siderCollapsed && isMyCoworkHomeRoute(pathname) && (
+          <ConversationSearchPopover
+            onConversationSelect={onConversationSelect}
+            onSessionClick={() => layout?.isMobile && layout.setSiderCollapsed(true)}
+            renderTrigger={({ onClick }) => (
+              <Tooltip content={searchLabel}>
+                <Button className='mcw-secondary-icon' aria-label={searchLabel} onClick={onClick}>
+                  <Search size={18} />
+                </Button>
+              </Tooltip>
+            )}
+          />
+        )}
+        <Tooltip content={text.collapseSidebar}>
+          <Button
+            className='mcw-secondary-icon'
+            aria-label={text.collapseSidebar}
+            onClick={() => layout?.setSiderCollapsed(true)}
+          >
+            <ExpandLeft size={18} />
+          </Button>
+        </Tooltip>
+      </div>
+      {scheduledHost && createPortal(<p className='mcw-secondary-note'>{text.scheduledNote}</p>, scheduledHost)}
+    </>
   );
 }

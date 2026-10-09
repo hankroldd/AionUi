@@ -71,8 +71,8 @@ it('输入当帧及299ms内隐藏ask/save、不发查询；旧q清空前仍隐�
 });
 it.each([
   ['类型', 'PDF', 'file_type', 'pdf'],
-  ['状态', '入库失败', 'state', 'failed'],
-  ['来源', '产物', 'origin_filter', 'outputs'],
+  ['状态', '不可用', 'status_group', 'unavailable'],
+  ['来源', 'AI 生成的', 'origin_group', 'ai_generated'],
 ])('%s条件即时撤掉整库ask/save，清除条件恢复且保留当前源，不写不等价的分组', async (label, option, field, value) => {
   await sourceAndTags();
   await choose(label, option);

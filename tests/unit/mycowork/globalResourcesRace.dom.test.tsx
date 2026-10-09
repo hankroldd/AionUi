@@ -46,14 +46,14 @@ it('旧state请求晚到不能覆盖新的type筛选', async () => {
   fixture((q) =>
     q.has('file_type')
       ? list([item('res_new', '新PDF.pdf')], 1)
-      : q.has('state')
+      : q.has('status_group')
         ? old.promise
         : list(FIRST.slice(0, 2), 2)
   );
   render(<ResourcesPage lang='zh-CN' />);
   await screen.findByRole('button', { name: '第一页-1.md', exact: true });
-  await choose('状态', '入库失败');
-  await waitFor(() => expect(lastQuery().get('state')).toBe('failed'));
+  await choose('状态', '不可用');
+  await waitFor(() => expect(lastQuery().get('status_group')).toBe('unavailable'));
   await choose('类型', 'PDF');
   await screen.findByRole('button', { name: '新PDF.pdf' });
   await act(async () => {
@@ -114,11 +114,15 @@ it('旧place成功晚到不能覆盖新imports集合', async () => {
 it('input变化当帧隐藏旧列表，300ms窗口内旧filter响应不能显示；新q胜出', async () => {
   const old = deferred<Reply>();
   fixture((q) =>
-    q.has('q') ? list([item('res_new', '新q匹配.md')], 1) : q.has('state') ? old.promise : list(FIRST.slice(0, 2), 2)
+    q.has('q')
+      ? list([item('res_new', '新q匹配.md')], 1)
+      : q.has('status_group')
+        ? old.promise
+        : list(FIRST.slice(0, 2), 2)
   );
   render(<ResourcesPage lang='zh-CN' />);
   await screen.findByRole('button', { name: '第一页-1.md', exact: true });
-  await choose('状态', '入库失败');
+  await choose('状态', '不可用');
   fireEvent.change(input(), { target: { value: '新查询' } });
   expect(screen.queryByTestId('mycowork-resource-item')).toBeNull();
   const before = reads().length;

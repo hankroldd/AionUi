@@ -28,23 +28,23 @@ import {
 
 beforeEach(reset);
 afterEach(() => vi.unstubAllGlobals());
-it('来源按origin，KB按source_id各自显示；产物原稿显示“已生成”而不是存档文案，Secret人工可见但标AI不引用', async () => {
+it('来源按origin，KB按source_id各自显示；未发布的产物原稿显示“仅存档”、已发布的显示“AI 可引用”，Secret人工可见但标AI不引用', async () => {
   const publishedOutput = { ...OUTPUT, source_id: 'src_a', file_name: '已入库产物.pdf', state: 'ready' };
   fixture(() => list([publishedOutput, OUTPUT, SECRET], 3));
   render(<ResourcesPage lang='zh-CN' onAskScope={async () => undefined} />);
   const published = (await screen.findByRole('button', { name: '已入库产物.pdf' })).closest(
     '[data-testid="mycowork-resource-item"]'
   ) as HTMLElement;
-  expect(published.querySelector('.mcw-rc-source')).toHaveTextContent('产物');
+  expect(published.querySelector('.mcw-rc-source')).toHaveTextContent('AI 生成的');
   expect(published.querySelector('.mcw-rc-knowledge-base')).toHaveTextContent('虚构甲库');
   const output = screen
     .getByRole('button', { name: '首页外产物-600.pdf' })
     .closest('[data-testid="mycowork-resource-item"]') as HTMLElement;
-  expect(output.querySelector('.mcw-rc-source')).toHaveTextContent('产物');
+  expect(output.querySelector('.mcw-rc-source')).toHaveTextContent('AI 生成的');
   expect(output.querySelector('.mcw-rc-knowledge-base')).toHaveTextContent('—');
-  // ADR-0022 决策 7：产物原稿（state=stored）只显示“已生成 / 已发布”胶囊，不套用“存档（AI 不引用）”
-  expect(within(output).getByText('已生成')).toBeInTheDocument();
-  expect(within(output).queryByText(/存档|AI 不引用/)).toBeNull();
+  // W4-8：产物原稿（state=stored）没发布过 = 仅存档；不再有“已生成 / 已发布”胶囊
+  expect(within(output).getByText('仅存档')).toBeInTheDocument();
+  expect(within(output).queryByText(/已生成|已发布|AI 不引用/)).toBeNull();
   expect(within(published).getByText('AI 可引用')).toBeInTheDocument();
   const secret = screen
     .getByRole('button', { name: '虚构密件.md' })
@@ -56,8 +56,8 @@ it('来源按origin，KB按source_id各自显示；产物原稿显示“已生�
   const cards = screen.getAllByTestId('mycowork-resource-item');
   expect(within(cards[0]).getByTestId('mycowork-output-source')).toBeInTheDocument(); // 产物卡片的来源行 = 来源对话 · 时间
   expect(within(cards[0]).getByText('虚构甲库')).toBeInTheDocument();
-  expect(within(cards[1]).getByText('已生成')).toBeInTheDocument();
-  expect(within(cards[1]).queryByText(/存档|AI 不引用/)).toBeNull();
+  expect(within(cards[1]).getByText('仅存档')).toBeInTheDocument();
+  expect(within(cards[1]).queryByText(/已生成|已发布|AI 不引用/)).toBeNull();
   expect(within(cards[1]).queryByText('虚构甲库')).toBeNull();
   expect(within(cards[2]).getByText('AI 不引用')).toBeInTheDocument();
   expect(reads()).toHaveLength(1);
@@ -80,9 +80,9 @@ it('产物“更多”有发布到知识库；解析不到来源对话就不给�
   expect(writes()).toHaveLength(0);
 });
 it.each([
-  ['来源', 'origin_filter', 'imports'],
+  ['来源', 'origin_group', 'mine_uploaded'],
   ['类型', 'file_type', 'csv'],
-  ['状态', 'state', 'ready'],
+  ['状态', 'status_group', 'citable'],
   ['排序', 'sort', 'name'],
 ])('键盘Enter打开与选定%s，Escape关闭菜单', async (label, field, value) => {
   fixture(() => list(FIRST.slice(0, 2), 2));

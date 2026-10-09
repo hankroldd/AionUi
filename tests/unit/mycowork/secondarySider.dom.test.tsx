@@ -27,7 +27,11 @@ vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover',
     onConversationSelect: () => void;
   }) => renderTrigger({ onClick: onConversationSelect }),
 }));
-import SecondaryHeader, { mycoworkSiderId, useMyCoworkSecondaryCollapse } from '@/renderer/mycowork-secondary';
+import SecondaryHeader, {
+  mycoworkNoSiderRoute,
+  mycoworkSiderId,
+  useMyCoworkSecondaryCollapse,
+} from '@/renderer/mycowork-secondary';
 
 beforeEach(() => {
   localStorage.clear();
@@ -82,8 +86,18 @@ describe('secondary header', () => {
     expect(mycoworkSiderId('/office/resources')).toBe('mycowork-space-sider');
     expect(mycoworkSiderId('/office/trash')).toBe('mycowork-space-sider');
     expect(mycoworkSiderId('/office/trash/')).toBe('mycowork-space-sider');
+    expect(mycoworkSiderId('/scheduled')).toBe('mycowork-scheduled-sider');
+    expect(mycoworkSiderId('/scheduled/job-1')).toBe('mycowork-scheduled-sider');
+    expect(mycoworkSiderId('/scheduledx')).toBeNull();
     for (const path of ['/office/resources/res_fixture/versions', '/office/imports', '/office/knowledge'])
       expect(mycoworkSiderId(path)).toBeNull();
+  });
+
+  it('routes without secondary content are route-collapsed on desktop: scheduled, versions and edit pages; not Home, Space or Memory', () => {
+    for (const path of ['/scheduled', '/scheduled/job-1', '/office/resources/res_1/versions', '/office/edit/eds_1'])
+      expect(mycoworkNoSiderRoute(path), path).toBe(true);
+    for (const path of ['/guid', '/conversation/c1', '/office/space', '/office/trash', '/office/memory', '/scheduledx'])
+      expect(mycoworkNoSiderRoute(path), path).toBe(false);
   });
 
   it('Home uses native search selection and the Layout collapse action', () => {
@@ -101,5 +115,18 @@ describe('secondary header', () => {
     render(<SecondaryHeader onConversationSelect={vi.fn()} />);
     expect(screen.getByRole('heading').textContent).toBe('定时任务');
     expect(screen.queryByRole('button', { name: 'conversation.historySearch.tooltip' })).toBeNull();
+  });
+
+  it('Scheduled route fills its own container with a one-line note instead of the Home conversation list', () => {
+    route.path = '/scheduled';
+    const host = document.createElement('div');
+    host.id = 'mycowork-scheduled-sider';
+    document.body.append(host);
+    try {
+      render(<SecondaryHeader onConversationSelect={vi.fn()} />);
+      expect(host.textContent).toBe('任务列表与新建在右侧页面。');
+    } finally {
+      host.remove();
+    }
   });
 });

@@ -14,6 +14,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
+import { settleTracker } from './saveTrackerTeardown';
 import { OfficeEditSlot, OfficeVersionsSlot } from '@/renderer/mycowork-slots';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
@@ -55,13 +56,15 @@ describe('OfficeEditSlot', () => {
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('DocsAPI', { DocEditor });
   });
-  afterEach(() => {
+  afterEach(async () => {
     vi.unstubAllGlobals();
     window.innerWidth = 1024;
+    await settleTracker();
   });
 
-  it('creates the editor from the signed config; finish closes first, then waits for the Bridge to report the save', async () => {
+  it('creates the editor from the signed config; "save and return" closes first, leaves at once, and the tracker reports the save', async () => {
     let gets = 0;
+    window.location.hash = '#/office/edit/eds_1';
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.endsWith('/close') && init?.method === 'POST') return reply(202, session('closing'));
       if (url === '/bridge/v1/edit-sessions/eds_1')
@@ -73,15 +76,13 @@ describe('OfficeEditSlot', () => {
     const [placeholder, cfg] = DocEditor.mock.calls[0] as unknown as [string, Record<string, unknown>];
     expect(placeholder).toBe('mycowork-docs-eds_1');
     expect(cfg).toMatchObject({ ...config, width: '100%', height: '100%' });
-    expect(screen.getByTestId('office-editor-status').textContent).toContain('正在在线编辑');
-    fireEvent.click(screen.getByRole('button', { name: '结束编辑并保存' }));
-    expect(await screen.findByText('保存待确认：正在等待编辑服务回传，先不要覆盖文件。')).toBeInTheDocument();
+    expect(screen.getByTestId('office-editor-status').textContent).toContain('正在编辑。编辑期间 AI 不会改这个文件。');
+    fireEvent.click(screen.getByRole('button', { name: '保存并返回' }));
+    // 没有来处：立刻回该资源的版本页，不在原地等；编辑器随页面销毁
+    await waitFor(() => expect(window.location.hash).toBe('#/office/resources/res_1/versions'));
     expect(calls('POST', '/edit-sessions/eds_1/close')).toHaveLength(1);
-    expect(destroyEditor).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText('已保存为新版本。', undefined, { timeout: 4000 })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '查看版本与变化' }).getAttribute('href')).toBe(
-      '#/office/resources/res_1/versions'
-    );
+    await waitFor(() => expect(destroyEditor).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(document.body).toHaveTextContent('已保存为新版本。'), { timeout: 4000 });
   });
 
   it('a session needing recovery can rejoin the editor (same session)', async () => {
@@ -91,9 +92,9 @@ describe('OfficeEditSlot', () => {
       return reply(404, {});
     });
     render(<OfficeEditSlot />);
-    expect(await screen.findByText(/保存未确认：编辑服务没有回传结果/)).toBeInTheDocument();
+    expect(await screen.findByText('保存结果还没确认。可以继续编辑，或放弃这次修改。')).toBeInTheDocument();
     expect(DocEditor).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '回到编辑器' }));
+    fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
     await waitFor(() => expect(DocEditor).toHaveBeenCalledTimes(1));
     expect(JSON.parse(String(calls('POST', '/bridge/v1/edit-sessions')[0]?.[1]?.body))).toEqual({
       resource_id: 'res_1',
@@ -149,7 +150,7 @@ describe('OfficeEditSlot', () => {
     render(<OfficeEditSlot />);
     expect(await screen.findByText('在线编辑需要桌面浏览器：请在桌面打开。')).toBeInTheDocument();
     expect(DocEditor).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: '结束编辑并保存' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '保存并返回' })).toBeNull();
   });
 
   it('when api.js fails to load, "close and go back" closes then discards and returns to the versions page', async () => {
@@ -192,11 +193,11 @@ describe('OfficeEditSlot', () => {
     });
     render(<OfficeEditSlot />);
     fireEvent.click(await screen.findByRole('button', { name: '关闭并返回' }));
-    expect(await screen.findByText('编辑器在别处仍打开，写入权保留：请在那里结束编辑。')).toBeInTheDocument();
+    expect(await screen.findByText('编辑器在别处仍打开：请先在那里保存并返回。')).toBeInTheDocument();
     append.mockRestore();
     vi.stubGlobal('DocsAPI', { DocEditor });
-    fireEvent.click(await screen.findByRole('button', { name: '回到编辑器' }));
-    expect(await screen.findByRole('button', { name: '结束编辑并保存' })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+    expect(await screen.findByRole('button', { name: '保存并返回' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '关闭并返回' })).toBeNull();
     await waitFor(() => expect(DocEditor).toHaveBeenCalledTimes(1));
   });

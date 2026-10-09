@@ -135,14 +135,14 @@ describe('继续编辑先核当前版本', () => {
     const n = await recoveryNote();
     fireEvent.click(n.getByRole('button', { name: '继续编辑' }));
     await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => /\/resources\//.test(String(u)))).toBe(true));
-    await new Promise((r) => setTimeout(r, 50));
+    await waitFor(() => expect(document.querySelector('.arco-message-error')).not.toBeNull()); // 有失败提示
     expect(posts('/bridge/v1/edit-sessions')).toHaveLength(0);
     expect(window.location.hash).toBe('#/office/space');
   });
 });
 
 describe('放弃', () => {
-  it('EDIT_ALREADY_SAVED：提示“已保存为新版本”的人话（不直出错误码），重读后报已保存', async () => {
+  it('EDIT_ALREADY_SAVED：不当错误报（无红色错误提示），重读到 closed 就只说一次“已保存为新版本”', async () => {
     let st: object = session('recovery_required');
     api(() => st, {
       onDiscard: () => {
@@ -153,13 +153,23 @@ describe('放弃', () => {
     const n = await recoveryNote();
     fireEvent.click(n.getByRole('button', { name: '放弃这次修改' }));
     fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
-    await waitFor(() => expect(body()).toHaveTextContent(text.alreadySaved));
-    expect(body()).not.toHaveTextContent('EDIT_ALREADY_SAVED');
     await waitFor(() => expect(body()).toHaveTextContent('已保存为新版本。'));
+    expect(body()).not.toHaveTextContent('EDIT_ALREADY_SAVED');
+    expect(document.querySelector('.arco-message-error')).toBeNull();
+    expect(body().textContent?.split(text.alreadySaved).length).toBe(1); // 没有第二条重复的“已为你刷新”
     await noteGone();
   });
 
-  it('同一会话放弃重试（上次连不上）复用同一个 submission_id；成功后才换新的', async () => {
+  it('EDIT_ALREADY_SAVED 而重读时会话仍未 closed（补做没做成）：给 info 提示“已保存为新版本，已为你刷新”，不是错误', async () => {
+    api(() => session('recovery_required'), { onDiscard: () => err(409, 'EDIT_ALREADY_SAVED') });
+    const n = await recoveryNote();
+    fireEvent.click(n.getByRole('button', { name: '放弃这次修改' }));
+    fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
+    await waitFor(() => expect(body()).toHaveTextContent(text.alreadySaved));
+    expect(document.querySelector('.arco-message-error')).toBeNull();
+  });
+
+  it('同一会话放弃重试（上次连不上）复用同一个 submission_id；成功后才换新的（409 后同理）', async () => {
     let fail = true;
     api(() => session('recovery_required'), { onDiscard: () => (fail ? reply(502, {}) : reply(200, {})) });
     const n = await recoveryNote();
@@ -176,5 +186,28 @@ describe('放弃', () => {
     const [first, second] = submissionIds();
     expect(first).toBeTruthy();
     expect(second).toBe(first);
+    // 成功之后换新键（再点一次放弃，会话在 mock 里仍是 recovery_required）
+    await until(() => document.querySelector('.arco-modal') === null);
+    await click();
+    await waitFor(() => expect(posts('/discard')).toHaveLength(3));
+    expect(submissionIds()[2]).not.toBe(first);
+  });
+
+  it('409 之后换新键', async () => {
+    let reply409 = true;
+    api(() => session('recovery_required'), { onDiscard: () => (reply409 ? err(409, 'EDIT_STATE_CONFLICT') : reply(200, {})) });
+    const n = await recoveryNote();
+    const click = async () => {
+      fireEvent.click(n.getByRole('button', { name: '放弃这次修改' }));
+      fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
+    };
+    await click();
+    await waitFor(() => expect(posts('/discard')).toHaveLength(1));
+    await until(() => document.querySelector('.arco-modal') === null);
+    reply409 = false;
+    await click();
+    await waitFor(() => expect(posts('/discard')).toHaveLength(2));
+    const [first, second] = submissionIds();
+    expect(second).not.toBe(first);
   });
 });

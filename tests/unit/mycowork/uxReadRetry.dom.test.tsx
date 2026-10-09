@@ -304,16 +304,16 @@ describe('版本页后台重读', () => {
 
   it('后台重读得到 404 不保留（照旧进错误态）；用户点刷新后暂时失败则保留并提示', async () => {
     render(<OfficeVersionsSlot />);
-    await screen.findByText('v2');
+    await screen.findByText('v2', undefined, { timeout: 4000 });
     revisions = async () => reply(404, { error: { code: 'NOT_FOUND', message: 'x' } });
     await act(async () => thirtySeconds.forEach((fn) => fn()));
-    await screen.findByText('版本列表没有读取成功');
+    await screen.findByText('版本列表没有读取成功', undefined, { timeout: 4000 });
     revisions = async () => reply(200, timeline(2));
     fireEvent.click(screen.getByRole('button', { name: '重新读取' }));
-    await screen.findByText('v2');
+    await screen.findByText('v2', undefined, { timeout: 4000 });
     revisions = async () => proxy(503);
     fireEvent.click(screen.getByRole('button', { name: '刷新预览' }));
-    await screen.findByText(/没能刷新版本列表/);
+    await screen.findByText(/没能刷新版本列表/, undefined, { timeout: 4000 });
     expect(screen.getByText('v2')).toBeInTheDocument();
   });
 

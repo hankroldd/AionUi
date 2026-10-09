@@ -89,7 +89,7 @@ describe('发布弹窗不锁人', () => {
     expect(await screen.findByText('正在发布到「虚构知识库」…')).toBeInTheDocument();
     expect(accepted).not.toHaveBeenCalled();
     await act(async () => release(json(publication(requests[0]!), 201)));
-    expect(await screen.findByText(/已提交发布到「虚构知识库」/)).toBeInTheDocument();
+    expect(await screen.findByText(/已提交发布 v1 到「虚构知识库」/)).toBeInTheDocument();
     expect(screen.queryByText('正在发布到「虚构知识库」…')).toBeNull();
     expect(accepted).toHaveBeenCalledTimes(1);
   });
@@ -110,7 +110,7 @@ describe('发布弹窗不锁人', () => {
     expect(requests).toHaveLength(2);
     expect(requests[1]?.confirm_hidden_content).toBeUndefined();
     fireEvent.click(screen.getByRole('button', { name: '仍要发布' }));
-    expect(await screen.findByText(/已提交发布到「虚构知识库」/)).toBeInTheDocument();
+    expect(await screen.findByText(/已提交发布 v1 到「虚构知识库」/)).toBeInTheDocument();
     expect(new Set(requests.map((r) => r.submission_id)).size).toBe(1);
     expect(requests[2]).toMatchObject({ confirm_out_of_scope: true, confirm_hidden_content: true });
   });
@@ -125,7 +125,7 @@ describe('发布弹窗不锁人', () => {
     expect(await screen.findByText(/未收到发布结果/)).toBeInTheDocument();
     await dialogGone();
     fireEvent.click(await screen.findByRole('button', { name: '重试（不会重复发布）' }));
-    expect(await screen.findByText(/已提交发布到「虚构知识库」/)).toBeInTheDocument();
+    expect(await screen.findByText(/已提交发布 v1 到「虚构知识库」/)).toBeInTheDocument();
     expect(requests).toHaveLength(2);
     expect(requests[1]).toEqual(requests[0]);
     expect(accepted).toHaveBeenCalledTimes(1);
@@ -137,7 +137,7 @@ describe('发布弹窗不锁人', () => {
     await publish();
     expect(await screen.findByText(/发布前检查暂不可用/)).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: '重试（不会重复发布）' }));
-    await screen.findByText(/已提交发布到「虚构知识库」/);
+    await screen.findByText(/已提交发布 v1 到「虚构知识库」/);
     expect(requests[1]).toEqual(requests[0]);
   });
 });

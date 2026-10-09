@@ -137,8 +137,15 @@ describe('发布设计对齐的审查跟进', () => {
   }, 15_000);
 
   it('次要 / 轻按钮与弹窗取消按钮的底色字色只作用于未禁用状态', () => {
-    const css = readFileSync(join(process.env['MYCOWORK_UI_DIR'] ?? '', 'pages/shell/page-shell.css'), 'utf8');
-    for (const sel of ['.mcw-pill-secondary.arco-btn', '.mcw-pill-light.arco-btn', '.mcw-dialog .arco-modal-footer .arco-btn-secondary']) {
+    const dir = process.env['MYCOWORK_UI_DIR'] ?? '';
+    // 弹窗页脚的次要按钮规则已并进通用的 page-controls.css（.arco-btn-secondary.arco-btn）
+    const checks: Array<[string, string]> = [
+      ['pages/shell/page-shell.css', '.mcw-pill-secondary.arco-btn'],
+      ['pages/shell/page-shell.css', '.mcw-pill-light.arco-btn'],
+      ['pages/shell/page-controls.css', '.arco-btn-secondary.arco-btn'],
+    ];
+    for (const [file, sel] of checks) {
+      const css = readFileSync(join(dir, file), 'utf8');
       const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(([, s, body]) => s!.includes(sel) && /(^|\s)(background|color):/.test(body!));
       expect(rules.length, sel).toBeGreaterThan(0);
       for (const [, s] of rules) expect(s, sel).toContain(':not(.arco-btn-disabled)');

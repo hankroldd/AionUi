@@ -1,7 +1,7 @@
 /**
  * [mycowork] PR08 A391。文件：tests/unit/mycowork/publicationLinked.dom.test.tsx
  * 职责：发布到知识库时库里已有内容相同的条目（linked_existing）的界面：本会话发起的发布完成提示写“知识库里已有内容相同的《X》，已关联到它，
- *       没有另存一份。”（读不到名字时不写名字）、版本页时间线上那条发布记录带简短版本、空间行的发布标记带“已关联库内已有条目”；
+ *       没有另存一份。”（读不到名字时不写名字）、版本页时间线上那条发布记录带简短版本、空间行的发布标记带“库里已有同内容文件”；
  *       没有 linked_existing 时都不出现；中英两套。
  * 边界：只用真实 React/Arco 组件，只替换 Bridge HTTP；字段形状与 bridge.v1.openapi.yaml 的 Publication / published_to 一致。
  */
@@ -74,7 +74,9 @@ function bridge(o: { pubs?: object[]; list?: object[] } = {}) {
 const output = (linked: boolean) => ({
   resource_id: 'res_o', file_name: '产物.md', source_id: null, origin: 'outputs', purpose: 'working', state: 'stored',
   tag_ids: [], secret: false, can_mark_secret: true, updated_at: '2026-10-08T01:00:00.000Z', revision_count: 1,
-  published_to: [{ publication_id: 'p1', source_id: 'src_q', status: 'published', has_published: true, linked_existing: linked }],
+  published_to: [
+    { publication_id: 'p1', source_id: 'src_q', status: 'published', has_published: true, linked_existing: linked, ...(linked ? { published_file_name: '库里的旧名.md' } : {}) },
+  ],
 });
 
 describe('A391 发布关联到库里已有同内容条目', () => {
@@ -95,17 +97,17 @@ describe('A391 发布关联到库里已有同内容条目', () => {
     bridge({ pubs: [pub({ linked_existing: true, published_file_name: '库里的旧名.md' })] });
     watchPublication('p1', { kb: '青禾库', lang: 'zh-CN' });
     render(<OfficeVersionsSlot />);
-    expect(await screen.findByText('知识库里已有内容相同的《库里的旧名.md》，已关联到它，没有另存一份。')).toBeInTheDocument();
+    expect(await screen.findByText('「青禾库」里已有内容相同的《库里的旧名.md》，这次没有另存一份；AI 引用的是库里那一份。')).toBeInTheDocument();
     expect(screen.queryByText('已发布到「青禾库」，AI 现在可以引用它')).toBeNull();
-    expect((await screen.findByTestId('version-publication-linked')).textContent).toBe('已关联到库里已有的《库里的旧名.md》');
+    expect((await screen.findByTestId('version-publication-linked')).textContent).toBe('库里已有内容相同的《库里的旧名.md》，没有另存一份');
   });
 
   it('读不到那份的名字（null）时不写名字', async () => {
     bridge({ pubs: [pub({ linked_existing: true, published_file_name: null })] });
     watchPublication('p1', { kb: '青禾库', lang: 'zh-CN' });
     render(<OfficeVersionsSlot />);
-    expect(await screen.findByText('知识库里已有内容相同的文件，已关联到它，没有另存一份。')).toBeInTheDocument();
-    expect((await screen.findByTestId('version-publication-linked')).textContent).toBe('已关联到库里已有的同内容文件');
+    expect(await screen.findByText('「青禾库」里已有内容相同的文件，这次没有另存一份；AI 引用的是库里那一份。')).toBeInTheDocument();
+    expect((await screen.findByTestId('version-publication-linked')).textContent).toBe('库里已有内容相同的文件，没有另存一份');
   });
 
   it('没有 linked_existing 时仍是原来的完成提示，也没有关联提示', async () => {
@@ -123,17 +125,32 @@ describe('A391 发布关联到库里已有同内容条目', () => {
     watchPublication('p1', { kb: 'Library', lang: 'en' });
     render(<OfficeVersionsSlot />);
     expect(
-      await screen.findByText('The library already has identical content, "old-name.md"; linked to it, no second copy saved.'),
+      await screen.findByText('"Library" already has identical content, "old-name.md"; no second copy was saved. AI cites the one in the library.'),
     ).toBeInTheDocument();
     expect((await screen.findByTestId('version-publication-linked')).textContent).toBe(
-      'Linked to existing "old-name.md" in the library',
+      'The library already has identical content, "old-name.md"; no second copy saved',
     );
   });
 
-  it('空间行：published_to 带 linked_existing 时标“已关联库内已有条目”，没带不标', async () => {
+  it('从空间页发起的发布：完成提示（空间列表对账）同样带库里那份的名字', async () => {
+    bridge({ list: [output(true)] });
+    watchPublication('p1', { kb: '青禾库', lang: 'zh-CN' });
+    render(<OfficeResourcesSlot />);
+    expect(
+      await screen.findByText('「青禾库」里已有内容相同的《库里的旧名.md》，这次没有另存一份；AI 引用的是库里那一份。'),
+    ).toBeInTheDocument();
+  });
+
+  it('时间线上关联时的链接名是“查看库里那一份”', async () => {
+    bridge({ pubs: [pub({ linked_existing: true, published_file_name: '库里的旧名.md' })] });
+    render(<OfficeVersionsSlot />);
+    expect(await screen.findByRole('link', { name: '查看库里那一份' })).toBeInTheDocument();
+  });
+
+  it('空间行：published_to 带 linked_existing 时标“库里已有同内容文件”，没带不标', async () => {
     bridge({ list: [output(true)] });
     render(<OfficeResourcesSlot />);
-    expect((await screen.findByTestId('mycowork-publication-linked')).textContent).toBe('已关联库内已有条目');
+    expect((await screen.findByTestId('mycowork-publication-linked')).textContent).toBe('库里已有同内容文件');
     cleanup();
     bridge({ list: [output(false)] });
     render(<OfficeResourcesSlot />);

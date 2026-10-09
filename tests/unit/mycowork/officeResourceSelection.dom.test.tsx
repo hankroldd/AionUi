@@ -238,7 +238,7 @@ describe('space selection and batch tags', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(calls('PATCH')).toHaveLength(0);
   });
-  it('keeps successful results and a conflicted draft, reloads only failed items, and retries their preview revision', async () => {
+  it('keeps successful results and a conflicted draft; one click on "重试失败项" reloads only failed items and re-applies with the new revision', async () => {
     render(<OfficeResourcesSlot />);
     await screen.findByRole('button', { name: 'A.md' });
     const dialog = await openBulk();
@@ -246,20 +246,21 @@ describe('space selection and batch tags', () => {
     metadata.res_b.metadata_revision += 1;
     metadata.res_b.tag_ids.push('tag_keep');
     fireEvent.click(within(dialog).getByRole('button', { name: '应用预览' }));
-    await within(dialog).findByText('此文件已改变，请重新读取失败项并确认预览。');
+    await within(dialog).findByText('此文件已被别处改动；点“重试失败项”会先重新读取，再按同样的增删应用。');
     expect(within(dialog).getByText('已完成')).toBeInTheDocument();
     expect(body('res_a')).toEqual({ expected_metadata_revision: 3, tags: { add: ['tag_new'], remove: [] } });
     expect(body('res_b')).toEqual({ expected_metadata_revision: 4, tags: { add: ['tag_new'], remove: [] } });
     expect(calls('PATCH', 'res_i')).toHaveLength(0);
     expect(metadata.res_a.secret).toBe(true);
-    fireEvent.click(within(dialog).getByRole('button', { name: '重新读取失败项' }));
-    await waitFor(() => expect(within(dialog).getByRole('button', { name: '应用预览' })).toBeEnabled());
+    // 失败后主按钮就是“重试失败项”（可点），不再要先点“重新读取”再点“应用预览”
+    expect(within(dialog).queryByRole('button', { name: '应用预览' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: '重新读取失败项' })).toBeNull();
+    const retry = within(dialog).getByRole('button', { name: '重试失败项' });
+    expect(retry).toBeEnabled();
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(calls('GET', 'res_a')).toHaveLength(1);
     expect(calls('GET', 'res_b')).toHaveLength(2);
-    expect(calls('PATCH', 'res_b')).toHaveLength(1);
-    expect(within(dialog).getByText('其他标签 · 原标签 → 其他标签 · 原标签 · 新标签')).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole('button', { name: '应用预览' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(calls('PATCH', 'res_a')).toHaveLength(1);
     expect(body('res_b', 1).expected_metadata_revision).toBe(5);
     expect(metadata.res_b.tag_ids).toEqual(['tag_other', 'tag_keep', 'tag_new']);

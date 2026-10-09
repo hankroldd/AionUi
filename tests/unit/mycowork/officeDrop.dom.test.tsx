@@ -31,6 +31,21 @@ describe('mycoworkDropIntercept', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
+  // 放在最前：之后的用例留下淡出中的确认框会抢焦点
+  it('attach is the primary button with default focus; Enter attaches, import is secondary, Esc attaches', async () => {
+    const taken = mycoworkDropIntercept([new File(['hi'], '主次.pptx')]);
+    const attach = (await screen.findAllByRole('button', { name: '附加到本轮' })).at(-1) as HTMLElement;
+    const imp = screen.getAllByRole('button', { name: '导入为资源' }).at(-1) as HTMLElement;
+    expect(attach.className).toContain('arco-btn-primary');
+    expect(imp.className).not.toContain('arco-btn-primary');
+    await waitFor(() => expect(document.activeElement).toBe(attach));
+    expect(screen.getAllByText(/只给这一轮对话用/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/以后在资源里都能找到/).length).toBeGreaterThan(0);
+    fireEvent.click(attach); // 回车落在默认焦点按钮上即触发 click
+    await expect(taken).resolves.toBe(false);
+    expect(window.location.hash).toBe('#/guid');
+  });
+
   it('import as resources: opens the import queue and uploads the dropped file there', async () => {
     const taken = mycoworkDropIntercept([new File(['hi'], '拖入稿.pptx')]);
     await screen.findAllByRole('button', { name: '导入为资源' });
@@ -50,5 +65,13 @@ describe('mycoworkDropIntercept', () => {
     expect(window.location.hash).toBe('#/guid');
     await act(async () => void render(<OfficeImportsSlot />));
     expect(uploads()).toHaveLength(0);
+  });
+
+  it('Esc closes the choice as attach to this turn', async () => {
+    const taken = mycoworkDropIntercept([new File(['hi'], 'esc.pptx')]);
+    await screen.findAllByRole('button', { name: '附加到本轮' });
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape', code: 'Escape', keyCode: 27 });
+    await expect(taken).resolves.toBe(false);
+    expect(window.location.hash).toBe('#/guid');
   });
 });

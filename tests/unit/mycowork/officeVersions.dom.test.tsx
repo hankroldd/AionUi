@@ -165,8 +165,7 @@ const openMenu = (v: string) => fireEvent.click(screen.getByRole('button', { nam
 const publishToKb = async () => {
   fireEvent.click(screen.getByRole('button', { name: '发布到知识库' }));
   const dialog = await screen.findByRole('dialog');
-  fireEvent.click(within(dialog).getByLabelText('选择知识库'));
-  fireEvent.click(await screen.findByText('青禾库'));
+  // 只有一个可选知识库：已预选，不用再选
   fireEvent.change(within(dialog).getByLabelText('库里的文件名'), { target: { value: '汇报（虚构）.pptx' } });
   // 影响预览：以什么名字进哪个库、谁能看到（Google Drive 式）
   expect(await within(dialog).findByText(/将以文件名“汇报（虚构）.pptx”进入知识库“青禾库”/)).toBeInTheDocument();

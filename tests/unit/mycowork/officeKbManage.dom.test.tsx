@@ -251,6 +251,11 @@ describe('space: knowledge base management', () => {
     expect(step1.textContent).not.toContain('移出该库');
     expect(screen.getByRole('button', { name: '继续' })).toBeDisabled();
     expect(sent('DELETE')).toHaveLength(0);
+    // 读失败有出路：点“重试”重读资料数，读到就能继续
+    scopesFailFrom = undefined;
+    fireEvent.click(within(step1).getByRole('button', { name: '重试' }));
+    await waitFor(() => expect(step1.textContent).toContain('移出该库'), LONG);
+    expect(screen.getByRole('button', { name: '继续' })).toBeEnabled();
   });
 
   it('when the progress cannot be read it says so and offers to read again instead of stopping silently', async () => {

@@ -808,8 +808,9 @@ describe('OfficeResourcesSlot', () => {
     expect(within(chips).getAllByText(/^(项目|风险|第三个)$/)).toHaveLength(2);
     expect(within(chips).getByText('+1')).toBeInTheDocument();
     fireEvent.click(within(draft).getByRole('button', { name: '更多操作 工作稿.pptx' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: '去版本页加入知识库…' }));
-    expect(window.location.hash).toBe('#/office/resources/res_1/versions');
+    fireEvent.click(await screen.findByRole('menuitem', { name: '发布到知识库' }));
+    expect(window.location.hash).not.toContain('/versions'); // 原地弹窗，不再跳版本页
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
   it('a knowledge base filtered by tags lists base ∩ tags, saves a smart group limited to it, and asks with it (D144)', async () => {

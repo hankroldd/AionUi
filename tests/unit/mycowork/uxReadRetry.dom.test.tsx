@@ -83,6 +83,14 @@ describe('bridgeJson 读请求重试', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('不带 body 的 DELETE / POST 也是写请求：按 method 判断，不重试、不当 GET 发', async () => {
+    fetchMock.mockRejectedValue(new TypeError('network'));
+    await expect(bridgeJson('/bridge/v1/x', { method: 'DELETE' })).rejects.toMatchObject({ kind: 'unavailable' });
+    await expect(bridgeJson('/bridge/v1/x', { method: 'POST' })).rejects.toMatchObject({ kind: 'unavailable' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.map(([, init]) => init.method)).toEqual(['DELETE', 'POST']);
+  });
+
   it.each([
     [401, 'unauthenticated'],
     [404, 'failed'],

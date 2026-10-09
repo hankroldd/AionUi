@@ -37,7 +37,7 @@ const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1,
 const rev = (id: string, over: object = {}) => ({
   revision_id: id,
   parent_id: null,
-  content_sha256: 'x',
+  content_sha256: `x-${id}`,
   size: 1,
   created_at: '2025-03-02T01:00:00.000Z',
   origin: 'original',
@@ -146,7 +146,7 @@ function bridge(opts: Opts = {}) {
     if (url.endsWith('/restore'))
       return opts.restoreStatus
         ? reply(opts.restoreStatus, { error: { code: 'EDIT_LEASE_HELD', message: 'x' } })
-        : reply(201, {});
+        : reply(201, { created: true, revision: rev('rev_dddddddd', { origin: 'restore', restored_from: 'rev_aaaaaaaa', current: true }) });
     if (url === '/bridge/v1/publications' && method === 'POST') {
       const code = codes.shift();
       if (code) return reply(409, { error: { code, message: 'x' } });

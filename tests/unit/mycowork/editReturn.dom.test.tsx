@@ -300,6 +300,26 @@ describe('写回结果与自动返回（审查补丁：警告类写回不丢）'
     expect(window.location.hash).toBe('#/office/edit-text/res_md');
   });
 
+  it('文本：写回失败但没有对象（落记录前出错，status = failed）同样不自动返回，“返回”按钮手动回去', async () => {
+    bridge((url: string) =>
+      url.endsWith('/save')
+        ? reply(200, {
+            revision_id: 'rev_b',
+            created: true,
+            base_revision_id: 'rev_b',
+            workspace_writeback: null,
+            workspace_writeback_status: 'failed',
+          })
+        : undefined
+    );
+    await editText();
+    expect(await screen.findByText(/没能同步到 AI 的工作目录/)).toBeInTheDocument();
+    await act(async () => undefined);
+    expect(window.location.hash).toBe('#/office/edit-text/res_md');
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
+    await waitFor(() => expect(window.location.hash).toBe('#/office/space'));
+  });
+
   it('文本：Secret 跳过写回照常返回，跨页面提示含说明', async () => {
     bridge(save({ relative_path: '周报.md', outcome: 'skipped', saved_as: null, reason: 'secret' }));
     await editText();

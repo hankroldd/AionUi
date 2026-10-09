@@ -32,6 +32,17 @@ describe('历史版本的原件入口', () => {
     expect(open).not.toHaveBeenCalled();
   });
 
+  it('点了原件链接后菜单关闭，不盖在下一行上', async () => {
+    installBridge({ total: 3 });
+    render(<VersionsPage resourceId='resource-1' lang='zh-CN' renderMarkdown={(s) => <p>{s}</p>} />);
+    await screen.findByText('已到最早的版本');
+    fireEvent.click(within(item(1)).getByRole('button', { name: '更多操作 v2' }));
+    const link = await screen.findByRole('link', { name: '下载这一版' });
+    link.addEventListener('click', (e) => e.preventDefault()); // jsdom 不做下载
+    fireEvent.click(link);
+    await waitFor(() => expect(screen.queryByRole('link', { name: '下载这一版' })).toBeNull()); // 隐藏的弹层不在可访问树里
+  });
+
   it('docx 这类浏览器只会存到本机的类型：叫“下载这一版”，链接带 download，不开空白标签页', async () => {
     installBridge({ total: 3 });
     render(<VersionsPage resourceId='resource-1' lang='zh-CN' renderMarkdown={(s) => <p>{s}</p>} />);

@@ -7,6 +7,7 @@
 
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import { Message } from '@arco-design/web-react';
 import { setScopeSelection } from '@mycowork/ui';
 import { bindGuidScope, withGuidScope } from '@/renderer/mycowork-slots';
@@ -73,6 +74,9 @@ const deps = (): GuidSendDeps =>
     t: vi.fn((key: string) => key),
     localeKey: 'zh-CN',
   }) as unknown as GuidSendDeps;
+
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+readRetry.delays = [0, 0];
 
 describe('withGuidScope', () => {
   beforeEach(() => {

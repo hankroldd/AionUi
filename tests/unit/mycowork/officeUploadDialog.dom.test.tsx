@@ -8,6 +8,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 import { fetchMock, fixture, list, FIRST, nav, reads, reply, reset, standard } from './globalResourceFixture';
@@ -97,6 +98,9 @@ const batchReads = () => calls('GET', '/import-batches/bat_1');
 const failRead = (): object => {
   throw new TypeError('network');
 };
+
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+readRetry.delays = []; // 轮询用例按定时器数请求次数，关掉单次请求内的自动重试
 
 describe('上传弹窗', () => {
   afterEach(() => vi.useRealTimers());

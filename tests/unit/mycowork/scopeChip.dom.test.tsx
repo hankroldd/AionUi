@@ -9,6 +9,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 // Same as renderer/main.tsx: Arco's global Message needs the React 19 adapter (tests load the CJS lib build).
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { Message } from '@arco-design/web-react';
@@ -89,6 +90,9 @@ const tick = (name: string) => fireEvent.click(screen.getByText(name));
 const SEARCH = '搜索知识库、智能分组（含其标签）或已展开清单里的文件名';
 const NONE_CHECKED = '一份都没勾：应用时这个知识库不会加入范围';
 
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+readRetry.delays = [0, 0];
+
 describe('ScopeChip', () => {
   beforeEach(() => {
     setScopeSelection([]);
@@ -109,7 +113,7 @@ describe('ScopeChip', () => {
     await openDialog();
     expect(screen.getByTestId('mycowork-scope-summary')).toHaveTextContent(/^尚未选择$/);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('textbox', { name: SEARCH })));
-    expect(fetchMock).toHaveBeenCalledWith('/bridge/v1/scopes', { credentials: 'same-origin' });
+    expect(fetchMock).toHaveBeenCalledWith('/bridge/v1/scopes', expect.objectContaining({ credentials: 'same-origin' }));
   });
 
   it('lists sources with partial-processing counts', async () => {
@@ -163,10 +167,17 @@ describe('ScopeChip', () => {
 
   it('shows unavailable with retry when the Bridge cannot be reached, then recovers', async () => {
     route();
-    fetchMock.mockRejectedValueOnce(new TypeError('network'));
+    const serve = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
+    let scopes = 0; // 目录首读 + 2 次自动重试都断网，才显示错误
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/bridge/v1/scopes' && scopes++ < 3) throw new TypeError('network');
+      return serve(url, init);
+    });
     render(<ScopeChip lang='zh-CN' />);
     await openDialog();
-    expect(await screen.findByText('资料服务暂不可用，请稍后重试')).toBeInTheDocument();
+    expect(
+      await screen.findByText('网络不太稳定，没能连上服务；已自动重试，请稍后再试。已保存的内容不受影响。'),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     expect(await screen.findByText('产品知识库')).toBeInTheDocument();
   });

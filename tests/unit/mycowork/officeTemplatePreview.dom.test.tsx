@@ -8,6 +8,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeCompositionSlot } from '@/renderer/mycowork-slots';
 
@@ -72,6 +73,9 @@ const serve = (ids: string[], previews: Record<string, () => unknown>) =>
   });
 const previewCalls = (id: string) =>
   fetchMock.mock.calls.filter(([u]) => String(u) === `/bridge/v1/assets/${id}/preview?version=1`).length;
+
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+readRetry.delays = [0, 0];
 
 describe('P09 candidate preview', () => {
   beforeEach(() => {

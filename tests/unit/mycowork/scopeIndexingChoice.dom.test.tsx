@@ -9,24 +9,42 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
+import { Modal } from '@arco-design/web-react';
 import { setScopeSelection } from '@mycowork/ui';
 import { bindGuidScope, ConversationScopeSlot, withGuidScope } from '@/renderer/mycowork-slots';
 
 const lang = vi.hoisted(() => ({ value: 'zh-CN' }));
-vi.mock('i18next', () => ({ default: { get language() { return lang.value; } } }));
+vi.mock('i18next', () => ({
+  default: {
+    get language() {
+      return lang.value;
+    },
+  },
+}));
 vi.mock('@/common', () => ({ ipcBridge: { conversation: { responseStream: { on: () => () => undefined } } } }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: lang.value } }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn(), useLocation: () => ({ state: null }) }));
 
 const fetchMock = vi.fn();
 const reply = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => body });
-const counts = (ready: number, indexing: number) => ({ total: ready + indexing, ready, indexing, failed: 0, unavailable: 0 });
+const counts = (ready: number, indexing: number) => ({
+  total: ready + indexing,
+  ready,
+  indexing,
+  failed: 0,
+  unavailable: 0,
+});
 const plan = (...groups: Array<[number, number]>) => ({
   plan_id: 'plan_1',
   version: 1,
   status: 'OK',
   brief: {
-    groups: groups.map(([r, i], n) => ({ source_id: `src_${n}`, source_name: `库${n}`, mode: 'whole', counts: counts(r, i) })),
+    groups: groups.map(([r, i], n) => ({
+      source_id: `src_${n}`,
+      source_name: `库${n}`,
+      mode: 'whole',
+      counts: counts(r, i),
+    })),
     excluded: 0,
     unauthorized: 0,
     refs: {},
@@ -37,7 +55,11 @@ const TOKEN = {
   token: 't',
   expires_at: '2026-09-25T20:00:00Z',
   mcp: {},
-  session_mcp_server: { id: 'mycowork_bridge', name: 'mycowork_bridge', transport: { type: 'streamable_http', url: 'http://x/mcp', headers: {} } },
+  session_mcp_server: {
+    id: 'mycowork_bridge',
+    name: 'mycowork_bridge',
+    transport: { type: 'streamable_http', url: 'http://x/mcp', headers: {} },
+  },
   workspace: '/data/ws/1',
 };
 const USE_READY = '先用已就绪的 5 份（另有 3 份处理中，现在读不到）';
@@ -54,14 +76,15 @@ function bridge(p: object) {
 /** 发起发送；返回尚未结算的 Promise，让弹窗可见。 */
 async function send(): Promise<{ result: Promise<unknown>; settled: () => string; dialog: HTMLElement }> {
   let state = 'pending';
-  const before = document.querySelectorAll('.arco-modal-wrapper').length;
+  const before = new Set(document.querySelectorAll('.arco-modal-wrapper'));
   const result = withGuidScope({}).then(
     () => (state = 'sent'),
-    (e: Error) => (state = e.message),
+    (e: Error) => (state = e.message)
   );
-  // 上一个用例的弹窗可能还在关闭动画里：新弹窗总在 body 末尾，取最后一个
-  await waitFor(() => expect(document.querySelectorAll('.arco-modal-wrapper').length).toBeGreaterThan(before));
-  const dialog = (await screen.findAllByRole('dialog')).at(-1) as HTMLElement;
+  // 按身份认新弹窗：进入前记下已有的 wrapper，等出现不在其中的那个（上一个用例的弹窗可能还在关闭动画里）
+  const fresh = () => [...document.querySelectorAll<HTMLElement>('.arco-modal-wrapper')].find((w) => !before.has(w));
+  await waitFor(() => expect(fresh()).toBeDefined());
+  const dialog = await within(fresh() as HTMLElement).findByRole('dialog');
   return { result, settled: () => state, dialog };
 }
 
@@ -71,8 +94,11 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
   setScopeSelection([{ source_id: 'src_0', name: '库0' }]);
 });
+const added: HTMLElement[] = []; // 用例自己 append 到 body 的节点
 afterEach(() => {
   vi.unstubAllGlobals();
+  Modal.destroyAll();
+  added.splice(0).forEach((node) => node.remove());
   cleanup();
 });
 
@@ -142,6 +168,7 @@ describe('发送前：资料还在处理中', () => {
   it('关闭弹窗后焦点回到弹出前的元素（输入框）', async () => {
     bridge(plan([2, 1], [3, 2]));
     const box = document.body.appendChild(document.createElement('textarea'));
+    added.push(box);
     box.focus();
     const { result, dialog } = await send();
     fireEvent.click(within(dialog).getByRole('button', { name: '等全部就绪再问' }));
@@ -152,7 +179,9 @@ describe('发送前：资料还在处理中', () => {
   it('用户在答复前后把焦点放到了别处：不抢回来', async () => {
     bridge(plan([2, 1], [3, 2]));
     const box = document.body.appendChild(document.createElement('textarea'));
+    added.push(box);
     const other = document.body.appendChild(document.createElement('input'));
+    added.push(other);
     box.focus();
     const { result, dialog } = await send();
     fireEvent.click(within(dialog).getByRole('button', { name: '等全部就绪再问' }));
@@ -183,7 +212,9 @@ describe('发送前：资料还在处理中', () => {
     lang.value = 'en';
     bridge(plan([2, 1], [3, 2]));
     const { result, settled, dialog } = await send();
-    expect(within(dialog).getByRole('button', { name: 'Use the 5 ready now (3 more still processing, cannot be read yet)' })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: 'Use the 5 ready now (3 more still processing, cannot be read yet)' })
+    ).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Wait until all are ready' }));
     await act(async () => void (await result));
     expect(settled()).toContain('Not sent: Some sources are still processing');

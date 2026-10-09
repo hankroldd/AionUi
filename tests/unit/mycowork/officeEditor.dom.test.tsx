@@ -12,6 +12,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeEditSlot, OfficeVersionsSlot } from '@/renderer/mycowork-slots';
 
@@ -42,6 +43,9 @@ const destroyEditor = vi.fn();
 const DocEditor = vi.fn(function (this: object) {
   return { destroyEditor };
 });
+
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+readRetry.delays = [0, 0];
 
 describe('OfficeEditSlot', () => {
   beforeEach(() => {
@@ -198,7 +202,7 @@ describe('OfficeEditSlot', () => {
   });
 
   it('tells "cannot reach the service" (network / 502, with Retry) apart from "not configured" (503)', async () => {
-    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    for (let i = 0; i < 3; i++) fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch')); // 读请求自动重试两次后才报错
     fetchMock.mockResolvedValueOnce({ status: 200, ok: true, json: async () => session('closed') });
     render(<OfficeEditSlot />);
     expect(await screen.findByText(/连不上 MyCowork 服务/)).toBeInTheDocument();

@@ -193,7 +193,7 @@ describe('ScopeChip', () => {
     fetchMock.mockResolvedValue(reply(200, { sources: [{ source_id: 'src_a' }] }));
     render(<ScopeChip lang='zh-CN' />);
     await openDialog();
-    expect(await screen.findByText(/没能处理资料范围，请稍后重试/)).toBeInTheDocument();
+    expect(await screen.findByText(/没能处理资料范围/)).toBeInTheDocument();
   });
 
   it('is a centered dialog with a search box that filters knowledge bases by name', async () => {

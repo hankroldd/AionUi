@@ -6,8 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { bridgeFailureText } from '@mycowork/ui';
-import { BridgeError } from '@mycowork/ui/scope-picker/index.ts';
-import { scopeText } from '@mycowork/ui/scope-picker/messages.ts';
+import { bridgeErrorText } from '@mycowork/ui/scope-picker/messages.ts';
 import { trashText } from '@mycowork/ui/pages/trash/messages.ts';
 
 describe('错误码进“详情”，主文案没有错误码', () => {
@@ -17,12 +16,13 @@ describe('错误码进“详情”，主文案没有错误码', () => {
     expect(text.replace(/（详情：[^）]*）/, '')).not.toMatch(/[A-Z]{3,}_[A-Z]+|代码|HTTP/);
   });
 
-  it('failed 类错误：中英文都是“没能处理 … 再附详情”', () => {
-    const failed = new BridgeError('failed', 'HTTP 500');
-    const zh = bridgeFailureText('zh-CN', failed);
-    expect(scopeText('zh-CN').errors.failed).not.toMatch(/HTTP|失败（/);
-    expect(zh).toContain('请联系管理员');
-    expect(bridgeFailureText('en-US', new Error('REVISION_CONFLICT'))).toContain('(details: REVISION_CONFLICT)');
+  it('bridgeErrorText 的 failed 分支：中英文主文案无码，码只在“详情”里；没权限不叫人重试', () => {
+    const failed = { kind: 'failed' as const, message: 'HTTP 500' };
+    expect(bridgeErrorText('zh-CN', failed)).toBe('没能处理资料范围（详情：HTTP 500）');
+    expect(bridgeErrorText('en-US', failed)).toBe('Could not prepare the sources (details: HTTP 500)');
+    const forbidden = bridgeErrorText('zh-CN', { kind: 'failed', message: 'FORBIDDEN' });
+    expect(forbidden).toBe('你没有权限做这个操作。');
+    expect(forbidden).not.toMatch(/重试|FORBIDDEN/);
   });
 });
 
@@ -31,8 +31,11 @@ describe('回收站影响说明', () => {
   it('全零不说话（空串），非零只列非零项，不出现内部词', () => {
     const t = trashText('zh-CN');
     expect(t.impact(zero)).toBe('');
-    expect(t.impact({ ...zero, publications: 2 })).toBe('已发布到 2 个知识库');
-    expect(t.impact({ publications: 1, memory_items: 3, collections: 0, plans: 0 })).toBe('已发布到 1 个知识库 · 3 条记忆来自它');
-    expect(t.impact({ publications: 1, memory_items: 3, collections: 1, plans: 1 })).not.toMatch(/发布记录|记忆来源|集合关系|历史引用/);
+    expect(t.impact({ ...zero, publications: 2 })).toBe('发布过 2 次');
+    expect(t.impact({ publications: 1, memory_items: 3, collections: 0, plans: 0 })).toBe('发布过 1 次 · 3 条记忆来自它');
+    expect(t.impact({ publications: 1, memory_items: 3, collections: 2, plans: 4 })).toBe(
+      '发布过 1 次 · 3 条记忆来自它 · 在 2 个集合里（含收藏） · 在 4 次对话的资料范围里用过',
+    );
+    expect(t.impact({ publications: 1, memory_items: 3, collections: 1, plans: 1 })).not.toMatch(/发布记录|记忆来源|集合关系|历史引用|页面计划|分组/);
   });
 });

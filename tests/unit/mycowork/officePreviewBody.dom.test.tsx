@@ -108,7 +108,7 @@ describe('shared preview body — Markdown and unsupported formats', () => {
   it.each(['pdf', 'png', 'svg'])('explains unsupported %s without any rendering or content read', (ext) => {
     render(<PreviewBody {...props} fileName={`虚构.${ext}`} />);
     expect(screen.getByText('暂不支持在这里预览')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '下载当前内容' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '下载' })).toHaveAttribute(
       'href',
       '/bridge/v1/resources/res_a/preview'
     );
@@ -139,7 +139,7 @@ describe('shared preview body — failures and retry', () => {
       await screen.findByText(message as string);
       expect(screen.getByTestId('preview-body').querySelector('iframe,pre')).toBeNull();
       expect(screen.queryByRole('button', { name: '重试' }) !== null).toBe(retry);
-      if (!retry) expect(screen.getByRole('link', { name: '下载当前内容' })).toBeInTheDocument();
+      if (!retry) expect(screen.getByRole('link', { name: '下载' })).toBeInTheDocument();
     }
   );
 

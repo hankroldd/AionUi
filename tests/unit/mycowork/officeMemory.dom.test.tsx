@@ -134,7 +134,7 @@ describe('OfficeMemorySlot', () => {
     await screen.findByText('二期验收定在十月（虚构）');
     fireEvent.click(screen.getByRole('button', { name: '已拒绝' }));
     expect(await screen.findByText('这一栏还没有条目')).toBeInTheDocument();
-    expect(screen.getByText(/候选只来自会话里的“沉淀知识”与 AI 的记忆建议/)).toBeInTheDocument();
+    expect(screen.getByText(/候选来自 AI 在对话里提出的记忆建议/)).toBeInTheDocument();
   });
 
   it('an unavailable Bridge is explained in plain words, not as an error code', async () => {

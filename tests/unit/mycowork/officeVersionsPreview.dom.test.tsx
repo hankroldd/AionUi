@@ -158,7 +158,7 @@ describe('OfficeVersionsSlot — current version preview (D138)', () => {
     const again = await preview();
     expect(await within(again).findByText(/旧版格式/)).toBeInTheDocument();
     expect(within(again).queryByRole('button', { name: '重试' })).toBeNull();
-    expect(within(again).getByText('下载当前内容').closest('a')?.getAttribute('href')).toBe(
+    expect(within(again).getByText('下载').closest('a')?.getAttribute('href')).toBe(
       '/bridge/v1/resources/res_1/preview'
     );
   });

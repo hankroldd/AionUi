@@ -67,7 +67,7 @@ describe('P09 browse all / view original / adopt all', () => {
     fireEvent.click(use);
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/office/compositions/dec_2', { replace: true }));
     expect(posts).toEqual([{ id: 'dec_1', body: expect.objectContaining({ page_no: 1, asset_id: 'n1' }) }]);
-    expect(await screen.findByText('方案第 2 版')).toBeInTheDocument();
+    expect(await screen.findByText('页面计划第 2 版')).toBeInTheDocument();
     expect(screen.getAllByText('已选定').length).toBeGreaterThan(0);
   });
 
@@ -90,7 +90,7 @@ describe('P09 browse all / view original / adopt all', () => {
     const dialog = await open();
     fireEvent.click(await within(dialog).findByRole('button', { name: '用于第 1 页' }));
     expect(await screen.findByText('这个模板不符合本页或整套主题的要求，不能用于第 1 页')).toBeInTheDocument();
-    expect(screen.getByText('方案第 1 版')).toBeInTheDocument();
+    expect(screen.getByText('页面计划第 1 版')).toBeInTheDocument();
     expect(navigate).not.toHaveBeenCalled();
   });
 
@@ -126,7 +126,7 @@ describe('P09 browse all / view original / adopt all', () => {
     });
     render(<OfficeCompositionSlot />);
     fireEvent.click(await screen.findByRole('button', { name: '全部采用首选' }));
-    expect(await screen.findByText('方案第 3 版')).toBeInTheDocument();
+    expect(await screen.findByText('页面计划第 3 版')).toBeInTheDocument();
     expect(posts.map((p) => [p.id, p.body.page_no, p.body.asset_id])).toEqual([
       ['dec_1', 1, 'a1'],
       ['dec_2', 3, 'c1'],
@@ -150,7 +150,7 @@ describe('P09 browse all / view original / adopt all', () => {
     fireEvent.click(await screen.findByRole('button', { name: '全部采用首选' }));
     expect(await screen.findByText(/已采用 2 页.*第 3 页没成功/)).toBeInTheDocument();
     expect(posts.map((p) => p.body.page_no)).toEqual([1, 2, 3]); // 第 4 页没有被动
-    expect(screen.getByText('方案第 3 版')).toBeInTheDocument();
+    expect(screen.getByText('页面计划第 3 版')).toBeInTheDocument();
     expect(screen.getAllByText('已选中')).toHaveLength(2);
   });
 });

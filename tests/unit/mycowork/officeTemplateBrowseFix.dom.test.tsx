@@ -306,11 +306,11 @@ describe('P09 browse drawer: review fixes', () => {
       const { rerender } = render(<OfficeCompositionSlot />);
       nav.id = 'dec_9';
       rerender(<OfficeCompositionSlot />);
-      expect(await screen.findByText('方案第 1 版')).toBeInTheDocument();
+      expect(await screen.findByText('页面计划第 1 版')).toBeInTheDocument();
       const shown = calls(/dec_9$/).length;
       release(reply(200, decisionOf(7, [{ no: 1, cands: ['a1'] }])));
       await new Promise((r) => setTimeout(r, 30));
-      expect(screen.queryByText('方案第 7 版')).toBeNull();
+      expect(screen.queryByText('页面计划第 7 版')).toBeNull();
       expect(calls(/dec_9$/)).toHaveLength(shown);
     });
 
@@ -321,7 +321,7 @@ describe('P09 browse drawer: review fixes', () => {
       fireEvent.click((await screen.findAllByRole('button', { name: '选这个结构' }))[1] as HTMLElement);
       await waitFor(() => expect(nav.navigate).toHaveBeenCalled());
       rerender(<OfficeCompositionSlot />);
-      expect(await screen.findByText('方案第 2 版')).toBeInTheDocument();
+      expect(await screen.findByText('页面计划第 2 版')).toBeInTheDocument();
       expect(calls(/template-decisions\/dec_2$/)).toHaveLength(0);
     });
   });
@@ -346,7 +346,7 @@ describe('P09 browse drawer: review fixes', () => {
       await waitFor(() => expect(all).toBeDisabled());
       screen.getAllByRole('button', { name: '选这个结构' }).forEach((b) => expect(b).toBeDisabled());
       release();
-      await screen.findByText('方案第 3 版');
+      await screen.findByText('页面计划第 3 版');
       expect(posts.map((p) => p.body.asset_id)).toEqual(['a1', 'b1']);
     });
 
@@ -381,7 +381,7 @@ describe('P09 browse drawer: review fixes', () => {
       serve({ pages: [{ no: 1, cands: ['a1'] }] });
       render(<OfficeCompositionSlot />);
       fireEvent.click(await screen.findByRole('button', { name: '全部采用首选' }));
-      await screen.findByText('方案第 2 版');
+      await screen.findByText('页面计划第 2 版');
       expect(screen.queryByText(/请核对|没有候选，需手选/)).toBeNull();
     });
   });

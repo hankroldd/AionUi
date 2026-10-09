@@ -102,7 +102,7 @@ describe('ProjectScopeSlot', () => {
     await openEntry();
     await screen.findByText('产品知识库');
     fireEvent.click(screen.getByRole('button', { name: '设为项目默认' }));
-    expect(await screen.findByText('未保存项目默认：没能处理资料范围，请稍后重试（详情：FORBIDDEN）')).toBeInTheDocument();
+    expect(await screen.findByText('未保存项目默认：你没有权限做这个操作。')).toBeInTheDocument();
     await new Promise((r) => setTimeout(r, 400));
     expect(drawerOpen()).toBe(true);
     expect(bindingCalls()).toHaveLength(1);

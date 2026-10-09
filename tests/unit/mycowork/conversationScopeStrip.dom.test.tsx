@@ -128,7 +128,7 @@ describe('ConversationScopeSlot', () => {
   it('treats a malformed context as a failure', async () => {
     fetchMock.mockResolvedValue(reply(200, { ...CONTEXT, used: [{ resource_id: 'r1' }] }));
     render(<ConversationScopeSlot conversation_id='conv-1' />);
-    expect(await screen.findByText('没能处理资料范围，请稍后重试（详情：invalid context response）')).toBeInTheDocument();
+    expect(await screen.findByText('没能处理资料范围（详情：invalid context response）')).toBeInTheDocument();
   });
 
   it('marks an empty-scope plan and a web-allowed policy', async () => {

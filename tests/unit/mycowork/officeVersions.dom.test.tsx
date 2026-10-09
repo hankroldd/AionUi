@@ -218,7 +218,7 @@ describe('OfficeVersionsSlot', () => {
     bridge();
     render(<OfficeVersionsSlot />);
     await loaded();
-    expect(await screen.findByText('Diff 覆盖不足：已保存 v3；部分对象无法比较')).toBeInTheDocument();
+    expect(await screen.findByText('已保存 v3；有些内容没法自动对比')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '对比这两个版本' })); // 同一对再比一次也是真实调用
     await waitFor(() => expect(calls('GET', '/changes?')).toHaveLength(2));
     expect(calls('GET', '/changes?')[1]?.[0]).toContain('from=rev_bbbbbbbb&to=rev_cccccccc');
@@ -229,7 +229,7 @@ describe('OfficeVersionsSlot', () => {
     expect(screen.getByText('形状')).toBeInTheDocument();
     expect(screen.getByText('文字、位置与大小')).toBeInTheDocument();
     expect(screen.getByText('比较范围：整份文件（/）')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '看原件' })).toHaveAttribute('href', '/bridge/v1/resources/res_1/preview');
+    expect(screen.getByRole('link', { name: '查看原件' })).toHaveAttribute('href', '/bridge/v1/resources/res_1/preview');
     expect(screen.queryByTestId('version-diff-unknown')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '查看未覆盖项（1）' }));
     expect(screen.getByText('未覆盖项')).toBeInTheDocument();

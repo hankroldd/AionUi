@@ -198,7 +198,7 @@ describe('withGuidScope', () => {
       .mockResolvedValueOnce(
         reply(201, { ...TOKEN, session_mcp_server: { ...SERVER, transport: { ...SERVER.transport, type: 'stdio' } } })
       );
-    await expect(withGuidScope({})).rejects.toThrow('没能处理资料范围，请稍后重试（详情：invalid token response）');
+    await expect(withGuidScope({})).rejects.toThrow('没能处理资料范围（详情：invalid token response）');
   });
 });
 

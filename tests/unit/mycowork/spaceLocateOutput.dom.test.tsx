@@ -120,3 +120,24 @@ describe('space locate-output edge cases', () => {
     await waitFor(() => expect(document.querySelector('.mcw-rc-card[data-resource-id="res_out"]')!.className).toContain('is-located'));
   });
 });
+
+describe('space locate intent with place=imports (导入记录里的“在空间中查看”)', () => {
+  const IMP = item('res_imp', '导入的.md', { origin: 'imports', source_id: null, state: 'stored' });
+  it('queries origin=imports (not outputs) and marks the row', async () => {
+    fixture((q) => (q.get('origin') === 'imports' && q.get('q') === '导入的.md' ? list([IMP], 1) : list([], 0)));
+    requestLocate('res_imp', '导入的.md', 'imports');
+    window.location.hash = '#/office/space';
+    render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
+    await waitFor(() => expect(document.querySelector('[data-resource-id="res_imp"]')!.className).toContain('is-located'));
+    expect(lastQuery().get('origin')).toBe('imports');
+    expect(queries().some((q) => q.get('origin') === 'outputs')).toBe(false);
+  });
+
+  it('not found: the sentence names 导入, not 产物', async () => {
+    fixture(() => list([], 0));
+    requestLocate('res_gone', '没了.md', 'imports');
+    window.location.hash = '#/office/space';
+    render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
+    expect(await screen.findByText(/在“导入”里没找到“没了.md”/)).toBeInTheDocument();
+  });
+});

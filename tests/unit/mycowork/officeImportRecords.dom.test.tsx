@@ -9,6 +9,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ImportsPage } from '@mycowork/ui';
+import { peekLocateIntent, clearLocateIntent } from '@mycowork/ui/pages/resources/locate-intent.ts';
 import { batch, fetchMock, md, reply, row, steps, addFiles, confirmButton, bridge, posts } from './importFlowFixture';
 
 const summary = (over: object = {}) => ({
@@ -145,9 +146,9 @@ describe('导入记录列表', () => {
     expect(n).toBe(2);
     await tick(300); // 再 10 秒
     expect(n).toBe(3);
-    await tick(120_000); // 第三次还没返回：不会排第四次
+    await tick(50_000); // 第三次还没返回（兜底超时 60 秒未到）：不会排第四次
     expect(n).toBe(3);
-    release?.(pageOf([summary({ counts: { active: 0, done: 1, failed: 0 } })]));
+    await act(async () => release?.(pageOf([summary({ counts: { active: 0, done: 1, failed: 0 } })])));
     await tick(0);
     expect(screen.queryByText(/进行中 \d/)).toBeNull();
     await tick(120_000); // 已无进行中：不再刷新
@@ -240,12 +241,14 @@ describe('每项回到文件的入口', () => {
     for (const n of ['a-stored.md', 'b-archive.md', 'c-failed.md']) expect(within1(n).getByRole('button', { name: '在空间中查看' })).toBeInTheDocument();
     fireEvent.click(within1('b-archive.md').getByRole('button', { name: '在空间中查看' }));
     expect(window.location.hash).toBe('#/office/space');
+    expect(peekLocateIntent()).toEqual({ resourceId: 'res_b', name: 'b-archive.md', place: 'imports' }); // 定位到“导入”入口
+    clearLocateIntent();
   });
 
   it('失败项按原因给动作：回收站 / 编辑占用 / 原件缺失 / 其余重试', async () => {
     itemsOf([
       row({ seq: 0, upload_id: 'u0', file_name: 'trashed.md', status: 'failed', resource_id: 'res_t', error: 'resource_trashed', steps: steps('failed', 'pending') }),
-      row({ seq: 1, upload_id: 'u1', file_name: 'locked.md', status: 'failed', resource_id: 'res_l', error: 'edit_lease_held', steps: { received: 'done', stored: 'failed', parse: 'skipped', index: 'skipped' } }),
+      row({ seq: 1, upload_id: 'u1', file_name: 'locked.md', status: 'failed', resource_id: null, error: 'edit_lease_held', steps: { received: 'done', stored: 'failed', parse: 'skipped', index: 'skipped' } }),
       row({ seq: 2, upload_id: 'u2', file_name: 'gone.md', status: 'failed', resource_id: null, error: 'blob_missing', steps: { received: 'done', stored: 'failed', parse: 'skipped', index: 'skipped' } }),
       row({ seq: 3, upload_id: 'u3', file_name: 'plain.md', status: 'failed', resource_id: 'res_p', error: 'upstream_failed', steps: steps('failed', 'pending') }),
     ]);
@@ -254,9 +257,9 @@ describe('每项回到文件的入口', () => {
     const trashed = within1('trashed.md');
     expect(trashed.getByRole('link', { name: '去回收站' })).toHaveAttribute('href', '#/office/trash');
     expect(trashed.queryByRole('button', { name: '在空间中查看' })).toBeNull(); // 在回收站里，不指向空间
-    expect(trashed.queryByRole('button', { name: '重试' })).toBeNull();
+    expect(trashed.getByRole('button', { name: '重试' })).toBeInTheDocument(); // 从回收站恢复后回来能直接重试，不是死路
     const locked = within1('locked.md');
-    expect(locked.getByRole('link', { name: '查看版本与变化' })).toHaveAttribute('href', '#/office/resources/res_l/versions');
+    expect(locked.queryByRole('link', { name: '查看版本与变化' })).toBeNull(); // Bridge 此时不给 resource_id，无处可跳
     expect(locked.getByRole('button', { name: '重试' })).toBeInTheDocument();
     const gone = within1('gone.md');
     expect(gone.getByRole('button', { name: '重新选择文件' })).toBeInTheDocument();
@@ -381,5 +384,56 @@ describe('批次级重试隔离', () => {
     await act(async () => retry.go(batch([row({ file_name: 'plain.md' })], [], 3)));
     expect(screen.queryByLabelText('导入进度')).toBeNull(); // 旧重试的结果没有把批次塞回来
     expect(screen.getByRole('button', { name: '确认导入' })).toBeInTheDocument();
+  });
+});
+
+describe('路由与竞态', () => {
+  it('react-router 的 navigate（pushState，不触发 hashchange）在批次详情与列表之间切换，页面跟着变', async () => {
+    const { HashRouter, useNavigate, useLocation } = await import('react-router-dom');
+    stub({ list: () => pageOf([summary({ preview_names: ['列表里的.md'] })]), batch: () => detail([row({ file_name: '详情里的.md' })]) });
+    let go: (to: string) => void = () => undefined;
+    const Probe = () => ((go = useNavigate()), null);
+    // 与 OfficeImportsSlot 一样订阅路由位置，router 导航会带着页面重渲染
+    const Page = () => (useLocation(), (<ImportsPage lang='zh-CN' />));
+    window.location.hash = '#/office/imports';
+    render(
+      <HashRouter>
+        <Probe />
+        <Page />
+      </HashRouter>,
+    );
+    expect(await screen.findByText(/列表里的.md/)).toBeInTheDocument();
+    act(() => go('/office/imports?batch=imp_1'));
+    expect(await screen.findByText('详情里的.md')).toBeInTheDocument();
+    act(() => go('/office/imports'));
+    expect(await screen.findByText(/列表里的.md/)).toBeInTheDocument(); // 列表真的渲染出来，不只是地址变了
+    expect(screen.queryByText('详情里的.md')).toBeNull();
+  });
+
+  it('换筛选后，旧筛选的响应晚到不覆盖新列表', async () => {
+    let releaseOld: ((v: unknown) => void) | undefined;
+    stub({
+      list: (q) =>
+        q.get('status') === 'failed'
+          ? pageOf([summary({ batch_id: 'imp_f', preview_names: ['新筛选.md'] })])
+          : new Promise((r) => (releaseOld = r)),
+    });
+    open();
+    await waitFor(() => expect(releaseOld).toBeDefined());
+    fireEvent.click(screen.getByText('有失败'));
+    expect(await screen.findByText(/新筛选.md/)).toBeInTheDocument();
+    await act(async () => releaseOld?.(pageOf([summary({ batch_id: 'imp_old', preview_names: ['旧响应.md'] })])));
+    expect(screen.queryByText(/旧响应.md/)).toBeNull();
+    expect(screen.getByText(/新筛选.md/)).toBeInTheDocument();
+  });
+
+  it('/scopes 没读到时，详情里的知识库写通用的“知识库”，不写“已不可用”', async () => {
+    stub({ batch: () => detail([row({ file_name: 'kb.md', source_id: 'src_q', status: 'ready' })]) });
+    const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<unknown>;
+    fetchMock.mockImplementation(async (u: string, i?: RequestInit) => (String(u) === '/bridge/v1/scopes' ? reply(503, {}) : base(u, i)));
+    open('#/office/imports?batch=imp_1');
+    await screen.findByText('kb.md');
+    expect(screen.getByTestId('import-item')).not.toHaveTextContent('已不可用');
+    expect(screen.getByTestId('import-item')).toHaveTextContent('知识库');
   });
 });

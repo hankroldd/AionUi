@@ -187,6 +187,36 @@ describe('作为新版本导入', () => {
     expect(bodyOf().items[0]).toEqual({ upload_id: 'up_1', purpose: 'working', duplicate_action: 'register_separately' });
   });
 
+  it('不是本人的资料（can_mark_secret 为 false）不作为新版本的候选', async () => {
+    bridge({ resources: found(res('res_other', '周报.md', { can_mark_secret: false })) });
+    await add();
+    expect(within(inFlow()).queryByRole('radiogroup')).toBeNull();
+  });
+
+  it('第 2 页没查成但第 1 页已有候选：提示“可能没列全”并可重试', async () => {
+    const filler = Array.from({ length: 49 }, (_, n) => res(`res_f${n}`, `周报.md.副本${n}`));
+    let page2Down = true;
+    bridge({
+      resources: (q) =>
+        q.get('page') === '2'
+          ? ((page2Down ? undefined : { page: 2, page_size: 50, total: 51, items: [res('res_p2', '周报.md', { updated_at: '2026-09-01T00:00:00Z' })] }) as object)
+          : { page: 1, page_size: 50, total: 51, items: [...filler, res('res_p1', '周报.md')] },
+    });
+    const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<unknown>;
+    fetchMock.mockImplementation(async (u: string, i?: RequestInit) =>
+      page2Down && String(u).startsWith('/bridge/v1/resources?') && new URLSearchParams(String(u).split('?')[1]).get('page') === '2'
+        ? reply(503, {})
+        : base(u, i),
+    );
+    await add();
+    expect(await screen.findByTestId('import-lookup-partial')).toHaveTextContent('可能没列全');
+    expect(within(inFlow()).getByRole('radiogroup')).toBeInTheDocument();
+    page2Down = false;
+    fireEvent.click(within(screen.getByTestId('import-lookup-partial')).getByRole('button', { name: '重试' }));
+    await waitFor(() => expect(screen.queryByTestId('import-lookup-partial')).toBeNull());
+    expect(screen.getByText(/你已有 2 份同名资料/)).toBeInTheDocument();
+  });
+
   it('英文界面', async () => {
     bridge({ resources: found(res('res_old', 'r.md')), created: batch([row({ resource_id: 'res_old' })]), revisionTotal: 2 });
     renderImports('en');

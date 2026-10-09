@@ -858,7 +858,7 @@ describe('OfficeResourcesSlot', () => {
     await waitFor(() => expect(screen.queryByText('导入资料', { selector: '.arco-modal-title' })).toBeNull());
     const header = screen.getByTestId('mycowork-resources').querySelector('header') as HTMLElement;
     fireEvent.click(within(header).getByRole('button', { name: '新建' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: '上传文件' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '导入资料' }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(window.location.hash).not.toBe('#/office/imports');
   });

@@ -63,7 +63,7 @@ async function openDialog() {
   render(<ResourcesPage lang="zh-CN" />);
   await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   fireEvent.click(within(document.querySelector('header') as HTMLElement).getByRole('button', { name: '新建' }));
-  fireEvent.click(await screen.findByRole('menuitem', { name: '上传文件' }));
+  fireEvent.click(await screen.findByRole('menuitem', { name: '导入资料' }));
   return screen.findByRole('dialog');
 }
 async function addFiles(dialog: HTMLElement, ...names: string[]) {

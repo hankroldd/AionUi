@@ -56,7 +56,7 @@ async function openDialog(lang = 'zh-CN') {
   render(<ResourcesPage lang={lang} />);
   await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   fireEvent.click(within(document.querySelector('header') as HTMLElement).getByRole('button', { name: lang === 'en' ? 'Create' : '新建' }));
-  fireEvent.click(await screen.findByRole('menuitem', { name: lang === 'en' ? 'Upload files' : '上传文件' }));
+  fireEvent.click(await screen.findByRole('menuitem', { name: lang === 'en' ? 'Import files' : '导入资料' }));
   return screen.findByRole('dialog');
 }
 async function addFile(dialog: HTMLElement, name = '周报.md') {
@@ -123,7 +123,7 @@ describe('上传弹窗', () => {
     await screen.findByRole('button', { name: '第一页-1.md', exact: true });
     nav('source-src_a');
     fireEvent.click(within(document.querySelector('header') as HTMLElement).getByRole('button', { name: '新建' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: '上传文件' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '导入资料' }));
     const dialog = await screen.findByRole('dialog');
     expect(selectedKb(dialog)).toBe('虚构甲库');
     await addFile(dialog);
@@ -159,7 +159,7 @@ describe('上传弹窗', () => {
     await screen.findByRole('button', { name: '第一页-1.md', exact: true });
     nav('source-src_a'); // 在知识库视图里默认选了库，勾 Secret 后不生效
     fireEvent.click(within(document.querySelector('header') as HTMLElement).getByRole('button', { name: '新建' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: '上传文件' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '导入资料' }));
     const dialog = await screen.findByRole('dialog');
     await addFile(dialog);
     expect(within(dialog).getByText('另登记为独立来源')).toBeInTheDocument();

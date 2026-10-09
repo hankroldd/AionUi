@@ -40,6 +40,16 @@ afterEach(() => {
 });
 
 describe('发布结果提示一定看得见', () => {
+  it('已经在该资源的版本页上时，结果提示不再给“查看版本与变化”', async () => {
+    window.location.hash = '#/office/resources/resource-1/versions';
+    serve(accepted);
+    render(dialog());
+    await publish();
+    await screen.findByText(/已提交发布 v34/);
+    expect(screen.queryByRole('link', { name: '查看版本与变化' })).toBeNull();
+    window.location.hash = '';
+  });
+
   it('受理很快：不闪“正在发布”，直接显示带“查看版本与变化”的结果，并停留至少 4 秒', async () => {
     serve(accepted);
     render(dialog());

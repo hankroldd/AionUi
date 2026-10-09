@@ -132,7 +132,7 @@ describe('版本页向空间页设计语言对齐', () => {
     expect(screen.getByTestId('version-publication-error').textContent).toContain('你已不能再向这个库发布');
     expect(screen.queryByText(/target_forbidden/)).toBeNull();
     expect(screen.getByText('发布到「知识库」 · 已完成')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '在知识库中查看' }).getAttribute('href')).toBe('#/office/resources/res_kb/versions');
+    expect(screen.getByRole('link', { name: '查看发布出去的这一份' }).getAttribute('href')).toBe('#/office/resources/res_kb/versions');
   });
 
   it('读不到是否为 Secret：发布入口提示稍后重试，不放行', async () => {

@@ -95,6 +95,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+
 describe('selected resource questions', () => {
   it('all currently listed files stay explicit IDs, grouped once by source, with all required IDs and no guessed project', async () => {
     const onAskScope = host();
@@ -208,7 +211,7 @@ describe('selected resource questions', () => {
     fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: '重试' }));
     await waitFor(() => expect(readCalls('/bridge/v1/resources')).toBeGreaterThan(before));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
-    await waitFor(() => pick()); // 重试走基线的 reload：列表重读、选择清空；目录读到后再选就能提问
+    // 重读同一查询不再清空选择（列表内容没变）；目录读到后直接就能提问
     await waitFor(() => expect(ask()).toBeEnabled());
     fireEvent.click(ask());
     await waitFor(() => expect(onAskScope).toHaveBeenCalledTimes(1));

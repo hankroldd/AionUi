@@ -24,7 +24,10 @@ vi.mock('react-router-dom', () => ({
 }));
 
 const fetchMock = vi.fn();
-const reply = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => body });
+const reply = (status: number, body: unknown) => {
+  const res = { status, ok: status < 300, json: async () => body, clone: () => res }; // clone：Bridge 的错误体决定 5xx 要不要自动重试
+  return res;
+};
 const counts = { total: 1, ready: 1, indexing: 0, failed: 0, unavailable: 0 };
 const now = new Date();
 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 13).toISOString();
@@ -131,7 +134,7 @@ function bridge(opts: Opts = {}) {
         secret: opts.secret === true,
       });
     if (url.includes('/changes?'))
-      return opts.diffStatus ? reply(opts.diffStatus, {}) : reply(200, opts.diff ?? partialDiff);
+      return opts.diffStatus ? reply(opts.diffStatus, { error: { code: 'UPSTREAM_TIMEOUT', message: 'x' } }) : reply(200, opts.diff ?? partialDiff);
     if (url.endsWith('/restore'))
       return opts.restoreStatus
         ? reply(opts.restoreStatus, { error: { code: 'EDIT_LEASE_HELD', message: 'x' } })
@@ -172,6 +175,9 @@ const publishToKb = async () => {
   expect(await within(dialog).findByText(/将以文件名“汇报（虚构）.pptx”进入知识库“青禾库”/)).toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('button', { name: '发布' }));
 };
+
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
 
 describe('OfficeVersionsSlot', () => {
   beforeEach(() => {

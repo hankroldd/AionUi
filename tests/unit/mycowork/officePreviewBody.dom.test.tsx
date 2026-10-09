@@ -34,6 +34,9 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+
 describe('shared preview body — format and safety', () => {
   it.each(['docx', 'PPTX', 'xlsx'])(
     'reads %s through session Bridge HTML in a script-only opaque iframe',
@@ -140,16 +143,16 @@ describe('shared preview body — failures and retry', () => {
   );
 
   it('retries a failed read with a fresh signal and never creates an editor session, plan or write', async () => {
-    fetchMock
-      .mockResolvedValueOnce(response(503, {}))
-      .mockResolvedValueOnce(page('<html><body>重试成功（虚构）</body></html>'));
+    // 首读 + 2 次自动重试都 503，才出现“重试”按钮
+    for (let i = 0; i < 3; i++) fetchMock.mockResolvedValueOnce(response(503, {}));
+    fetchMock.mockResolvedValueOnce(page('<html><body>重试成功（虚构）</body></html>'));
     render(<PreviewBody {...props} />);
     fireEvent.click(await screen.findByRole('button', { name: '重试' }));
     await waitFor(() => expect(frame()).toHaveAttribute('srcdoc', expect.stringContaining('重试成功')));
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(Array(2).fill('/bridge/v1/resources/res_a/office/html'));
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(Array(4).fill('/bridge/v1/resources/res_a/office/html'));
     expect(signalAt(0).aborted).toBe(true);
-    expect(signalAt(1).aborted).toBe(false);
-    expect(signalAt(0)).not.toBe(signalAt(1));
+    expect(signalAt(3).aborted).toBe(false);
+    expect(signalAt(0)).not.toBe(signalAt(3));
     expect(fetchMock.mock.calls.every(([, init]) => !init.body && !init.method)).toBe(true);
   });
 });

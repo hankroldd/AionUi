@@ -179,6 +179,9 @@ const draftBody = (revision: number) => ({
   filter: { tag_ids: ['tag_a', 'tag_b'], source_ids: ['src_fixture'], include_descendants: false },
 });
 
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+
 describe('智能分组条件编辑冲突恢复', () => {
   beforeEach(() => {
     fetchMock.mockReset();
@@ -292,7 +295,7 @@ describe('智能分组条件编辑冲突恢复', () => {
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.filter(([url, init]) => url === '/bridge/v1/saved-views' && !init?.method).length
-      ).toBe(2)
+      ).toBe(mode === 'unreadable' ? 4 : 2) // 读不到的那次重读带 2 次自动重试
     );
     save();
     await waitFor(() => expect(bodies()).toEqual([draftBody(7), draftBody(7)]));

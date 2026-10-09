@@ -98,6 +98,9 @@ const failRead = (): object => {
   throw new TypeError('network');
 };
 
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = []; // 轮询用例按定时器数请求次数，关掉单次请求内的自动重试
+
 describe('上传弹窗', () => {
   afterEach(() => vi.useRealTimers());
 

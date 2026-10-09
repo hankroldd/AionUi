@@ -142,7 +142,7 @@ it('知识库目录首次读取失败：页面仍列出本人资料，点“重�
   const serve = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
   let scopes = 0;
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
-    url === '/bridge/v1/scopes' && scopes++ === 0
+    url === '/bridge/v1/scopes' && scopes++ < 3 // 首读 + 2 次自动重试都失败
       ? reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'x' } })
       : serve(url, init)
   );
@@ -155,5 +155,5 @@ it('知识库目录首次读取失败：页面仍列出本人资料，点“重�
   expect(notice).toBeDefined();
   fireEvent.click(within(notice as HTMLElement).getByRole('button', { name: '重试' }));
   expect(await screen.findByTestId('mycowork-nav-source-src_a')).toHaveTextContent('虚构甲库');
-  expect(scopes).toBe(2);
+  expect(scopes).toBe(4);
 });

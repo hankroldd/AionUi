@@ -141,6 +141,9 @@ afterEach(() => {
   document.querySelectorAll('.arco-modal-wrapper').forEach((n) => n.remove());
 });
 
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+
 describe('space: remove from knowledge base', () => {
   it('offers the menu item only for items the owner can remove', async () => {
     render(<OfficeResourcesSlot />);
@@ -207,7 +210,7 @@ describe('space: remove from knowledge base', () => {
     expect(failed.textContent).not.toContain('没有被删除');
   });
 
-  it('a conflict at acceptance says the file is busy; losing the progress poll does not claim the removal failed', async () => {
+  it('a conflict at acceptance says the file is busy; losing the progress poll neither claims failure nor stops, and the list updates itself', async () => {
     rejectStart = { status: 409, code: 'EDIT_LEASE_HELD' };
     const view = render(<OfficeResourcesSlot />);
     await menu('可移出.md');
@@ -219,18 +222,21 @@ describe('space: remove from knowledge base', () => {
     await waitFor(() => expect(row('可移出.md')).toBeInTheDocument(), LONG);
     view.unmount();
 
-    // 受理成功，之后读进度时网络断了
+    // 受理成功，之后读进度时网络断了：不说成“没能移出”，也不停下——退避后接着读，恢复后列表自己更新
     rejectStart = undefined;
     pollStatus = 502;
     render(<OfficeResourcesSlot />);
     await menu('可移出.md');
     fireEvent.click(screen.getAllByRole('menuitem', { name: '移出知识库' }).at(-1)!);
     fireEvent.click(await screen.findByRole('button', { name: '移出' }, LONG));
-    expect(await screen.findByText(/读不到移出进度。移出仍在后台进行/, undefined, LONG)).toBeInTheDocument();
+    const polled = () => fetchMock.mock.calls.filter(([url]) => /knowledge-removals\/[^/]+$/.test(String(url))).length;
+    await waitFor(() => expect(polled()).toBeGreaterThan(0), LONG);
+    expect(screen.queryByTestId('mycowork-removal-failed')).toBeNull();
+    pollStatus = undefined;
+    await waitFor(() => expect(row('可移出.md')).toBeNull(), LONG);
     expect(screen.queryByText(/正在被编辑、导入或发布/)).toBeNull();
     expect(screen.queryByTestId('mycowork-removal-failed')).toBeNull();
-    expect(screen.queryByTestId('mycowork-removal-pending')).toBeNull();
-  });
+  }, 30_000); // 含一次进度读失败后的退避等待（1.5 秒 + 3 秒）
 
   it('the menu follows the agreed order: ... edit tags, star, remove from knowledge base, Secret, delete', async () => {
     render(<OfficeResourcesSlot />);

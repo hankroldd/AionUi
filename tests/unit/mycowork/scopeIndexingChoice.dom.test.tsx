@@ -76,6 +76,9 @@ afterEach(() => {
   cleanup();
 });
 
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+
 describe('发送前：资料还在处理中', () => {
   it('全部就绪：不弹窗、不打扰，照常签发令牌', async () => {
     bridge(plan([8, 0]));

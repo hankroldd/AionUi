@@ -125,6 +125,9 @@ afterEach(() => {
   document.querySelectorAll('.arco-modal-wrapper').forEach((n) => n.remove());
 });
 
+// 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
+(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = []; // 进度读失败用例：关掉单次请求内的自动重试，直接看轮询退避
+
 describe('space: knowledge base management', () => {
   it('shows the gear only when the server marks the user as able to manage knowledge bases', async () => {
     canManage = false;
@@ -253,7 +256,7 @@ describe('space: knowledge base management', () => {
     expect(sent('DELETE')).toHaveLength(0);
   });
 
-  it('when the progress cannot be read it says so and offers to read again instead of stopping silently', async () => {
+  it('when the progress cannot be read it says so and keeps polling with backoff until the task ends', async () => {
     polls = [removal('archiving')];
     render(<OfficeResourcesSlot />);
     await open();
@@ -262,8 +265,8 @@ describe('space: knowledge base management', () => {
     fireEvent.click(await screen.findByRole('button', { name: '继续' }, LONG));
     fireEvent.click(await screen.findByRole('button', { name: '删除知识库' }, LONG));
     const stale = await screen.findByTestId('mycowork-kb-task-queued', undefined, LONG);
-    expect(await within(stale).findByText(/读不到删除进度/, undefined, LONG)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '重新读取' }));
+    expect(await within(stale).findByText(/暂时读不到删除进度/, undefined, LONG)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重新读取' })).toBeNull(); // 不需要手动：页面自己会接着读
     await waitFor(() => expect(screen.queryByText('渠道库')).toBeNull(), LONG);
   });
 });

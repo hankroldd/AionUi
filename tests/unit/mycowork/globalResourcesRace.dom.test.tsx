@@ -171,5 +171,5 @@ it('partial显示准确成功候选total与失败库人名，重试单查询；�
     loading.resolve(list([item('res_back', '恢复后的资料.md')], 1));
   });
   await screen.findByRole('button', { name: '恢复后的资料.md' });
-  expect(reads()).toHaveLength(4);
+  expect(reads()).toHaveLength(6); // 4 次查询 + 503 那次的 2 次自动重试
 });

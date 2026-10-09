@@ -57,6 +57,7 @@ function api(cur: () => object | Response, extra: (url: string, init?: RequestIn
     }
     if (url.endsWith('/discard')) return reply(200, {});
     if (url.endsWith('/close')) return reply(202, session('closing'));
+    if (/\/resources\/[^/]+\/revisions/.test(url)) return reply(200, { items: [], current_revision_id: 'rev_a' }); // 继续编辑前核当前版本
     if (url === '/bridge/v1/edit-sessions' && init?.method === 'POST') return reply(200, session('editing'));
     return reply(404, {});
   });

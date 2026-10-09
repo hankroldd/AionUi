@@ -87,6 +87,7 @@ describe('OfficeEditSlot', () => {
 
   it('a session needing recovery can rejoin the editor (same session)', async () => {
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (/\/resources\/[^/]+\/revisions/.test(url)) return reply(200, { items: [], current_revision_id: 'rev_a' }); // 继续编辑前核当前版本
       if (url === '/bridge/v1/edit-sessions' && init?.method === 'POST') return reply(200, session('editing'));
       if (url === '/bridge/v1/edit-sessions/eds_1') return reply(200, session('recovery_required'));
       return reply(404, {});
@@ -187,6 +188,7 @@ describe('OfficeEditSlot', () => {
       }
       if (url.endsWith('/discard') && init?.method === 'POST')
         return reply(409, { error: { code: 'EDIT_STATE_CONFLICT', message: 'x' } });
+      if (/\/resources\/[^/]+\/revisions/.test(url)) return reply(200, { items: [], current_revision_id: 'rev_a' }); // 继续编辑前核当前版本
       if (url === '/bridge/v1/edit-sessions' && init?.method === 'POST') return reply(200, session('editing'));
       if (url === '/bridge/v1/edit-sessions/eds_1') return reply(200, session(state));
       return reply(404, {});

@@ -173,7 +173,7 @@ const publishToKb = async () => {
   // 只有一个可选知识库：已预选，不用再选
   fireEvent.change(within(dialog).getByLabelText('库里的文件名'), { target: { value: '汇报（虚构）.pptx' } });
   // 影响预览：以什么名字进哪个库、谁能看到（Google Drive 式）
-  expect(await within(dialog).findByText(/将以文件名“汇报（虚构）.pptx”进入知识库“青禾库”/)).toBeInTheDocument();
+  expect(await within(dialog).findByText(/将以“汇报（虚构）.pptx”加入「青禾库」/)).toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('button', { name: '发布' }));
 };
 
@@ -329,7 +329,7 @@ describe('OfficeVersionsSlot', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: '接受并归档' }));
     const ask = await screen.findByRole('dialog');
     expect(within(ask).getByText('接受 v3 并归档？')).toBeInTheDocument();
-    expect(within(ask).getByText(/只记录在本地，不会发到任何知识库/)).toBeInTheDocument();
+    expect(within(ask).getByText(/只记在本地，不会发到知识库/)).toBeInTheDocument();
     expect(calls('POST', '/bridge/v1/publications')).toHaveLength(0);
     fireEvent.click(within(ask).getByRole('button', { name: '接受并归档' }));
     await waitFor(() => expect(calls('POST', '/bridge/v1/publications')).toHaveLength(1));

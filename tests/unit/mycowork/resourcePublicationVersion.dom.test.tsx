@@ -60,6 +60,6 @@ it('57个版本的产物发布确认应显示v57而非第一页条数v50', async
   );
   render(<Harness />);
   fireEvent.click(screen.getByText('打开'));
-  const actual = await screen.findByText(/认可版本：v/);
-  expect(actual.textContent).toContain('认可版本：v57');
+  const actual = await screen.findByText(/将发布 v/);
+  expect(actual.textContent).toContain('将发布 v57');
 });

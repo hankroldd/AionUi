@@ -205,12 +205,12 @@ describe('真实 React/Arco 共用发布弹窗', () => {
     serve((r, i) => (i === 0 ? error('REVISION_CONFLICT') : json(publication(r), 201)));
     render(<Harness overrides={{ onReload: reloaded }} />);
     await publish();
-    await screen.findByText(/所选认可版本保持不变/);
+    await screen.findByText(/仍可发布你选的这一版/);
     expect(reloaded).toHaveBeenCalledTimes(1);
     expect(requests).toHaveLength(1);
-    expect(screen.getByText(/认可版本：v1/)).toBeVisible();
+    expect(screen.getByText(/将发布 v1/)).toBeVisible();
     expect(screen.getByLabelText('库里的文件名')).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: '确认仍发布所选版本' }));
+    fireEvent.click(screen.getByRole('button', { name: '仍发布所选版本' }));
     await screen.findByText('已关闭');
     expect(requests[1]).toMatchObject({
       revision_id: 'rev-1',
@@ -292,7 +292,7 @@ describe('真实 React/Arco 共用发布弹窗', () => {
     fireEvent.click(await within(history).findByRole('button', { name: '重试', exact: true }));
     await waitFor(() => expect(paths).toContain('/bridge/v1/publications/pub-original/retry'));
     expect(requests).toHaveLength(0);
-    expect(screen.getByText('已发布 · 失败')).toBeVisible();
+    expect(screen.getByText('发布到「虚构知识库」 · 失败')).toBeVisible();
     await retryPublication('pub-original');
     expect(paths.filter((p) => p === '/bridge/v1/publications/pub-original/retry')).toHaveLength(2);
   });

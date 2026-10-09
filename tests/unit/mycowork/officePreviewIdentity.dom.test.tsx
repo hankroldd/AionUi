@@ -52,7 +52,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('A107 — current content has no unbound timeline label', () => {
-  it('shows later current GET bytes while the parent timeline still says v2, without labelling the body v2', async () => {
+  it('shows later current GET bytes while the parent timeline still says v2; the title carries the list\'s current version, the body is not claimed to be it', async () => {
     let finish!: (value: ReturnType<typeof page>) => void;
     const pending = new Promise<ReturnType<typeof page>>((resolve) => {
       finish = resolve;
@@ -67,8 +67,7 @@ describe('A107 — current content has no unbound timeline label', () => {
     const box = screen.getByTestId('versions-preview');
     await waitFor(() => expect(box.querySelector('iframe')).not.toBeNull());
     expect(box.querySelector('iframe')).toHaveAttribute('srcdoc', expect.stringContaining('虚构 rev_c'));
-    expect(box.querySelector('.mcw-ver-preview-title')).toHaveTextContent(/^当前内容预览$/);
-    expect(box.querySelector('.mcw-ver-preview-head')).not.toHaveTextContent('v2');
+    expect(box.querySelector('.mcw-ver-preview-title')).toHaveTextContent(/^当前内容预览 · v2$/); // 负责人 2026-10-09 要看到版本号：取版本列表里的当前版本，正文仍读此刻的当前内容（最多 30 秒后与列表对齐）
   });
 
   it('passes a real AbortSignal through fetch and aborts an unfinished current GET when the version page unmounts', async () => {

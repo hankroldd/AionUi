@@ -263,7 +263,7 @@ describe('P09 browse drawer: review fixes', () => {
       fireEvent.click(await within(dialog).findByRole('button', { name: '下一页' }));
       await within(dialog).findByText('2 / 2');
       const selects = dialog.querySelectorAll('.arco-select-view');
-      expect(selects).toHaveLength(2);
+      expect(selects).toHaveLength(3); // 类型、内容关系、审批状态（g1b）
       fireEvent.click(selects[1] as HTMLElement);
       fireEvent.click(await screen.findByText('流程', { selector: '.arco-select-option *, .arco-select-option' }));
       await waitFor(() => {

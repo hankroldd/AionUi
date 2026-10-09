@@ -312,6 +312,8 @@ describe('版本页后台重读', () => {
     fireEvent.click(screen.getByRole('button', { name: '重新读取' }));
     await screen.findByText('v2');
     revisions = async () => proxy(503);
+    // 预览加载中“刷新预览”是禁用的：等它可点再点，否则点击被忽略（高负载下的竞态）
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: '刷新预览' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: '刷新预览' }));
     await screen.findByText(/没能刷新版本列表/);
     expect(screen.getByText('v2')).toBeInTheDocument();
@@ -326,6 +328,7 @@ describe('版本页后台重读', () => {
     for (let i = 0; i < 20 && !releaseOld; i++) await act(async () => void (await Promise.resolve())); // 等旧请求真的发出去
     expect(releaseOld).toBeDefined();
     revisions = async () => reply(200, timeline(3)); // 用户点“刷新预览”：快，3 版
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: '刷新预览' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: '刷新预览' }));
     await screen.findByText('v3');
     await act(async () => releaseOld?.());

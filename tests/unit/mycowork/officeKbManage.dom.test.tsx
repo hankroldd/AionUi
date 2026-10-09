@@ -8,6 +8,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
 
@@ -126,7 +127,7 @@ afterEach(() => {
 });
 
 // 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
-(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = []; // 进度读失败用例：关掉单次请求内的自动重试，直接看轮询退避
+readRetry.delays = []; // 进度读失败用例：关掉单次请求内的自动重试，直接看轮询退避
 
 describe('space: knowledge base management', () => {
   it('shows the gear only when the server marks the user as able to manage knowledge bases', async () => {

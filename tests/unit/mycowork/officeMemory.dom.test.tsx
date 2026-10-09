@@ -91,6 +91,7 @@ describe('OfficeMemorySlot', () => {
     fireEvent.click(screen.getAllByRole('button', { name: '接受' })[1] as HTMLElement);
     await waitFor(() => expect(calls('POST', '/memory-items/mem_1/actions')).toHaveLength(1));
     expect(bodyOf('POST', '/memory-items/mem_1/actions')).toEqual({ action: 'accept', expected_revision: 2 });
+    await waitFor(() => expect(screen.getAllByRole('button', { name: '拒绝' })[0]).toBeEnabled()); // 重读返回前按钮禁用（防重复点击）
     fireEvent.click(screen.getAllByRole('button', { name: '拒绝' })[0] as HTMLElement);
     await waitFor(() => expect(calls('POST', '/memory-items/mem_3/actions')).toHaveLength(1));
     expect(bodyOf('POST', '/memory-items/mem_3/actions')).toEqual({ action: 'reject', expected_revision: 2 });

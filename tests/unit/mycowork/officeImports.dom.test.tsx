@@ -10,6 +10,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeImportsSlot } from '@/renderer/mycowork-slots';
 
@@ -82,7 +83,7 @@ async function chooseTarget() {
 }
 
 // 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
-(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = []; // 轮询用例按定时器数请求次数，关掉单次请求内的自动重试
+readRetry.delays = []; // 轮询用例按定时器数请求次数，关掉单次请求内的自动重试
 
 describe('OfficeImportsSlot', () => {
   beforeEach(() => {

@@ -8,6 +8,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeCompositionSlot } from '@/renderer/mycowork-slots';
 
@@ -74,7 +75,7 @@ const previewCalls = (id: string) =>
   fetchMock.mock.calls.filter(([u]) => String(u) === `/bridge/v1/assets/${id}/preview?version=1`).length;
 
 // 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
-(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+readRetry.delays = [0, 0];
 
 describe('P09 candidate preview', () => {
   beforeEach(() => {
@@ -121,12 +122,12 @@ describe('P09 candidate preview', () => {
 
   it('shows loading, then a failure with retry that fetches again and recovers', async () => {
     let calls = 0;
-    serve(['a3'], { a3: () => (++calls <= 3 ? err(503, 'UPSTREAM_UNAVAILABLE') : reply(200, '<html>ok</html>')) });
+    serve(['a3'], { a3: () => (++calls === 1 ? err(503, 'UPSTREAM_UNAVAILABLE') : reply(200, '<html>ok</html>')) });
     render(<OfficeCompositionSlot />);
     expect(await screen.findByText('预览加载失败')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     await waitFor(() => expect(document.querySelector('iframe.mcw-tp-frame')).not.toBeNull());
-    expect(previewCalls('a3')).toBe(4); // 首读 + 2 次自动重试 + 点“重试”
+    expect(previewCalls('a3')).toBe(2);
   });
 
   it('shows a loading note while the preview is rendering', async () => {

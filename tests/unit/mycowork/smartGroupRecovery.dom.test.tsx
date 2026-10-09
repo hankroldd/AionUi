@@ -6,6 +6,7 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 
@@ -180,7 +181,7 @@ const draftBody = (revision: number) => ({
 });
 
 // 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
-(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+readRetry.delays = [0, 0];
 
 describe('智能分组条件编辑冲突恢复', () => {
   beforeEach(() => {
@@ -295,7 +296,7 @@ describe('智能分组条件编辑冲突恢复', () => {
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.filter(([url, init]) => url === '/bridge/v1/saved-views' && !init?.method).length
-      ).toBe(mode === 'unreadable' ? 4 : 2) // 读不到的那次重读带 2 次自动重试
+      ).toBe(2)
     );
     save();
     await waitFor(() => expect(bodies()).toEqual([draftBody(7), draftBody(7)]));

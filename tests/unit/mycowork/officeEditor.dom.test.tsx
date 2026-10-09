@@ -12,6 +12,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeEditSlot, OfficeVersionsSlot } from '@/renderer/mycowork-slots';
 
@@ -44,7 +45,7 @@ const DocEditor = vi.fn(function (this: object) {
 });
 
 // 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
-(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+readRetry.delays = [0, 0];
 
 describe('OfficeEditSlot', () => {
   beforeEach(() => {

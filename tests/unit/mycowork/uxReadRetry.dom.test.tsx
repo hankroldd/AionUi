@@ -7,6 +7,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { bridgeJson } from '@mycowork/ui/scope-picker/bridge-client';
 import { ConversationScopeSlot, OfficeImportsSlot, OfficeVersionsSlot } from '@/renderer/mycowork-slots';
@@ -41,7 +42,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   streamListeners.clear();
   vi.stubGlobal('fetch', fetchMock);
-  (globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+  readRetry.delays = [0, 0];
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -99,9 +100,35 @@ describe('bridgeJson 读请求重试', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('读请求 15 秒没响应按“连不上”处理（先重试再抛）；写请求有更长的超时', async () => {
+  it('502 + Web Host 真实错误体（UPSTREAM_UNAVAILABLE）也是代理层的失败：重试两次后成功', async () => {
+    const webHost502 = () => {
+      const res = {
+        status: 502,
+        ok: false,
+        json: async () => ({ error: { code: 'UPSTREAM_UNAVAILABLE', message: 'Bridge is unreachable' } }),
+        clone: () => res, // 真实 Response 有 clone；旧实现靠它判断“带错误体 = Bridge 自己的回答”
+      };
+      return res;
+    };
+    fetchMock
+      .mockResolvedValueOnce(webHost502())
+      .mockResolvedValueOnce(webHost502())
+      .mockResolvedValueOnce(reply(200, { ok: 1 }));
+    await expect(bridgeJson('/bridge/v1/x')).resolves.toEqual({ ok: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('连不上的说法：读请求重试过才说“已自动重试”，写请求和超时不说', async () => {
+    fetchMock.mockRejectedValue(new TypeError('network'));
+    const read = await bridgeJson('/bridge/v1/x').catch((e) => e);
+    const write = await bridgeJson('/bridge/v1/x', { body: {} }).catch((e) => e);
+    expect(read.info).toEqual({ retried: true });
+    expect(write.info).toEqual({ retried: false });
+  });
+
+  it('读 60 秒 / 写 90 秒兜底超时：到点按“连不上”处理，超时不重试，读正文也计时', async () => {
     vi.useFakeTimers();
-    (globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [];
+    readRetry.delays = [300, 900]; // 就算开着重试，超时也不重试
     fetchMock.mockImplementation(
       (_url: string, init: RequestInit) =>
         new Promise((_, reject) => {
@@ -112,13 +139,31 @@ describe('bridgeJson 读请求重试', () => {
       kind: 'unavailable',
       message: 'UNREACHABLE',
     });
-    await vi.advanceTimersByTimeAsync(15_000);
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(fetchMock.mock.calls[0]![1].signal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
     await read;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     const write = expect(bridgeJson('/bridge/v1/x', { body: {} })).rejects.toMatchObject({ kind: 'unavailable' });
-    await vi.advanceTimersByTimeAsync(15_001);
-    expect(fetchMock.mock.calls.at(-1)![1].signal.aborted).toBe(false); // 15 秒后写请求还在等
-    await vi.advanceTimersByTimeAsync(45_000);
+    await vi.advanceTimersByTimeAsync(89_999);
+    expect(fetchMock.mock.calls[1]![1].signal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
     await write;
+    // 响应头到了、正文迟迟不来：同一个计时
+    fetchMock.mockReset();
+    fetchMock.mockImplementation((_url: string, init: RequestInit) =>
+      Promise.resolve({
+        status: 200,
+        ok: true,
+        json: () =>
+          new Promise((_, reject) =>
+            init.signal?.addEventListener('abort', () => reject(new DOMException('a', 'AbortError')))
+          ),
+      })
+    );
+    const body = expect(bridgeJson('/bridge/v1/x')).rejects.toMatchObject({ message: 'UNREACHABLE' });
+    await vi.advanceTimersByTimeAsync(60_000);
+    await body;
   });
 });
 
@@ -156,6 +201,44 @@ describe('对话页“本轮范围”条', () => {
     expect(screen.getByText(/项目A资料/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '更改范围' })).toBeInTheDocument();
     expect(screen.queryByText(UNREACHABLE_ZH)).toBeNull();
+  });
+});
+
+describe('保留旧内容只对暂时连不上生效', () => {
+  const ctx = {
+    plan_id: 'plan_1',
+    version: 1,
+    status: 'OK',
+    brief: {
+      groups: [
+        {
+          source_id: 'src_a',
+          source_name: '项目A资料',
+          mode: 'whole',
+          counts: { total: 1, ready: 1, indexing: 0, failed: 0, unavailable: 0 },
+        },
+      ],
+      excluded: 0,
+      unauthorized: 0,
+      refs: {},
+      policy: { strict: false, web: 'off' },
+    },
+    used: [],
+    withheld: 0,
+    superseded: false,
+  };
+  it('范围条：用户点“刷新”后暂时失败 → 保留内容并提示、先不让改范围；404 → 不保留', async () => {
+    fetchMock.mockResolvedValueOnce(reply(200, ctx));
+    render(<ConversationScopeSlot conversation_id='conv-1' />);
+    await screen.findByText(/项目A资料/);
+    fetchMock.mockResolvedValue(proxy(503));
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }));
+    await screen.findByText(/没能刷新本轮范围/);
+    expect(screen.getByText(/项目A资料/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '更改范围' })).toBeNull();
+    fetchMock.mockResolvedValue(reply(404, { error: { code: 'NOT_FOUND', message: 'x' } }));
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }));
+    await screen.findByText('未选择资料：仅普通对话');
   });
 });
 
@@ -217,6 +300,21 @@ describe('版本页后台重读', () => {
     expect(screen.getByText('v2')).toBeInTheDocument();
     expect(screen.queryByText('版本列表没有读取成功')).toBeNull();
     expect(screen.getByTestId('versions-preview')).toBeInTheDocument();
+  });
+
+  it('后台重读得到 404 不保留（照旧进错误态）；用户点刷新后暂时失败则保留并提示', async () => {
+    render(<OfficeVersionsSlot />);
+    await screen.findByText('v2');
+    revisions = async () => reply(404, { error: { code: 'NOT_FOUND', message: 'x' } });
+    await act(async () => thirtySeconds.forEach((fn) => fn()));
+    await screen.findByText('版本列表没有读取成功');
+    revisions = async () => reply(200, timeline(2));
+    fireEvent.click(screen.getByRole('button', { name: '重新读取' }));
+    await screen.findByText('v2');
+    revisions = async () => proxy(503);
+    fireEvent.click(screen.getByRole('button', { name: '刷新预览' }));
+    await screen.findByText(/没能刷新版本列表/);
+    expect(screen.getByText('v2')).toBeInTheDocument();
   });
 
   it('慢的旧响应不能盖掉新响应', async () => {

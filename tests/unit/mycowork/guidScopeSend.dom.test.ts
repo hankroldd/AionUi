@@ -7,6 +7,7 @@
 
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import { Message } from '@arco-design/web-react';
 import { setScopeSelection } from '@mycowork/ui';
 import { bindGuidScope, withGuidScope } from '@/renderer/mycowork-slots';
@@ -75,7 +76,7 @@ const deps = (): GuidSendDeps =>
   }) as unknown as GuidSendDeps;
 
 // 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
-(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+readRetry.delays = [0, 0];
 
 describe('withGuidScope', () => {
   beforeEach(() => {
@@ -152,7 +153,7 @@ describe('withGuidScope', () => {
   it('rejects with a localized "not sent" error when the Bridge is unavailable', async () => {
     setScopeSelection([{ source_id: 'src_a', name: 'A' }]);
     fetchMock.mockResolvedValueOnce(reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'x' } }));
-    await expect(withGuidScope({})).rejects.toThrow('未发送：网络不太稳定，没能连上服务；已自动重试，请稍后再试。已保存的内容不受影响。');
+    await expect(withGuidScope({})).rejects.toThrow('未发送：资料服务暂不可用，请稍后重试');
   });
 
   it('rejects instead of sending with an empty scope', async () => {

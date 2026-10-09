@@ -10,6 +10,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import type { TChatConversation } from '@/common/config/storage';
 import { ProjectScopeSlot } from '@/renderer/mycowork-slots';
@@ -52,7 +53,7 @@ const drawerOpen = () =>
 const bindingCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).includes('/binding'));
 
 // 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
-(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+readRetry.delays = [0, 0];
 
 describe('ProjectScopeSlot', () => {
   beforeEach(() => {
@@ -116,7 +117,7 @@ describe('ProjectScopeSlot', () => {
     await openEntry();
     await screen.findByText('产品知识库');
     fireEvent.click(screen.getByRole('button', { name: '设为项目默认' }));
-    expect(await screen.findByText('未保存项目默认：网络不太稳定，没能连上服务；已自动重试，请稍后再试。已保存的内容不受影响。')).toBeInTheDocument();
+    expect(await screen.findByText('未保存项目默认：没能连上服务，请稍后再试。已保存的内容不受影响。')).toBeInTheDocument();
   });
 
   it('cancel writes nothing', async () => {

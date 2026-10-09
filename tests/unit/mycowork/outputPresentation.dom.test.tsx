@@ -37,6 +37,7 @@ const output = (over: Partial<Resource> = {}): Resource => ({
 });
 const actions = (over: Partial<ItemActions> = {}): ItemActions => ({
   starred: () => false,
+  starring: () => false,
   originName: () => '产物',
   sourceName: () => '—',
   kbName: (id) => (id === 'src-fictional' ? '虚构库' : id),

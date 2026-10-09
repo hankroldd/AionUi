@@ -198,7 +198,7 @@ it('remains blocked while an unavailable catalog is being reloaded and enables o
     finish = resolve;
   });
   fireEvent.click(within(dialog).getByRole('button', { name: '重试' }));
-  await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url === '/bridge/v1/scopes')).toHaveLength(4));
+  await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url === '/bridge/v1/scopes')).toHaveLength(2));
   expect(within(dialog).getByRole('button', { name: '询问此文件' })).toBeDisabled();
   expect(ask).not.toHaveBeenCalled();
   await act(async () => {

@@ -9,6 +9,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 // Same as renderer/main.tsx: Arco's global Message needs the React 19 adapter (tests load the CJS lib build).
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ConversationScopeSlot, withGuidScope } from '@/renderer/mycowork-slots';
@@ -65,7 +66,7 @@ const SUMMARY = '项目A资料 + 产品库；公网关闭；AI 可引用 8 · �
 const emit = (m: StreamMessage) => act(() => streamListeners.forEach((fn) => fn(m)));
 
 // 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
-(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+readRetry.delays = [0, 0];
 
 describe('ConversationScopeSlot', () => {
   beforeEach(() => {
@@ -115,12 +116,10 @@ describe('ConversationScopeSlot', () => {
   });
 
   it('shows the Bridge error instead of pretending nothing was selected, and recovers on refresh', async () => {
-    // 读请求先自动重试两次，三次都 503 才显示错误
-    for (let i = 0; i < 3; i++)
-      fetchMock.mockResolvedValueOnce(reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'x' } }));
+    fetchMock.mockResolvedValueOnce(reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'x' } }));
     fetchMock.mockResolvedValue(reply(200, CONTEXT));
     render(<ConversationScopeSlot conversation_id='conv-1' />);
-    expect(await screen.findByText('网络不太稳定，没能连上服务；已自动重试，请稍后再试。已保存的内容不受影响。')).toBeInTheDocument();
+    expect(await screen.findByText('资料服务暂不可用，请稍后重试')).toBeInTheDocument();
     expect(screen.queryByText('未选择资料：仅普通对话')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '刷新' }));
     expect(await screen.findByText(SUMMARY)).toBeInTheDocument();

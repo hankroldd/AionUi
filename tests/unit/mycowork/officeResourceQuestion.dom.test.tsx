@@ -6,6 +6,7 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import type { ResourceList } from '@mycowork/contracts';
 import { ResourcesPage } from '@mycowork/ui';
@@ -96,7 +97,7 @@ afterEach(() => {
 });
 
 // 读请求的自动重试在用例里免等退避（产品默认 300/900 ms）
-(globalThis as { __mcwReadRetryMs?: number[] }).__mcwReadRetryMs = [0, 0];
+readRetry.delays = [0, 0];
 
 describe('selected resource questions', () => {
   it('all currently listed files stay explicit IDs, grouped once by source, with all required IDs and no guessed project', async () => {

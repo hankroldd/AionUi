@@ -1,7 +1,7 @@
 /**
  * [mycowork] PR08 A391。文件：tests/unit/mycowork/publicationLinked.dom.test.tsx
- * 职责：发布到知识库时库里已有内容相同的条目（linked_existing）的界面：本会话发起的发布完成提示写“知识库里已有内容相同的《X》，已关联到它，
- *       没有另存一份。”（读不到名字时不写名字）、版本页时间线上那条发布记录带简短版本、空间行的发布标记带“库里已有同内容文件”；
+ * 职责：发布到知识库时库里已有内容相同的条目（linked_existing）的界面：本会话发起的发布完成提示写“「库名」里已有内容相同的《X》，这次没有另存一份；
+ *       AI 引用的是库里那一份。”（读不到名字时不写名字；版本页与空间页两条对账路径都测）、版本页时间线上那条发布记录带简短版本、空间行的发布标记带“库里已有同内容文件”；
  *       没有 linked_existing 时都不出现；中英两套。
  * 边界：只用真实 React/Arco 组件，只替换 Bridge HTTP；字段形状与 bridge.v1.openapi.yaml 的 Publication / published_to 一致。
  */

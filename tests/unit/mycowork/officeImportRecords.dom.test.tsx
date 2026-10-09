@@ -111,16 +111,29 @@ describe('导入记录列表', () => {
     await waitFor(() => expect(new URLSearchParams(String(listCalls().at(-1)?.[0]).split('?')[1]).get('status')).toBeNull());
   });
 
-  it('加载态是骨架；读失败先静默重试一次，仍失败才出错误态，点“重试”恢复', async () => {
+  it('加载态是骨架；瞬时读失败由 bridge-client 重试，仍失败才出错误态，点“重试”恢复', async () => {
     let down = true;
     stub({ list: () => (down ? new Error('x') : pageOf([summary()])) });
     open();
     expect(document.querySelector('.arco-skeleton')).not.toBeNull();
     expect(await screen.findByText('没能读取导入记录', {}, LONG)).toBeInTheDocument();
-    expect(listCalls().length).toBeGreaterThanOrEqual(2); // 先静默重试过一次
+    expect(listCalls().length).toBeGreaterThanOrEqual(1);
     down = false;
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     expect(await screen.findByTestId('import-record')).toBeInTheDocument();
+  });
+
+  it('首次读到 404：直接出错误态，只发一次请求（读重试只在 bridge-client 一层）', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      String(url).startsWith('/bridge/v1/import-batches')
+        ? reply(404, { error: { code: 'NOT_FOUND', message: 'x' } })
+        : reply(200, { sources: [], projects: [], tags: [] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    open();
+    expect(await screen.findByText('没能读取导入记录', {}, { timeout: 600 })).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 1000)); // 越过原先的 800ms 静默重试
+    expect(listCalls()).toHaveLength(1);
   });
 
   it('有进行中的批次：静默刷新，间隔 5 秒起退避，上一拍没返回不排下一拍；没有进行中就不刷', async () => {

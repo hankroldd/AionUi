@@ -3,7 +3,7 @@
  * 只替换同源HTTP边界；真实ScopeChip、Modal、Checkbox与预览读取。
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ScopeChip, getScope, setScopeSelection } from '@mycowork/ui';
@@ -21,6 +21,9 @@ const row = (id: number) => ({
 });
 const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
+let total = 550;
+let failSearch = false;
+let resolveLate: ((r: Response) => void) | undefined;
 let pending = false;
 let pendingSignal: AbortSignal | undefined;
 async function browse() {
@@ -38,6 +41,9 @@ const apply = () => fireEvent.click(screen.getByRole('button', { name: '应用�
 
 describe('resource basket across pages', () => {
   beforeEach(() => {
+    total = 550;
+    failSearch = false;
+    resolveLate = undefined;
     pending = false;
     pendingSignal = undefined;
     setScopeSelection([]);
@@ -63,14 +69,22 @@ describe('resource basket across pages', () => {
           pendingSignal = init?.signal as AbortSignal;
           return new Promise(() => {});
         }
+        if (q.get('q') === '慢')
+          return new Promise<Response>((resolve) => {
+            resolveLate = resolve;
+          });
+        if (q.get('q') === '失败' && failSearch)
+          return reply({ error: { code: 'FORBIDDEN', message: 'fixture' } }, 403);
         const page = Number(q.get('page') ?? 1);
         const items =
           q.get('q') === '额外'
             ? [row(501)]
             : q.get('q') === '风险'
               ? [row(3)]
-              : Array.from({ length: 50 }, (_, i) => row((page - 1) * 50 + i));
-        return reply({ items, total: q.get('q') ? 1 : 550, page, page_size: 50 });
+              : q.get('q') === '失败'
+                ? [row(4)]
+                : Array.from({ length: 50 }, (_, i) => row((page - 1) * 50 + i));
+        return reply({ items, total: q.get('q') ? 1 : total, page, page_size: 50 });
       }
       throw new Error(`unexpected request ${url}`);
     });
@@ -171,5 +185,45 @@ describe('resource basket across pages', () => {
     await waitFor(() => expect(pendingSignal).toBeDefined());
     page.unmount();
     expect(pendingSignal!.aborted).toBe(true);
+  });
+  it('legacy picker also blocks new Secret entries and excludes them from select all', async () => {
+    total = 50;
+    render(<ScopeChip lang='zh-CN' />);
+    fireEvent.click(screen.getByRole('button', { name: /资料范围/ }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /青禾库/ }));
+    fireEvent.click(screen.getByRole('button', { name: '挑选文件', exact: true }));
+    const secret = await screen.findByRole('checkbox', { name: name(2), exact: true });
+    expect(secret).toBeDisabled();
+    expect(secret).not.toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: '全选', exact: true }));
+    apply();
+    await waitFor(() => expect(getScope().items[0]?.resource_ids).toHaveLength(49));
+    expect(getScope().items[0]?.resource_ids).not.toContain('res_2');
+  });
+
+  it('ignores a late search and preserves the basket through an HTTP failure and retry', async () => {
+    render(<ScopeChip lang='zh-CN' />);
+    const dialog = await browse();
+    fireEvent.click(await within(dialog).findByRole('checkbox', { name: name(1) }));
+    const input = within(dialog).getByRole('textbox', { name: '搜索此知识库的文件' });
+    fireEvent.change(input, { target: { value: '慢' } });
+    await waitFor(() => expect(resolveLate).toBeDefined());
+    fireEvent.change(input, { target: { value: '风险' } });
+    await within(dialog).findByRole('checkbox', { name: name(3) });
+    await act(async () => {
+      resolveLate!(reply({ items: [row(8)], total: 1, page: 1, page_size: 50 }));
+    });
+    expect(within(dialog).getByRole('checkbox', { name: name(3) })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('checkbox', { name: name(8) })).toBeNull();
+    failSearch = true;
+    fireEvent.change(input, { target: { value: '失败' } });
+    await within(dialog).findByText(/FORBIDDEN/);
+    expect(within(dialog).getByText('已选择 1 份')).toBeInTheDocument();
+    failSearch = false;
+    fireEvent.click(within(dialog).getByRole('button', { name: '重试' }));
+    await within(dialog).findByRole('checkbox', { name: name(4) });
+    await confirm(dialog);
+    apply();
+    await waitFor(() => expect(getScope().items[0]?.resource_ids).toEqual(['res_1']));
   });
 });

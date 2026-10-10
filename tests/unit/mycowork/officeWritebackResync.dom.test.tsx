@@ -113,7 +113,8 @@ describe('保存跟踪器的常驻通知', () => {
     fireEvent.click(resyncBtn()!); // 处理中再点无效
     expect(calls).toEqual(['{}']);
     await act(async () => release());
-    await waitFor(() => expect(body()).toHaveTextContent('已写回会话工作目录中的 方案.docx'));
+    await waitFor(() => expect(body()).toHaveTextContent(text.resyncDone));
+    expect(body()).not.toHaveTextContent('AI 下一步读到的就是你改后的内容');
     expect(resyncBtn()).toBeNull();
     expect(body()).not.toHaveTextContent(text.writeFailed('方案.docx'));
   });
@@ -127,7 +128,7 @@ describe('保存跟踪器的常驻通知', () => {
     await waitFor(() => expect(resyncBtn()).toBeEnabled());
     expect(body()).toHaveTextContent(text.writeFailed('方案.docx'));
     fireEvent.click(resyncBtn()!);
-    await waitFor(() => expect(body()).toHaveTextContent('已写回会话工作目录中的 方案.docx'));
+    await waitFor(() => expect(body()).toHaveTextContent(text.resyncDone));
   });
 
   it('请求出错（500）：保留按钮可再试；已同步（409）当作成功', async () => {
@@ -147,7 +148,18 @@ describe('保存跟踪器的常驻通知', () => {
     trackSave(text, 'eds_1');
     await waitFor(() => expect(resyncBtn()).not.toBeNull());
     fireEvent.click(resyncBtn()!);
-    await waitFor(() => expect(body()).toHaveTextContent('另存为 方案.人工编辑-1.docx'));
+    await waitFor(() => expect(body()).toHaveTextContent(text.resyncConflict('方案.人工编辑-1.docx')));
+    expect(body()).not.toHaveTextContent('在你编辑期间被改过');
+    expect(resyncBtn()).toBeNull();
+  });
+
+  it('不受理且原因不是已同步（not_failed / no_workspace_file）：中性提示、不说“已经同步”，按钮撤掉', async () => {
+    serve(failedView, [() => reply(409, { error: { code: 'EDIT_STATE_CONFLICT', reason: 'not_failed' } })]);
+    trackSave(text, 'eds_1');
+    await waitFor(() => expect(resyncBtn()).not.toBeNull());
+    fireEvent.click(resyncBtn()!);
+    await waitFor(() => expect(body()).toHaveTextContent(text.resyncOther));
+    expect(body()).not.toHaveTextContent(text.resyncNoNeed);
     expect(resyncBtn()).toBeNull();
   });
 
@@ -177,7 +189,7 @@ describe('ONLYOFFICE 编辑页结果态', () => {
     render(<OfficeEditSlot />);
     await waitFor(() => expect(body()).toHaveTextContent(text.writeFailedAny));
     fireEvent.click(resyncBtn()!);
-    await waitFor(() => expect(body()).toHaveTextContent('已写回会话工作目录中的 方案.docx'));
+    await waitFor(() => expect(body()).toHaveTextContent(text.resyncDone));
     expect(resyncBtn()).toBeNull();
     expect(body()).not.toHaveTextContent(text.writeFailedAny);
   });
@@ -224,7 +236,7 @@ describe('文本编辑页', () => {
     await run('failed', wb('failed', { relative_path: 'notes.md' }));
     await waitFor(() => expect(body()).toHaveTextContent('没能写回会话工作目录中的 notes.md'));
     fireEvent.click(resyncBtn()!);
-    await waitFor(() => expect(body()).toHaveTextContent('已写回会话工作目录中的 notes.md'));
+    await waitFor(() => expect(body()).toHaveTextContent(text.resyncDone));
     expect(body()).toHaveTextContent('已保存为新版本。');
     expect(resyncBtn()).toBeNull();
   });
@@ -246,7 +258,25 @@ describe('版本页顶部提示条（刷新后也有）', () => {
     fireEvent.click(within(banner).getByRole('button', { name: text.resync }));
     await waitFor(() => expect(screen.queryByTestId('writeback-resync-banner')).toBeNull());
     expect(b.calls.filter((c) => c.method === 'POST' && c.url.endsWith('/workspace-writeback'))).toHaveLength(1);
-    await waitFor(() => expect(body()).toHaveTextContent('已写回会话工作目录中的 a.docx'));
+    await waitFor(() => expect(body()).toHaveTextContent(text.resyncDone));
+  });
+  it('版本页重新同步出结果后，仍挂着的 failed 常驻通知一起撤掉（A441 的同步部分）', async () => {
+    let failed = true;
+    installBridge({
+      total: 3,
+      writebackFailed: () => failed,
+      resync: () => ((failed = false), json({ revision_id: 'rev-3', workspace_writeback_status: 'written', workspace_writeback: wb('written') })),
+    });
+    const inner = fetch;
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) =>
+      url === '/bridge/v1/edit-sessions/eds_1' ? new Response(JSON.stringify({ ...failedView, resource_id: RES })) : inner(url, init)
+    );
+    trackSave(text, 'eds_1');
+    await waitFor(() => expect(body()).toHaveTextContent(text.writeFailed('方案.docx')));
+    mount();
+    const banner = await screen.findByTestId('writeback-resync-banner');
+    fireEvent.click(within(banner).getByRole('button', { name: text.resync }));
+    await waitFor(() => expect(body()).not.toHaveTextContent(text.writeFailed('方案.docx')));
   });
   it('workspace_writeback_failed=false 或旧后端没有该字段：没有提示条', async () => {
     installBridge({ total: 3 });

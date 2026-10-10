@@ -117,7 +117,7 @@ describe('导入记录列表', () => {
     open();
     expect(document.querySelector('.arco-skeleton')).not.toBeNull();
     expect(await screen.findByText('没能读取导入记录', {}, LONG)).toBeInTheDocument();
-    expect(listCalls().length).toBeGreaterThanOrEqual(1);
+    expect(listCalls()).toHaveLength(3); // 空体 503 属瞬时：bridge-client 一层重试（首发 + delays 两次）；页面层不再叠一层
     down = false;
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     expect(await screen.findByTestId('import-record')).toBeInTheDocument();

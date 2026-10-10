@@ -21,6 +21,8 @@ export type Hooks = {
   publications?: () => Response | Promise<Response>;
   preview?: () => Response | Promise<Response>;
   metadata?: () => Response | Promise<Response>;
+  writebackFailed?: () => boolean; // 时间线的 workspace_writeback_failed（A375）
+  resync?: () => Response | Promise<Response>; // POST /resources/{id}/workspace-writeback（A373）
 };
 
 export const revItem = (k: number, total: number, over: object = {}) => ({
@@ -62,6 +64,7 @@ export function installBridge(h: Hooks) {
       page,
       page_size: 50,
       total: hooks.total,
+      workspace_writeback_failed: hooks.writebackFailed?.() ?? false,
     };
   };
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
@@ -78,6 +81,8 @@ export function installBridge(h: Hooks) {
     const rs = /\/revisions\/([^/]+)\/restore$/.exec(url);
     if (rs && method === 'POST')
       return hooks.restore?.(body, decodeURIComponent(rs[1] ?? '')) ?? json({ error: { code: 'INTERNAL' } }, 500);
+    if (url.endsWith('/workspace-writeback') && method === 'POST')
+      return hooks.resync?.() ?? json({ error: { code: 'INTERNAL' } }, 500);
     const ch = /\/changes\?from=([^&]+)&to=([^&]+)/.exec(url);
     if (ch) {
       const [from, to] = [decodeURIComponent(ch[1] ?? ''), decodeURIComponent(ch[2] ?? '')];

@@ -115,6 +115,63 @@ describe('resource basket across pages', () => {
     await waitFor(() => expect(getScope().items[0]?.resource_ids).toEqual(['res_1', 'res_51', 'res_3']));
   });
 
+  it('keeps a newly listed ID after confirmation despite an older complete legacy snapshot', async () => {
+    let reads = 0;
+    const serve = request.getMockImplementation()!;
+    request.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.startsWith('/bridge/v1/resources?')) {
+        const items = ++reads === 1 ? [row(1)] : [row(1), row(3)];
+        return reply({ items, total: items.length, page: 1, page_size: 50 });
+      }
+      return serve(url, init);
+    });
+    setScopeSelection([{ source_id: 'kb_a', name: '青禾库', resource_ids: ['res_1'] }]);
+    render(<ScopeChip lang='zh-CN' />);
+    fireEvent.click(screen.getByRole('button', { name: /资料范围/ }));
+    await screen.findByRole('checkbox', { name: name(1), exact: true });
+    fireEvent.click(screen.getByRole('button', { name: '浏览全部 青禾库' }));
+    const dialog = await screen.findByRole('dialog', { name: '浏览 青禾库' });
+    fireEvent.click(await within(dialog).findByRole('checkbox', { name: name(3), exact: true }));
+    expect(within(dialog).getByText('已选择 2 份')).toBeInTheDocument();
+    await confirm(dialog);
+    apply();
+    await waitFor(() => expect(getScope().items[0]?.resource_ids).toEqual(['res_1', 'res_3']));
+  });
+
+  it('narrows on a new tag result and ignores the previous tag response arriving late', async () => {
+    let finishOld: ((value: Response) => void) | undefined;
+    const serve = request.getMockImplementation()!;
+    request.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/bridge/v1/tags')
+        return reply({
+          tags: [
+            { tag_id: 'tag_old', name: '旧标签（虚构）', parent_id: null },
+            { tag_id: 'tag_new', name: '新标签（虚构）', parent_id: null },
+          ],
+        });
+      if (url.startsWith('/bridge/v1/resources?')) {
+        if (new URL(url, 'http://localhost').searchParams.getAll('tag_id').includes('tag_new'))
+          return reply({ items: [row(3)], total: 1, page: 1, page_size: 50 });
+        return new Promise<Response>((resolve) => {
+          finishOld = resolve;
+        });
+      }
+      return serve(url, init);
+    });
+    setScopeSelection([{ source_id: 'kb_a', name: '青禾库', tag_ids: ['tag_old'], resource_ids: ['res_1', 'res_3'] }]);
+    render(<ScopeChip lang='zh-CN' />);
+    fireEvent.click(screen.getByRole('button', { name: /资料范围/ }));
+    const tags = await screen.findByLabelText('只要带这些标签的（可选）');
+    await waitFor(() => expect(finishOld).toBeTypeOf('function'));
+    fireEvent.click(tags);
+    fireEvent.click(await screen.findByText('新标签（虚构）'));
+    await screen.findByRole('checkbox', { name: name(3), exact: true });
+    await act(async () => finishOld!(reply({ items: [row(1)], total: 1, page: 1, page_size: 50 })));
+    apply();
+    await waitFor(() => expect(getScope().items[0]?.resource_ids).toEqual(['res_3']));
+    expect(getScope().items[0]?.tag_ids).toContain('tag_new');
+  });
+
   it('cancelling returns focus and leaves the original explicit selection intact', async () => {
     setScopeSelection([{ source_id: 'kb_a', name: '青禾库', resource_ids: ['res_4'] }]);
     render(<ScopeChip lang='zh-CN' />);

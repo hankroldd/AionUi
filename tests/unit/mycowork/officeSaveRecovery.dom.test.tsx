@@ -175,6 +175,19 @@ describe('跟踪器：recovery_required 不是终态', () => {
     await advance(12_000);
     expect(gets('eds_1').length).toBe(n);
   });
+
+  it('resetSaveTracker 后在途请求以网络失败返回（距上次成功已超 15 秒）：不再弹“网络不通”', async () => {
+    fake();
+    let fail: (e: Error) => void = () => undefined;
+    fetchMock.mockImplementation(() => new Promise((_, rej) => (fail = rej))); // 第一拍一直挂着
+    trackSave(text, 'eds_1');
+    await advance(16_000); // 在途那一拍已超过 NET_DOWN_MS
+    resetSaveTracker();
+    await act(async () => fail(new TypeError('Failed to fetch')));
+    await advance(1000);
+    expect(body()).not.toHaveTextContent(text.netDown);
+    expect(note()).toBeNull();
+  });
 });
 
 describe('继续编辑 / 放弃：动作前先重读会话', () => {

@@ -210,7 +210,8 @@ describe('OfficeTextEditSlot', () => {
 
   it.each([
     [422, 'UNSUPPORTED_ENCODING', '文件不是 UTF-8 编码'],
-    [413, 'PAYLOAD_TOO_LARGE', '文件太大，不能在线编辑'],
+    [413, 'PAYLOAD_TOO_LARGE', '文件超过 1 MB，不能在这里编辑'],
+    [404, 'NOT_FOUND', '只有文件所有者能在线编辑'],
   ])('open failure %i %s: no retry button, reason shown after the open-failed prefix', async (status, code, reason) => {
     fetchMock.mockImplementation(async (url: string) =>
       url === '/bridge/v1/text-edit-sessions' ? reply(status, { error: { code, message: 'x' } }) : reply(204, null),
@@ -220,5 +221,20 @@ describe('OfficeTextEditSlot', () => {
     expect(screen.queryByRole('button', { name: '重试' })).toBeNull();
     expect(screen.getByRole('button', { name: '版本与变化' })).toBeInTheDocument();
     expect(calls('/text-edit-sessions')).toHaveLength(1);
+  });
+
+  it('409 EDIT_LEASE_HELD: keeps the retry button, with the text-page wording (no mention of the AI)', async () => {
+    let opens = 0;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/bridge/v1/text-edit-sessions')
+        return ++opens === 1 ? reply(409, { error: { code: 'EDIT_LEASE_HELD', message: 'x' } }) : reply(201, session());
+      return reply(204, null);
+    });
+    render(<OfficeTextEditSlot />);
+    expect(await screen.findByText(/这个文件正在别处编辑；请先在那里保存或关闭/)).toBeInTheDocument();
+    expect(screen.queryByText(/AI 暂时不能改/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+    expect(await screen.findByTestId('md-editor')).toBeInTheDocument();
+    expect(calls('/text-edit-sessions')).toHaveLength(2);
   });
 });

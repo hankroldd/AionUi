@@ -65,11 +65,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function start(strict = false) {
+async function start(strict = false, expansion = false) {
   const component = <ScopeStrip {...props} />;
   const mounted = render(strict ? <React.StrictMode>{component}</React.StrictMode> : component);
   fireEvent.click(await screen.findByRole('button', { name: '更改范围' }));
-  fireEvent.click(await screen.findByText('虚构库b'));
+  fireEvent.click(await screen.findByText(expansion ? '虚构库new' : '虚构库b'));
   fireEvent.click(screen.getByRole('button', { name: '应用', exact: true }));
   await waitFor(() => expect(release).toBeTypeOf('function'));
   return mounted;
@@ -89,7 +89,7 @@ async function finish(result: 'shrunk' | 'expanded' | 'error') {
 for (const invalidation of ['unmount', 'clear', 'replace', 'conversation', 'conversation ABA'] as const) {
   for (const result of ['shrunk', 'expanded', 'error'] as const) {
     it(`${invalidation}: late ${result} cannot write, navigate, notify or refresh`, async () => {
-      const mounted = await start();
+      const mounted = await start(false, result === 'expanded');
       if (invalidation === 'unmount') mounted.unmount();
       if (invalidation === 'clear') enterProject(undefined);
       if (invalidation === 'replace') setScopeSelection([{ source_id: 'src_new', name: '新草稿资料' }]);
@@ -132,7 +132,7 @@ it.each([false, true])('active narrowing retains project, subset and rules (Stri
   });
 });
 it('active expansion notifies and refreshes once without replacing the draft scope', async () => {
-  await start();
+  await start(false, true);
   const current = getScope();
   const beforeReads = reads();
   await finish('expanded');
@@ -169,3 +169,63 @@ it.each(['shrunk', 'error'] as const)(
     expect(screen.queryByRole('dialog', { name: '更改本会话的资料范围' })).not.toBeNull();
   }
 );
+
+for (const newScene of ['cancel', 'close-reopen-edit', 'local-edit'] as const) {
+  for (const result of ['shrunk', 'expanded', 'error'] as const) {
+    it(`${newScene}: late ${result} must not affect new dialog selection`, async () => {
+      await start(false, result === 'expanded');
+      const before = getScope();
+      if (newScene !== 'local-edit') {
+        fireEvent.click(screen.getByRole('button', { name: '取消', exact: true }));
+        await act(async () => {
+          await new Promise((r) => setTimeout(r, 450));
+        });
+        expect(screen.queryByRole('dialog', { name: '更改本会话的资料范围' })).toBeNull();
+        if (newScene === 'close-reopen-edit') {
+          fireEvent.click(screen.getByRole('button', { name: '更改范围' }));
+          await screen.findByText('虚构库b');
+          await waitFor(() => expect(fetchMock.mock.calls.filter(([u]) => u === '/bridge/v1/scopes')).toHaveLength(2));
+          // Initial a+b is restored, so the new choice is b rather than old pending a.
+          fireEvent.click(screen.getByText('虚构库a'));
+        }
+      } else {
+        // Controls remain editable. Toggle new relative to the pending selection (valid expansion adds new; contraction removes b).
+        fireEvent.click(screen.getByText('虚构库new'));
+      }
+      expect(getScope()).toBe(before); // The real dialog keeps edits local until apply.
+      const beforeReads = reads();
+      await finish(result);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 450));
+      });
+      console.log(
+        JSON.stringify({
+          newScene,
+          result,
+          scopeChanged: getScope() !== before,
+          carriedPlanId: getScope().carriedPlanId,
+          navigation: shrink.mock.calls.length,
+          success: vi.mocked(Message.success).mock.calls.length,
+          error: vi.mocked(Message.error).mock.calls.length,
+          extraReads: reads() - beforeReads,
+          dialogOpen: !!screen.queryByRole('dialog', { name: '更改本会话的资料范围' }),
+        })
+      );
+      expect({
+        scope: getScope() === before,
+        navigation: shrink.mock.calls.length,
+        success: vi.mocked(Message.success).mock.calls.length,
+        error: vi.mocked(Message.error).mock.calls.length,
+        extraReads: reads() - beforeReads,
+        dialogOpen: !!screen.queryByRole('dialog', { name: '更改本会话的资料范围' }),
+      }).toEqual({
+        scope: true,
+        navigation: 0,
+        success: 0,
+        error: 0,
+        extraReads: 0,
+        dialogOpen: newScene !== 'cancel',
+      });
+    });
+  }
+}

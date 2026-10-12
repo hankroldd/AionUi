@@ -94,16 +94,23 @@ it('a failed list has one readable error and Retry; an expired login hides memor
 it('modify409 keeps its draft and submits the revision returned by the explicit reload', async () => {
   let revision = 2,
     status = 409;
+  let finishReload: (() => void) | undefined;
   fetchMock.mockImplementation(async (url: string) => {
     if (url.includes('/actions')) {
       revision = 3;
       return reply(status, { error: { code: 'MEMORY_STATE_CONFLICT' } });
     }
-    if (url.includes('/memory-items?'))
-      return reply(200, {
+    if (url.includes('/memory-items?')) {
+      const response = reply(200, {
         items: url.includes('status=candidate') ? [{ ...item('candidate', '原事实（虚构）'), revision }] : [],
         total: 1,
       });
+      if (revision === 3 && status === 409)
+        return new Promise((resolve) => {
+          finishReload = () => resolve(response);
+        });
+      return response;
+    }
     return reply(200, { paused: false });
   });
   render(<MemoryPage lang='zh-CN' />);
@@ -117,8 +124,16 @@ it('modify409 keeps its draft and submits the revision returned by the explicit 
   fireEvent.click(screen.getByRole('button', { name: '待确认' }));
   expect(await screen.findByRole('textbox')).toHaveValue('保留的修改（虚构）');
   fireEvent.click(screen.getByRole('button', { name: '保存' }));
-  await screen.findByText('条目已被更新，已重新读取；请再操作一次。');
-  expect(await screen.findByRole('textbox')).toHaveValue('保留的修改（虚构）');
+  await screen.findByText(/条目已被更新/);
+  expect(screen.queryByText(/已重新读取/)).toBeNull();
+  expect(screen.getByText('条目已被更新；操作按钮可用后，请再试一次。')).toBeInTheDocument();
+  expect(screen.getByRole('textbox')).toHaveValue('保留的修改（虚构）');
+  expect(screen.getByRole('button', { name: '保存' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  expect(fetchMock.mock.calls.filter(([url]) => url.includes('/actions'))).toHaveLength(1);
+  await waitFor(() => expect(finishReload).toBeTypeOf('function'));
+  await act(async () => finishReload!());
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存' })).toBeEnabled());
   status = 200;
   fireEvent.click(screen.getByRole('button', { name: '保存' }));
   await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url.includes('/actions'))).toHaveLength(2));

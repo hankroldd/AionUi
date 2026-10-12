@@ -123,7 +123,7 @@ describe('OfficeMemorySlot', () => {
     await screen.findByText('先写结论');
     const before = calls('GET', '/memory-items?').length;
     fireEvent.click(screen.getAllByRole('button', { name: '接受' })[0] as HTMLElement);
-    expect(await screen.findByText('条目已被更新，已重新读取；请再操作一次。')).toBeInTheDocument();
+    expect(await screen.findByText('条目已被更新；操作按钮可用后，请再试一次。')).toBeInTheDocument();
     // 重读在提示渲染之后的 effect 里发出，不能紧跟着同步断言
     await waitFor(() => expect(calls('GET', '/memory-items?').length).toBeGreaterThan(before));
   });

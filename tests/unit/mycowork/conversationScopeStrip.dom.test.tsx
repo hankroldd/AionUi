@@ -241,18 +241,35 @@ describe('ConversationScopeSlot', () => {
       expect(calls('POST', '/context-plans')).toHaveLength(2);
     });
 
-    it('restores the tag narrowing from brief.scopes, so an unchanged apply keeps it instead of widening to the whole base (D144)', async () => {
+    it('keeps a tag-created subset frozen on unchanged apply instead of recomputing the tag (A68)', async () => {
       const scopes = [
         { selector: 'knowledge_base', id: 'src_a', tag_ids: ['tag_1'] },
         { selector: 'knowledge_base', id: 'src_b' },
       ];
-      bridge('expanded', { ...CONTEXT, brief: { ...CONTEXT.brief, scopes } });
+      bridge('expanded', {
+        ...CONTEXT,
+        brief: {
+          ...CONTEXT.brief,
+          scopes,
+          groups: CONTEXT.brief.groups.map((g, i) =>
+            i === 0 ? { ...g, mode: 'subset', member_count: 1, counts: counts(1, 0, 0, 0) } : g),
+        },
+      });
       await openDrawer();
-      expect(await screen.findByText('符合条件 1 份')).toBeInTheDocument();
+      expect(await screen.findByText('保留原子集 1 份')).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: '应用' }));
       await waitFor(() => expect(calls('POST', '/context-plans')).toHaveLength(1));
       const [[, post]] = calls('POST', '/context-plans');
-      expect(JSON.parse(String(post?.body))).toMatchObject({ parent_plan_id: 'plan_1', scopes });
+      expect(JSON.parse(String(post?.body))).toMatchObject({
+        parent_plan_id: 'plan_1',
+        scopes: [
+          { selector: 'plan_group', id: 'src_a', plan_id: 'plan_1' },
+          { selector: 'knowledge_base', id: 'src_b' },
+        ],
+        excludes: [],
+        policy: CONTEXT.brief.policy,
+      });
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/bridge/v1/resources?'))).toHaveLength(0);
     });
 
     it('refuses an empty selection and keeps the drawer open', async () => {

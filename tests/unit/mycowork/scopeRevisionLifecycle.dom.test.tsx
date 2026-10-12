@@ -155,3 +155,17 @@ it('active failure leaves the selection for an explicit successful retry', async
   expect(JSON.parse(posts()[0][1].body)).toEqual(JSON.parse(posts()[1][1].body));
   expect(shrink).toHaveBeenCalledTimes(1);
 });
+
+it.each(['shrunk', 'error'] as const)(
+  'stale %s is not a successful apply that closes the current dialog',
+  async (result) => {
+    await start();
+    enterProject(undefined);
+    await finish(result);
+    // Pinned Arco Modal retains its exiting portal for 400 ms; inspect after that exit can complete.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    });
+    expect(screen.queryByRole('dialog', { name: '更改本会话的资料范围' })).not.toBeNull();
+  }
+);

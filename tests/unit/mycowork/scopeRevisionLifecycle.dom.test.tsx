@@ -3,7 +3,7 @@
  * Only Bridge HTTP and notification outputs are substituted; real strip, dialog and store run together.
  */
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Message } from '@arco-design/web-react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
@@ -51,6 +51,21 @@ beforeEach(() => {
     if (url === '/bridge/v1/scopes') return reply(200, { sources, projects: [] });
     if (url === '/bridge/v1/tags') return reply(200, { tags: [] });
     if (url === '/bridge/v1/saved-views') return reply(200, { views: [] });
+    if (url.startsWith('/bridge/v1/resources?'))
+      return reply(200, {
+        total: 2,
+        page: 1,
+        page_size: 50,
+        items: [1, 2].map((n) => ({
+          resource_id: `r_file${n}`,
+          file_name: `虚构文件${n}.md`,
+          origin: 'kb_native',
+          tag_ids: [],
+          updated_at: '2026-10-12T00:00:00Z',
+          state: 'ready',
+        })),
+      });
+    if (url === '/bridge/v1/resources/r_file1/preview') return { ...reply(200, {}), text: async () => '虚构只读正文' };
     if (url === '/bridge/v1/context-plans')
       return new Promise((resolve) => {
         release = resolve;
@@ -65,11 +80,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function start(strict = false, expansion = false) {
+async function start(strict = false, expansion = false, preselectFile = false) {
   const component = <ScopeStrip {...props} />;
   const mounted = render(strict ? <React.StrictMode>{component}</React.StrictMode> : component);
   fireEvent.click(await screen.findByRole('button', { name: '更改范围' }));
   fireEvent.click(await screen.findByText(expansion ? '虚构库new' : '虚构库b'));
+  if (preselectFile) {
+    const browser = await openBasket();
+    fireEvent.click(await within(browser).findByRole('checkbox', { name: '虚构文件1.md' }));
+    fireEvent.click(within(browser).getByRole('button', { name: '使用已选文件' }));
+    await within(screen.getByTestId('mycowork-scope-narrow-src_a')).findByText('虚构文件1.md');
+  }
   fireEvent.click(screen.getByRole('button', { name: '应用', exact: true }));
   await waitFor(() => expect(release).toBeTypeOf('function'));
   return mounted;
@@ -229,3 +250,51 @@ for (const newScene of ['cancel', 'close-reopen-edit', 'local-edit'] as const) {
     });
   }
 }
+
+async function openBasket() {
+  const source = screen.getByText('虚构库a').closest('.mcw-scope-item') as HTMLElement;
+  fireEvent.click(within(source).getByRole('button', { name: /^(重新选择文件|浏览全部 虚构库a)$/ }));
+  return screen.findByRole('dialog', { name: '浏览 虚构库a' });
+}
+for (const edit of ['checkbox', 'page', 'clear'] as const) {
+  for (const result of ['shrunk', 'expanded', 'error'] as const) {
+    it(`unconfirmed basket ${edit}: late ${result} cannot affect the current selection`, async () => {
+      await start(false, result === 'expanded', true);
+      const browser = await openBasket();
+      const first = await within(browser).findByRole('checkbox', { name: '虚构文件1.md' });
+      expect(first).toBeChecked();
+      if (edit === 'checkbox') fireEvent.click(within(browser).getByRole('checkbox', { name: '虚构文件2.md' }));
+      if (edit === 'page') fireEvent.click(within(browser).getByRole('button', { name: '选择本页' }));
+      if (edit === 'clear') fireEvent.click(within(browser).getByRole('button', { name: '清空已选' }));
+      const scope = getScope();
+      const beforeReads = reads();
+      await finish(result);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 450));
+      });
+      expect(getScope()).toBe(scope);
+      expect(shrink).not.toHaveBeenCalled();
+      expect(Message.success).not.toHaveBeenCalled();
+      expect(Message.error).not.toHaveBeenCalled();
+      expect(reads()).toBe(beforeReads);
+      expect(screen.queryByRole('dialog', { name: '更改本会话的资料范围' })).not.toBeNull();
+      expect(screen.queryByRole('dialog', { name: '浏览 虚构库a' })).not.toBeNull();
+      expect((first as HTMLInputElement).checked).toBe(edit !== 'clear');
+    });
+  }
+}
+it.each([false, true])('search and read-only basket preview preserve active revision StrictMode=%s', async (strict) => {
+  await start(strict);
+  fireEvent.change(screen.getByRole('textbox', { name: '搜索知识库、智能分组（含其标签）或已展开清单里的文件名' }), {
+    target: { value: '虚构' },
+  });
+  const browser = await openBasket();
+  fireEvent.click(await within(browser).findByRole('button', { name: '预览 虚构文件1.md' }));
+  const preview = await screen.findByRole('dialog', { name: '虚构文件1.md' });
+  await within(preview).findByText('虚构只读正文');
+  fireEvent.click(within(preview).getByRole('button', { name: '返回选择' }));
+  fireEvent.click(within(browser).getByRole('button', { name: '返回范围' }));
+  await finish('shrunk');
+  expect(shrink).toHaveBeenCalledTimes(1);
+  expect(getScope().carriedPlanId).toBe('plan_next');
+});

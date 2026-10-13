@@ -64,7 +64,7 @@ it('one portal owns the four real statuses; selection and collapse use separate 
   }
 });
 
-it('a failed list has one readable error and Retry; an expired login hides memory rows', async () => {
+it('a temporary failed list can retry; an expired login hides rows and has no Retry', async () => {
   let code = 503;
   fetchMock.mockImplementation((url: string) =>
     Promise.resolve(
@@ -84,10 +84,8 @@ it('a failed list has one readable error and Retry; an expired login hides memor
   await screen.findByText('请登录后查看记忆');
   expect(screen.queryByTestId('memory-item')).toBeNull();
   await waitFor(() => expect(screen.getByRole('switch', { name: '暂停自动沉淀' })).toBeDisabled());
-  code = 200;
-  fireEvent.click(screen.getByRole('button', { name: '重试' }));
-  await screen.findByText('这一栏还没有条目');
-  expect(screen.queryByRole('alert')).toBeNull();
+  expect(screen.queryByRole('button', { name: '重试' })).not.toBeInTheDocument();
+  expect(screen.getByText('登录已过期，请重新登录后再试。')).toBeVisible();
   expect(fetchMock.mock.calls.filter(([, init]) => init?.body)).toHaveLength(0);
 });
 

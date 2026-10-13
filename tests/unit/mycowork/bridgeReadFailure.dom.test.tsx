@@ -59,7 +59,8 @@ describe('详情输入与现场', () => {
   });
 
   it.each([new BridgeError('unauthenticated'), new BridgeError('failed', 'FORBIDDEN'),
-    new BridgeError('failed', 'NOT_FOUND'), new BridgeError('scope_changed')])('不可直接重试的错误：%s', (error) => {
+    new BridgeError('failed', 'NOT_FOUND'), new BridgeError('failed', 'HTTP 403'),
+    new BridgeError('failed', 'HTTP 404'), new BridgeError('scope_changed')])('不可直接重试的错误：%s', (error) => {
     render(<BridgeReadFailure lang='en' error={error} onRetry={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain('contact your administrator (details:');
@@ -110,7 +111,24 @@ describe.each(['imports', 'memory', 'browser'] as const)('真实入口 %s', (pag
     const before = fetchMock.mock.calls.length;
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument());
+    if (page === 'imports') await screen.findByText('No imports yet');
+    else await waitFor(() => expect(document.querySelector(page === 'memory' ? '.mcw-mem-count' : '.arco-pagination')).toBeVisible());
+    await waitFor(() => expect(screen.queryByTestId('bridge-read-failure')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
     if (page === 'browser') expect(screen.getByText('1 selected', { exact: true })).toBeVisible();
   });
+});
+
+it('重试仍失败且没有合法诊断码，不能把详情消失算成成功', async () => {
+  render(<ImportsPage lang='en' />);
+  await screen.findByRole('button', { name: 'Details' });
+  fetchMock.mockImplementation(async () => reply(422, { error: { code: 'invalid-code /private/fixture.key' } }));
+  const before = fetchMock.mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));
+  await screen.findByTestId('bridge-read-failure');
+  expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
+  expect(screen.queryByText('No imports yet')).not.toBeInTheDocument();
+  expect(document.body.textContent).not.toContain('/private/fixture.key');
 });

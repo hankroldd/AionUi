@@ -23,6 +23,7 @@ const reply = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 let total = 550;
 let failSearch = false;
+let searchError = 'INTERNAL';
 let resolveLate: ((r: Response) => void) | undefined;
 let pending = false;
 let pendingSignal: AbortSignal | undefined;
@@ -43,6 +44,7 @@ describe('resource basket across pages', () => {
   beforeEach(() => {
     total = 550;
     failSearch = false;
+    searchError = 'INTERNAL';
     resolveLate = undefined;
     pending = false;
     pendingSignal = undefined;
@@ -74,7 +76,7 @@ describe('resource basket across pages', () => {
             resolveLate = resolve;
           });
         if (q.get('q') === '失败' && failSearch)
-          return reply({ error: { code: 'FORBIDDEN', message: 'fixture' } }, 403);
+          return reply({ error: { code: searchError, message: 'fixture' } }, searchError === 'FORBIDDEN' ? 403 : 422);
         const page = Number(q.get('page') ?? 1);
         const items =
           q.get('q') === '额外'
@@ -258,6 +260,20 @@ describe('resource basket across pages', () => {
     expect(getScope().items[0]?.resource_ids).not.toContain('res_2');
   });
 
+  it('permission failure keeps the basket and query without offering an ineffective retry', async () => {
+    render(<ScopeChip lang='zh-CN' />);
+    const dialog = await browse();
+    fireEvent.click(await within(dialog).findByRole('checkbox', { name: name(1) }));
+    searchError = 'FORBIDDEN';
+    failSearch = true;
+    const input = within(dialog).getByRole('textbox', { name: '搜索此知识库的文件' });
+    fireEvent.change(input, { target: { value: '失败' } });
+    await within(dialog).findByText('你没有权限查看这些资料，请联系管理员。');
+    expect(within(dialog).queryByRole('button', { name: '重试' })).toBeNull();
+    expect(within(dialog).getByText('已选择 1 份')).toBeVisible();
+    expect(input).toHaveValue('失败');
+  });
+
   it('ignores a late search and preserves the basket through an HTTP failure and retry', async () => {
     render(<ScopeChip lang='zh-CN' />);
     const dialog = await browse();
@@ -274,7 +290,10 @@ describe('resource basket across pages', () => {
     expect(within(dialog).queryByRole('checkbox', { name: name(8) })).toBeNull();
     failSearch = true;
     fireEvent.change(input, { target: { value: '失败' } });
-    await within(dialog).findByText(/FORBIDDEN/);
+    const details = await within(dialog).findByRole('button', { name: '详情' });
+    expect(within(dialog).queryByText('INTERNAL', { exact: true })).toBeNull();
+    fireEvent.click(details);
+    expect(within(dialog).getByText('INTERNAL', { exact: true })).toBeVisible();
     expect(within(dialog).getByText('已选择 1 份')).toBeInTheDocument();
     failSearch = false;
     fireEvent.click(within(dialog).getByRole('button', { name: '重试' }));

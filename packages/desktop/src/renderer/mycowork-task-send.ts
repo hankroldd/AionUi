@@ -99,6 +99,10 @@ export async function sendOfficeDraft(
   const result = await submitOfficeTask({ ...owner, draft: saved, ...options });
   if (!result) return null;
   if (!officeTaskAccepted(result.run)) {
+    if (result.run.status === 'failed' && result.run.delivery_phase === 'rejected') {
+      await draft.accept(saved.state, saved.state);
+      throw new Error('任务尚未受理：投递已明确拒绝，输入已保留；请检查后再次点击发送。');
+    }
     const unknown = result.run.delivery_phase === 'unknown' || result.run.status === 'recovery_required';
     throw new Error(
       unknown

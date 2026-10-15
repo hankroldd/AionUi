@@ -5,6 +5,7 @@
  */
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import i18n from 'i18next';
+import useSWR from 'swr';
 import { useTranslation } from 'react-i18next';
 import { useInRouterContext, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { BookOpen } from '@icon-park/react';
@@ -21,6 +22,7 @@ import {
 import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
 import MarkdownView from '@/renderer/components/Markdown';
 import type { ISessionMcpServer, TChatConversation } from '@/common/config/storage';
+import { useBranchAdapter } from '@/renderer/mycowork-branches';
 import {
   askDropChoice,
   CompositionPage,
@@ -38,7 +40,45 @@ import {
   bindScopedConversation,
   isSceneAssistant,
   prepareScopedSession,
+  BranchMessageButton,
+  fetchConversationContext,
 } from '@mycowork/ui';
+
+/** PR10消息动作注册；普通聊天保留原按钮，办公状态未读到时不绕过分支登记。 */
+export const MyCoworkMessageBranchSlot: React.FC<{
+  conversationId?: string;
+  messageId: string;
+  isLastMessage: boolean;
+  hasTurnAnchor: boolean;
+  assistantId?: string;
+  fallback: React.ReactNode;
+}> = ({ conversationId, messageId, isLastMessage, hasTurnAnchor, assistantId, fallback }) => {
+  const { i18n: current } = useTranslation();
+  const ownerKey = useOwnerKey();
+  const adapter = useBranchAdapter();
+  const scene = isSceneAssistant(assistantId);
+  const { data, error } = useSWR(
+    ownerKey && conversationId && !scene ? ['mycowork-branch-context', ownerKey, conversationId] : null,
+    ([, , id]) => fetchConversationContext(id)
+  );
+  if (!conversationId) return <>{fallback}</>;
+  if (!scene && data === null) return <>{fallback}</>;
+  if (!ownerKey || (!scene && (!data || error))) return null;
+  return (
+    <BranchMessageButton
+      key={`${ownerKey}:${conversationId}:${messageId}`}
+      lang={current.language}
+      ownerKey={ownerKey}
+      adapter={adapter}
+      anchor={{
+        conversation_id: conversationId,
+        message_id: messageId,
+        is_last_message: isLastMessage,
+        has_turn_anchor: hasTurnAnchor,
+      }}
+    />
+  );
+};
 
 /**
  * Mount point: the "sources" scope chip above the Guid (new task) input. When the Guid page was opened from a
@@ -271,11 +311,13 @@ export const OfficeVersionsSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   const { resourceId = '' } = useParams();
   const ownerKey = useOwnerKey();
+  const branchAdapter = useBranchAdapter();
   return (
     <VersionsPage
       lang={current.language}
       resourceId={resourceId}
       ownerKey={ownerKey}
+      branchAdapter={branchAdapter}
       renderMarkdown={(content, overrides) => <MarkdownView components={overrides}>{content}</MarkdownView>}
     />
   );
@@ -333,6 +375,18 @@ const PreviewEditEntry: React.FC<{ relativePath?: string }> = ({ relativePath })
 };
 
 // [mycowork] ADR-0025：原生文件只引用注册出口，持久化适配不散入平台组件。
-export { DraftStatus, handoffGuidDraft, useGuidPersistentDraft, useConversationPersistentDraft } from './mycowork-drafts';
+export {
+  DraftStatus,
+  handoffGuidDraft,
+  useGuidPersistentDraft,
+  useConversationPersistentDraft,
+} from './mycowork-drafts';
 export type { PersistentDraft } from './mycowork-drafts';
-export { captureOfficeDraftState, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn } from './mycowork-task-send';
+export {
+  captureOfficeDraftState,
+  hydrateOfficeTaskRuntime,
+  isOfficeConversation,
+  officeTaskRuntime,
+  sendOfficeDraft,
+  stopOfficeTurn,
+} from './mycowork-task-send';

@@ -23,6 +23,7 @@ import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Previe
 import MarkdownView from '@/renderer/components/Markdown';
 import type { ISessionMcpServer, TChatConversation } from '@/common/config/storage';
 import { useBranchAdapter } from '@/renderer/mycowork-branches';
+import { useReviewAdapter } from '@/renderer/mycowork-reviews';
 import {
   askDropChoice,
   CompositionPage,
@@ -312,12 +313,14 @@ export const OfficeVersionsSlot: React.FC = () => {
   const { resourceId = '' } = useParams();
   const ownerKey = useOwnerKey();
   const branchAdapter = useBranchAdapter();
+  const reviewAdapter = useReviewAdapter();
   return (
     <VersionsPage
       lang={current.language}
       resourceId={resourceId}
       ownerKey={ownerKey}
       branchAdapter={branchAdapter}
+      reviewAdapter={reviewAdapter}
       renderMarkdown={(content, overrides) => <MarkdownView components={overrides}>{content}</MarkdownView>}
     />
   );

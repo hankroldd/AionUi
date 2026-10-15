@@ -263,7 +263,7 @@ const GuidPage: React.FC = () => {
   });
 
   const send = useGuidSend({
-    persistentDraft,
+    persistentDraft: persistentDraft.enabled ? persistentDraft : undefined,
     // Input state
     input: guidInput.input,
     setInput: guidInput.setInput,
@@ -549,6 +549,7 @@ const GuidPage: React.FC = () => {
     const prefillState = location.state as GuidNavigationState | null;
     const prefillPrompt = prefillState?.prefillPrompt;
     const prefillFiles = prefillState?.prefillFiles;
+    const preserveCurrentDraft = Boolean(prefillState?.preservePrefillDraft || skipNextClearRef.current);
     if (prefillPrompt && consumedPrefillKeyRef.current !== location.key) {
       // Consume prompt + optional attachments (e.g. bug-report screenshots) once.
       consumedPrefillKeyRef.current = location.key;
@@ -565,10 +566,14 @@ const GuidPage: React.FC = () => {
       // This pass is the state-clearing replace() right after a prefill — keep
       // the seeded input instead of clearing it.
       skipNextClearRef.current = false;
+    } else if (!persistentDraft.hasAuthProvider) {
+      guidInput.setInput('');
+      guidInput.setFiles([]);
     }
+    if (!preserveCurrentDraft && !prefillState?.workspace && (!persistentDraft.hasAuthProvider || prefillPrompt)) guidInput.setDir('');
     // [mycowork] ADR-0025：普通Back/刷新保留草稿；明确路由提问仍按上面的意图覆盖。
     guidInput.setLoading(false);
-  }, [guidInput.setDir, guidInput.setFiles, guidInput.setInput, guidInput.setLoading, location.key, location.state]);
+  }, [guidInput.setDir, guidInput.setFiles, guidInput.setInput, guidInput.setLoading, location.key, location.state, persistentDraft.hasAuthProvider]);
 
   // A draft-preserving prefill is an action, not durable navigation state.
   // Strip it after consumption so browser history or a remount cannot replay it.
@@ -687,7 +692,7 @@ const GuidPage: React.FC = () => {
   return (
     <ConfigProvider getPopupContainer={() => guidContainerRef.current || document.body}>
       <div ref={guidContainerRef} className={styles.guidContainer}>
-        <DraftStatus draft={persistentDraft} lang={i18n.language} />
+        {persistentDraft.enabled && <DraftStatus draft={persistentDraft} lang={i18n.language} />}
         {persistentDraft.blockedReason && <div role='alert'>{persistentDraft.blockedReason}</div>}
         <div className={styles.guidLayout} inert={!persistentDraft.ready && persistentDraft.status === 'loading'}>
           <div className={styles.heroHeader}>

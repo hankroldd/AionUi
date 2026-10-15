@@ -15,7 +15,7 @@ import {
   useScope,
   writeDraft,
 } from '@mycowork/ui';
-import { useOwnerKey } from '@/renderer/mycowork-resource-navigation';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import type { GuidAssistantSelectionResult } from '@/renderer/pages/guid/hooks/useGuidAssistantSelection';
 import type { GuidModelSelectionResult } from '@/renderer/pages/guid/hooks/useGuidModelSelection';
 import type { GuidInputResult } from '@/renderer/pages/guid/hooks/useGuidInput';
@@ -51,7 +51,14 @@ function conversationDraftState(state: DraftState): DraftState {
 }
 
 function useCurrentOwner() {
-  const ownerKey = useOwnerKey();
+  let auth: ReturnType<typeof useAuth> | undefined;
+  try {
+    auth = useAuth();
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== 'useAuth must be used within an AuthProvider') throw error;
+  }
+  const hasAuthProvider = auth !== undefined;
+  const ownerKey = auth?.status === 'authenticated' ? (auth.user?.id ?? 'local') : undefined;
   const identity = useMemo(() => ({ ownerKey }), [ownerKey]);
   const current = useRef<typeof identity | undefined>(identity);
   current.current = identity;
@@ -62,6 +69,7 @@ function useCurrentOwner() {
     };
   }, [identity]);
   useEffect(() => {
+    if (!hasAuthProvider) return;
     for (const key of Object.keys(sessionStorage)) {
       if (!key.startsWith(storagePrefix)) continue;
       const stored = sessionStorage.getItem(key);
@@ -75,8 +83,8 @@ function useCurrentOwner() {
       sessionStorage.removeItem(key);
       sessionStorage.removeItem(key.replace(storagePrefix, 'aionrs_initial_processed_'));
     }
-  }, [ownerKey]);
-  return { ownerKey, isCurrent: () => Boolean(ownerKey && current.current === identity) };
+  }, [ownerKey, hasAuthProvider]);
+  return { ownerKey, hasAuthProvider, isCurrent: () => Boolean(ownerKey && current.current === identity) };
 }
 
 type GuidOptions = {
@@ -169,7 +177,13 @@ export function useGuidPersistentDraft(options: GuidOptions) {
           : []
         : state.files
     );
-    input.setDir(typeof nav?.workspace === 'string' ? nav.workspace : (state.workspace ?? ''));
+    input.setDir(
+      typeof nav?.workspace === 'string'
+        ? nav.workspace
+        : prompt && !nav?.preservePrefillDraft
+          ? ''
+          : (state.workspace ?? '')
+    );
     if (!nav?.mycoworkScopeDraft && !nav?.mycoworkProjectId && state.scope) restoreScope(state.scope);
     setRestoredChoices(nav?.selectedAssistantId || nav?.resetAssistant ? undefined : state.choices);
   }, []);
@@ -230,12 +244,14 @@ export function useGuidPersistentDraft(options: GuidOptions) {
     });
   return {
     ...draft,
-    status: owner.ownerKey ? draft.status : ('loading' as const),
+    status: !owner.hasAuthProvider ? ('saved' as const) : owner.ownerKey ? draft.status : ('loading' as const),
+    enabled: owner.hasAuthProvider,
     ready:
-      Boolean(owner.ownerKey) &&
-      draft.ready &&
-      !['loading', 'conflict', 'error'].includes(draft.status) &&
-      !blockedReason,
+      !owner.hasAuthProvider ||
+      (Boolean(owner.ownerKey) &&
+        draft.ready &&
+        !['loading', 'conflict', 'error'].includes(draft.status) &&
+        !blockedReason),
     blockedReason,
     hasRestoredChoices: restoredChoices !== undefined,
     releaseChoices,
@@ -365,8 +381,11 @@ export function useConversationPersistentDraft(
   };
   return {
     ...draft,
-    status: owner.ownerKey ? draft.status : ('loading' as const),
-    ready: Boolean(owner.ownerKey) && draft.ready && !['loading', 'conflict', 'error'].includes(draft.status),
+    status: !owner.hasAuthProvider ? ('saved' as const) : owner.ownerKey ? draft.status : ('loading' as const),
+    enabled: owner.hasAuthProvider && enabled,
+    ready:
+      !owner.hasAuthProvider ||
+      (Boolean(owner.ownerKey) && draft.ready && !['loading', 'conflict', 'error'].includes(draft.status)),
     initial,
     finishInitial,
     ...owner,

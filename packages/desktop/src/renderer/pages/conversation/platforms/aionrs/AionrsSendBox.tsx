@@ -179,7 +179,7 @@ const AionrsSendBox: React.FC<{
     content, files: collectChatFileRefs(uploadFile, atPath),
     sessions: selectedSessions.map(({ id }) => ({ id, name: sessionNames[id] ?? '' })), ...draftContext,
   }), [atPath, content, draftContext, selectedSessions, sessionNames, uploadFile]);
-  const persistentDraft = useConversationPersistentDraft(conversation_id, draftState, onRestoreDraft, !teamRuntime && !teamSendMessage);
+  const persistentDraft = useConversationPersistentDraft(conversation_id, draftState, onRestoreDraft, !teamRuntime && !teamSendMessage && !teamPermission);
   const sendingDraftRef = useRef(false);
 
   const handleContentChange = useCallback(
@@ -371,7 +371,7 @@ const AionrsSendBox: React.FC<{
 
   // [mycowork] ADR-0025：目标草稿已持久化，受理前保留交接和源草稿；失败不自动重发。
   useEffect(() => {
-    if (!current_model?.use_model || !persistentDraft.ready || isBusy || sendingDraftRef.current ||
+    if (!persistentDraft.enabled || !current_model?.use_model || !persistentDraft.ready || isBusy || sendingDraftRef.current ||
       !sessionStorage.getItem(`aionrs_initial_message_${conversation_id}`) || sessionStorage.getItem(`aionrs_initial_processed_${conversation_id}`)) return;
     sendingDraftRef.current = true;
     void persistentDraft.initial((state) => executeCommand({ input: state.content, files: state.files, sessions: state.sessions.map(({ id }) => ({ id })) }))
@@ -396,14 +396,14 @@ const AionrsSendBox: React.FC<{
       return false;
     }
 
-    if (!teamRuntime && (!persistentDraft.ready || sendingDraftRef.current)) {
+    if (!persistentDraft.ready || (persistentDraft.enabled && sendingDraftRef.current)) {
       Message.warning('草稿尚未就绪或正在发送，请先处理草稿状态。');
       return false;
     }
     const sent = draftState;
     const filesToSend = collectChatFileRefs(uploadFile, atPath);
     const sessions = selectedSessions.length > 0 ? selectedSessions : undefined;
-    if (teamRuntime || teamSendMessage) {
+    if (!persistentDraft.enabled) {
       clearFiles(); setSelectedSessions([]); emitter.emit('aionrs.selected.file.clear');
       await executeCommand({ input: message, files: filesToSend, sessions });
       return;
@@ -742,8 +742,8 @@ const AionrsSendBox: React.FC<{
 
   return (
     <div className={`${sendBoxWidthClass} flex flex-col mt-auto mb-16px`}>
-      {!teamRuntime && <DraftStatus draft={persistentDraft} lang={i18n?.language} />}
-      <div inert={!teamRuntime && persistentDraft.status === 'loading'}>
+      {persistentDraft.enabled && <DraftStatus draft={persistentDraft} lang={i18n?.language} />}
+      <div inert={persistentDraft.status === 'loading'}>
       <CommandQueuePanel
         items={queuedCommands}
         mode={queueMode}
@@ -771,7 +771,7 @@ const AionrsSendBox: React.FC<{
       <SendBox
         data-testid='aionrs-sendbox'
         onMobilePlusClick={isMobile ? () => setIsMobileSheetOpen(true) : undefined}
-        preserveInputOnSend={!teamRuntime && !teamSendMessage}
+        preserveInputOnSend={persistentDraft.enabled}
         value={content}
         onChange={handleContentChange}
         selectedWorkspaceItems={atPath}
@@ -780,8 +780,8 @@ const AionrsSendBox: React.FC<{
           setAtPath(items);
         }}
         selectedSessions={selectedSessions}
-        sessionNames={teamRuntime ? undefined : sessionNames}
-        onSessionNamesChange={teamRuntime ? undefined : setSessionNames}
+        sessionNames={persistentDraft.enabled ? sessionNames : undefined}
+        onSessionNamesChange={persistentDraft.enabled ? setSessionNames : undefined}
         onSelectedSessionsChange={setSelectedSessions}
         crossSessionEnabled={crossSessionEnabled}
         isTeamConversation={Boolean(teamRuntime)}
@@ -789,7 +789,7 @@ const AionrsSendBox: React.FC<{
         active={teamRuntime?.isActive}
         onFocused={teamRuntime?.onFocus}
         disabled={!current_model?.use_model}
-        sendDisabled={isBusy || (!teamRuntime && !persistentDraft.ready)}
+        sendDisabled={isBusy || !persistentDraft.ready}
         sendDisabledTooltip={
           isBusy
             ? t('conversation.commandQueue.midturnBlockedSendHint', {
@@ -885,7 +885,7 @@ const AionrsSendBox: React.FC<{
         slash_commands={slash_commands}
         onSlashBuiltinCommand={onSlashBuiltinCommand}
         onAddToDraft={handleAddToQueue}
-        addToDraftDisabled={!canQueueCurrentDraft || (!teamRuntime && !persistentDraft.ready)}
+        addToDraftDisabled={!canQueueCurrentDraft || !persistentDraft.ready}
         addToDraftTooltip={
           isBusy
             ? t('conversation.commandQueue.addToQueueBusyHint', {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import useSWR from 'swr';
+import { useOwnerKey } from '@/renderer/mycowork-resource-navigation';
 import type { FileOrFolderItem } from '@/renderer/utils/file/fileTypes';
 export type { FileOrFolderItem } from '@/renderer/utils/file/fileTypes';
 
@@ -173,9 +174,10 @@ export const getSendBoxDraftHook = <K extends DraftConversationType>(
   initialValue: Extract<Draft, { _type: K }>
 ) => {
   function useDraft(conversation_id: string) {
-    const swrRet = useSWR([`/send-box/${type}/draft/${conversation_id}`, conversation_id], ([_, id]) => {
-      return getDraft(type, id);
-    });
+    // [mycowork] ADR-0025：办公内存草稿与Bridge同样按账号隔离，ACP/Codex保持原缓存。
+    const ownerKey = useOwnerKey();
+    const draftKey = type === 'aionrs' ? `${ownerKey ?? ''}:${conversation_id}` : conversation_id;
+    const swrRet = useSWR([`/send-box/${type}/draft/${draftKey}`, draftKey], ([_, id]) => getDraft(type, id));
 
     const mutateDraft = useCallback(
       (draft: (k: Extract<Draft, { _type: K }>) => typeof k | undefined): void => {
@@ -183,7 +185,7 @@ export const getSendBoxDraftHook = <K extends DraftConversationType>(
           .mutate(
             (prev) => {
               const newDraft = draft(prev ?? initialValue);
-              setDraft(type, conversation_id, newDraft);
+              setDraft(type, draftKey, newDraft);
               return newDraft;
             },
             { revalidate: false }
@@ -192,7 +194,7 @@ export const getSendBoxDraftHook = <K extends DraftConversationType>(
             console.error('Failed to mutate draft:', error);
           });
       },
-      [conversation_id]
+      [draftKey]
     );
 
     return {

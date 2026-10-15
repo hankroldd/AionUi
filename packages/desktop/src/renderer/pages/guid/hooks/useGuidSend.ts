@@ -16,9 +16,10 @@ import { type TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
-import { bindGuidScope, withGuidScope } from '@/renderer/mycowork-slots';
+import { bindGuidScope, withGuidScope, handoffGuidDraft, type PersistentDraft } from '@/renderer/mycowork-slots';
 
 export type GuidSendDeps = {
+  persistentDraft?: PersistentDraft & { ownerKey?: string; isCurrent: () => boolean };
   // Input state
   input: string;
   setInput: React.Dispatch<React.SetStateAction<string>>;
@@ -101,6 +102,11 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
   const sendingRef = useRef(false);
 
   const handleSend = useCallback(async () => {
+    const persistent = deps.persistentDraft;
+    if (selectedAssistantBackend === 'aionrs' && persistent && (!persistent.ready || ['error', 'conflict', 'loading'].includes(persistent.status))) {
+      Message.warning('草稿尚未保存或恢复失败，请先处理草稿状态。');
+      return;
+    }
     if (!selectedAssistantId) {
       return;
     }
@@ -177,6 +183,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         return;
       }
       try {
+        const savedDraft = persistent ? await persistent.flush() : undefined;
+        if (persistent && !persistent.isCurrent()) throw new Error('登录状态已变化，请回到草稿重试。');
         const conversation = await ipcBridge.conversation.create.invoke({
           name: input,
           model: current_model,
@@ -202,6 +210,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           Message.error(t('conversation.createFailed'));
           return;
         }
+        if (persistent && !persistent.isCurrent()) throw new Error('登录状态已变化，请回到草稿重试。');
         await bindGuidScope(conversation.id);
 
         if (isCustomWorkspace) {
@@ -221,11 +230,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         // initial message, so the window opens idle on the empty state instead of
         // auto-sending a blank first turn.
         if (input.trim()) {
-          const initialMessage = {
-            input,
-            files: files.length > 0 ? files : undefined,
-          };
-          sessionStorage.setItem(`aionrs_initial_message_${conversation.id}`, JSON.stringify(initialMessage));
+          if (savedDraft && persistent) await handoffGuidDraft(conversation.id, savedDraft, persistent);
+          else sessionStorage.setItem(`aionrs_initial_message_${conversation.id}`, JSON.stringify({ input, files: files.length ? files : undefined }));
         }
 
         await navigate(`/conversation/${conversation.id}`);
@@ -289,6 +295,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       throw error;
     }
   }, [
+    deps.persistentDraft,
     input,
     files,
     dir,
@@ -316,6 +323,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     setLoading(true);
     handleSend()
       .then(() => {
+        // [mycowork] ADR-0025：创建会话不代表首条消息受理，源草稿由受理回调清除。
+        if (selectedAssistantBackend === 'aionrs' && deps.persistentDraft) return;
         setInput('');
         setMentionOpen(false);
         setMentionQuery(null);
@@ -334,6 +343,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       });
   }, [
     loading,
+    selectedAssistantBackend,
     handleSend,
     setLoading,
     setInput,
@@ -350,7 +360,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
   // Calculate button disabled state. Empty input is allowed once an assistant is
   // picked — that path creates an empty conversation ("start chat") rather than
   // sending a message, so the gate only blocks while loading or with no assistant.
-  const isButtonDisabled = loading || !selectedAssistantId;
+  const isButtonDisabled = loading || !selectedAssistantId || (selectedAssistantBackend === 'aionrs' && Boolean(deps.persistentDraft) && !deps.persistentDraft?.ready);
 
   return {
     handleSend,

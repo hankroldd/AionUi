@@ -19,7 +19,7 @@ import SlashCommandMenu, { type SlashCommandMenuItem } from '@/renderer/componen
 import AssistantSelectionArea from './components/AssistantSelectionArea';
 import GuidActionRow from './components/GuidActionRow';
 import GuidInputCard from './components/GuidInputCard';
-import { GuidScopeSlot } from '@/renderer/mycowork-slots';
+import { GuidScopeSlot, DraftStatus, useGuidPersistentDraft } from '@/renderer/mycowork-slots';
 import GuidModelSelector from './components/GuidModelSelector';
 import QuickActionButtons from './components/QuickActionButtons';
 import FeedbackReportModal from '@/renderer/components/settings/SettingsModal/contents/FeedbackReportModal';
@@ -246,7 +246,24 @@ const GuidPage: React.FC = () => {
     [slashController.filteredCommands, slashController.query]
   );
 
+  const persistentDraft = useGuidPersistentDraft({
+    input: guidInput, agent: agentSelection, model: modelSelection, skills: allSkills, servers: availableMcpServers,
+    choices: {
+      assistant_id: selectedAssistantId, backend: agentSelection.selectedAssistantBackend,
+      model_provider_id: modelSelection.current_model?.id ?? null, model_id: modelSelection.current_model?.use_model ?? null,
+      acp_model: agentSelection.selectedAcpModel,
+      ...(agentSelection.selectedMode ? { permission: agentSelection.selectedMode } : {}),
+      ...(agentSelection.selectedThoughtLevelValue ? { thought_level: agentSelection.selectedThoughtLevelValue } : {}),
+      ...(guidEnabledSkills !== undefined ? { skill_ids: guidEnabledSkills } : {}),
+      ...(guidDisabledBuiltinSkills !== undefined ? { disabled_builtin_skill_ids: guidDisabledBuiltinSkills } : {}),
+      ...(guidSelectedMcpServerIds !== undefined ? { mcp_ids: guidSelectedMcpServerIds } : {}),
+    },
+    setSkills: setGuidEnabledSkills, setDisabledSkills: setGuidDisabledBuiltinSkills, setMcp: setGuidSelectedMcpServerIds,
+    navigation: navState,
+  });
+
   const send = useGuidSend({
+    persistentDraft,
     // Input state
     input: guidInput.input,
     setInput: guidInput.setInput,
@@ -314,9 +331,10 @@ const GuidPage: React.FC = () => {
 
   const handleSelectAssistant = useCallback(
     (assistantId: string) => {
+      persistentDraft.releaseChoices();
       agentSelection.setSelectedAssistantId(assistantId);
     },
-    [agentSelection.setSelectedAssistantId]
+    [agentSelection.setSelectedAssistantId, persistentDraft.releaseChoices]
   );
 
   // Typewriter placeholder
@@ -348,6 +366,7 @@ const GuidPage: React.FC = () => {
 
   // Sync disabledBuiltinSkills + enabledSkills from assistant detail defaults.
   useEffect(() => {
+    if (!persistentDraft.ready || persistentDraft.hasRestoredChoices) return;
     if (!selectedAssistantId || !selectedAssistantDetail) {
       setGuidDisabledBuiltinSkills(undefined);
       setGuidEnabledSkills(undefined);
@@ -357,12 +376,13 @@ const GuidPage: React.FC = () => {
     const resolvedDefaults = resolveGuidAssistantDefaults(selectedAssistantDetail);
     setGuidDisabledBuiltinSkills(resolvedDefaults.disabledBuiltinSkillIds);
     setGuidEnabledSkills(resolvedDefaults.skillIds);
-  }, [selectedAssistantDetail, selectedAssistantId]);
+  }, [selectedAssistantDetail, selectedAssistantId, persistentDraft.ready, persistentDraft.hasRestoredChoices]);
 
   const appliedAssistantDefaultsKeyRef = useRef<string | null>(null);
   const manualModelSelectionAssistantRef = useRef<string | null>(null);
   const manualThoughtLevelSelectionAssistantRef = useRef<string | null>(null);
   useEffect(() => {
+    if (!persistentDraft.ready || persistentDraft.hasRestoredChoices) return;
     if (!selectedAssistantId || !selectedAssistantDetail) {
       appliedAssistantDefaultsKeyRef.current = null;
       manualModelSelectionAssistantRef.current = null;
@@ -462,6 +482,7 @@ const GuidPage: React.FC = () => {
       console.error('[GuidPage] Failed to apply assistant defaults:', error);
     });
   }, [
+    persistentDraft.ready, persistentDraft.hasRestoredChoices,
     agentSelection.currentAcpCachedModelInfo?.available_models,
     agentSelection.currentAgentModeOptions,
     agentSelection.currentThoughtLevelOption,
@@ -478,12 +499,14 @@ const GuidPage: React.FC = () => {
 
   const setGuidSelectedMode = useCallback(
     (mode: React.SetStateAction<string>) => {
+      persistentDraft.releaseChoices(['permission']);
       agentSelection.setSelectedMode(mode, { persistPreference: !hasSelectedAssistant });
     },
     [agentSelection, hasSelectedAssistant]
   );
   const setGuidSelectedAcpModel = useCallback(
     (model: React.SetStateAction<string | null>) => {
+      persistentDraft.releaseChoices(['acp_model']);
       manualModelSelectionAssistantRef.current = selectedAssistantId;
       agentSelection.setSelectedAcpModel(model, { persistPreference: !hasSelectedAssistant });
     },
@@ -491,6 +514,7 @@ const GuidPage: React.FC = () => {
   );
   const setGuidSelectedThoughtLevel = useCallback(
     (value: string) => {
+      persistentDraft.releaseChoices(['thought_level']);
       manualThoughtLevelSelectionAssistantRef.current = selectedAssistantId;
       agentSelection.setSelectedThoughtLevelValue(value, { persistPreference: !hasSelectedAssistant });
     },
@@ -498,6 +522,7 @@ const GuidPage: React.FC = () => {
   );
   const setGuidCurrentModel = useCallback(
     (model: TProviderWithModel) => {
+      persistentDraft.releaseChoices(['model_id', 'model_provider_id']);
       manualModelSelectionAssistantRef.current = selectedAssistantId;
       return modelSelection.setCurrentModel(model, { persistPreference: !hasSelectedAssistant });
     },
@@ -524,7 +549,6 @@ const GuidPage: React.FC = () => {
     const prefillState = location.state as GuidNavigationState | null;
     const prefillPrompt = prefillState?.prefillPrompt;
     const prefillFiles = prefillState?.prefillFiles;
-    const preserveCurrentDraft = Boolean(prefillState?.preservePrefillDraft || skipNextClearRef.current);
     if (prefillPrompt && consumedPrefillKeyRef.current !== location.key) {
       // Consume prompt + optional attachments (e.g. bug-report screenshots) once.
       consumedPrefillKeyRef.current = location.key;
@@ -541,14 +565,9 @@ const GuidPage: React.FC = () => {
       // This pass is the state-clearing replace() right after a prefill — keep
       // the seeded input instead of clearing it.
       skipNextClearRef.current = false;
-    } else {
-      guidInput.setInput('');
-      guidInput.setFiles([]);
     }
+    // [mycowork] ADR-0025：普通Back/刷新保留草稿；明确路由提问仍按上面的意图覆盖。
     guidInput.setLoading(false);
-    if (!preserveCurrentDraft && !(location.state as { workspace?: string } | null)?.workspace) {
-      guidInput.setDir('');
-    }
   }, [guidInput.setDir, guidInput.setFiles, guidInput.setInput, guidInput.setLoading, location.key, location.state]);
 
   // A draft-preserving prefill is an action, not durable navigation state.
@@ -635,10 +654,10 @@ const GuidPage: React.FC = () => {
       allSkills={allSkills}
       disabledBuiltinSkills={guidDisabledBuiltinSkills ?? []}
       enabledSkills={guidEnabledSkills ?? []}
-      onToggleSkill={handleToggleSkill}
+      onToggleSkill={(name, isAuto) => { persistentDraft.releaseChoices([isAuto ? 'disabled_builtin_skill_ids' : 'skill_ids']); handleToggleSkill(name, isAuto); }}
       mcpServers={availableMcpServers}
       selectedMcpServerIds={guidSelectedMcpServerIds ?? []}
-      onToggleMcpServer={handleToggleMcpServer}
+      onToggleMcpServer={(id) => { persistentDraft.releaseChoices(['mcp_ids']); handleToggleMcpServer(id); }}
       speechInputNode={
         <SpeechInputButton onLiveTranscript={handleLiveTranscript} onTranscript={handleSpeechTranscript} />
       }
@@ -668,7 +687,9 @@ const GuidPage: React.FC = () => {
   return (
     <ConfigProvider getPopupContainer={() => guidContainerRef.current || document.body}>
       <div ref={guidContainerRef} className={styles.guidContainer}>
-        <div className={styles.guidLayout}>
+        <DraftStatus draft={persistentDraft} lang={i18n.language} />
+        {persistentDraft.blockedReason && <div role='alert'>{persistentDraft.blockedReason}</div>}
+        <div className={styles.guidLayout} inert={!persistentDraft.ready && persistentDraft.status === 'loading'}>
           <div className={styles.heroHeader}>
             <p className='text-2xl font-semibold mb-0 text-t-primary text-center'>{t('conversation.welcome.title')}</p>
           </div>

@@ -44,7 +44,7 @@ type UseGuidInputOptions = {
 export const useGuidInput = ({ locationState }: UseGuidInputOptions): GuidInputResult => {
   const [input, setInput] = useState('');
   const [files, setFiles] = useState<ChatFileRef[]>([]);
-  const [dir, setDir] = useState<string>('');
+  const [dir, setDir] = useState<string>(locationState?.workspace ?? '');
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [loading, setLoading] = useState(false);
 

@@ -44,17 +44,19 @@ import type { SessionRef } from '@/common/adapter/ipcBridge';
 import CrossSessionDisabledBanner from '@/renderer/components/chat/CrossSessionDisabledBanner';
 import { useCrossSessionMessageEnabled } from '@/renderer/hooks/chat/useCrossSessionMessageEnabled';
 import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
-import { type ChatFileRef, isChatFileRef, uploadFileRef } from '@/common/types/chatFile';
+import { type ChatFileRef } from '@/common/types/chatFile';
 import { localSelectionItems, mergeFileSelectionItems } from '@/renderer/utils/file/fileSelection';
 import { collectChatFileRefs, splitChatFileRefs } from '@/renderer/utils/file/messageFiles';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import { Button, Message, Tag } from '@arco-design/web-react';
 import { Brain, Lightning, MagicHat, Shield } from '@icon-park/react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
 import { useAionrsMessage } from './useAionrsMessage';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
+import { DraftStatus, useConversationPersistentDraft } from '@/renderer/mycowork-slots';
+import type { DraftState } from '@mycowork/contracts';
 import { withoutYolo } from '@/renderer/mycowork-approval-guard';
 
 const configErrorMessageKey = (error: unknown) => {
@@ -139,7 +141,7 @@ const AionrsSendBox: React.FC<{
       name,
       status: 'loaded',
     }));
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { checkAndUpdateTitle } = useAutoTitle();
   const { current_model } = modelSelection;
   const teamPermission = useTeamPermission();
@@ -160,6 +162,25 @@ const AionrsSendBox: React.FC<{
   const { markSendStarted, markSendAccepted, markSendFailed } = runtimeView;
 
   const { atPath, uploadFile, setAtPath, setUploadFile, content, setContent } = useSendBoxDraft(conversation_id);
+
+  const [selectedSessions, setSelectedSessions] = useState<SessionRef[]>([]);
+  const [sessionNames, setSessionNames] = useState<Record<string, string>>({});
+  const [draftContext, setDraftContext] = useState<Pick<DraftState, 'workspace' | 'scope' | 'choices'>>({});
+  const onRestoreDraft = useCallback((state: DraftState) => {
+    const restored = splitChatFileRefs(state.files);
+    setContent(state.content);
+    setUploadFile(restored.uploadFiles);
+    setAtPath(restored.atPath);
+    setSessionNames(Object.fromEntries(state.sessions.map(({ id, name }) => [id, name])));
+    setSelectedSessions(state.sessions.map(({ id }) => ({ id })));
+    setDraftContext({ workspace: state.workspace, scope: state.scope, choices: state.choices });
+  }, [setAtPath, setContent, setUploadFile]);
+  const draftState = useMemo<DraftState>(() => ({
+    content, files: collectChatFileRefs(uploadFile, atPath),
+    sessions: selectedSessions.map(({ id }) => ({ id, name: sessionNames[id] ?? '' })), ...draftContext,
+  }), [atPath, content, draftContext, selectedSessions, sessionNames, uploadFile]);
+  const persistentDraft = useConversationPersistentDraft(conversation_id, draftState, onRestoreDraft, !teamRuntime && !teamSendMessage);
+  const sendingDraftRef = useRef(false);
 
   const handleContentChange = useCallback(
     (val: string) => {
@@ -348,42 +369,16 @@ const AionrsSendBox: React.FC<{
     onExecute: executeCommand,
   });
 
-  // Handle initial message from Guid page — wait until model is ready
+  // [mycowork] ADR-0025：目标草稿已持久化，受理前保留交接和源草稿；失败不自动重发。
   useEffect(() => {
-    if (!conversation_id || !current_model?.use_model) return;
+    if (!current_model?.use_model || !persistentDraft.ready || isBusy || sendingDraftRef.current ||
+      !sessionStorage.getItem(`aionrs_initial_message_${conversation_id}`) || sessionStorage.getItem(`aionrs_initial_processed_${conversation_id}`)) return;
+    sendingDraftRef.current = true;
+    void persistentDraft.initial((state) => executeCommand({ input: state.content, files: state.files, sessions: state.sessions.map(({ id }) => ({ id })) }))
+      .catch((error: unknown) => Message.error(error instanceof Error ? error.message : '首条消息未确认受理，草稿已保留，请检查后重试。'))
+      .finally(() => { sendingDraftRef.current = false; });
+  }, [conversation_id, current_model?.use_model, executeCommand, isBusy, persistentDraft]);
 
-    const storageKey = `aionrs_initial_message_${conversation_id}`;
-    const processedKey = `aionrs_initial_processed_${conversation_id}`;
-
-    const processInitialMessage = async () => {
-      if (sessionStorage.getItem(processedKey)) return;
-      const storedMessage = sessionStorage.getItem(storageKey);
-      if (!storedMessage) return;
-
-      sessionStorage.setItem(processedKey, '1');
-      sessionStorage.removeItem(storageKey);
-
-      try {
-        const { input, files: initialFiles } = JSON.parse(storedMessage);
-        // Guid-page initial files are source-tagged ChatFileRefs (`local` for
-        // backend-machine picks, `upload` for device uploads). Legacy string[]
-        // entries (a stale pre-upgrade session) coerce to upload refs.
-        const initialRefs: ChatFileRef[] = Array.isArray(initialFiles)
-          ? initialFiles.map((f: unknown) => (typeof f === 'string' ? uploadFileRef(f) : f)).filter(isChatFileRef)
-          : [];
-        await executeCommand({ input, files: initialRefs });
-      } catch (error) {
-        console.error('[AionrsSendBox] Failed to send initial message:', error);
-        sessionStorage.removeItem(processedKey);
-      }
-    };
-
-    void processInitialMessage();
-  }, [conversation_id, current_model?.use_model, executeCommand]);
-
-  // `@@` session references the user picked. Declared before the handlers that
-  // read it — every send path has to both forward and release it.
-  const [selectedSessions, setSelectedSessions] = useState<SessionRef[]>([]);
   const { enabled: crossSessionEnabled } = useCrossSessionMessageEnabled();
 
   // aionrs backends never support mid-turn delivery: while the agent is
@@ -401,12 +396,26 @@ const AionrsSendBox: React.FC<{
       return false;
     }
 
+    if (!teamRuntime && (!persistentDraft.ready || sendingDraftRef.current)) {
+      Message.warning('草稿尚未就绪或正在发送，请先处理草稿状态。');
+      return false;
+    }
+    const sent = draftState;
     const filesToSend = collectChatFileRefs(uploadFile, atPath);
     const sessions = selectedSessions.length > 0 ? selectedSessions : undefined;
-    clearFiles();
-    setSelectedSessions([]);
-    emitter.emit('aionrs.selected.file.clear');
-    await executeCommand({ input: message, files: filesToSend, sessions });
+    if (teamRuntime || teamSendMessage) {
+      clearFiles(); setSelectedSessions([]); emitter.emit('aionrs.selected.file.clear');
+      await executeCommand({ input: message, files: filesToSend, sessions });
+      return;
+    }
+    sendingDraftRef.current = true;
+    try {
+      await persistentDraft.flush();
+      if (!persistentDraft.isCurrent()) return false;
+      await executeCommand({ input: message, files: filesToSend, sessions });
+      await persistentDraft.accept(sent, { ...sent, content: '', files: [], sessions: [] });
+      await persistentDraft.finishInitial(sent);
+    } finally { sendingDraftRef.current = false; }
   };
 
   const [interrupting, setInterrupting] = useState(false);
@@ -733,6 +742,8 @@ const AionrsSendBox: React.FC<{
 
   return (
     <div className={`${sendBoxWidthClass} flex flex-col mt-auto mb-16px`}>
+      {!teamRuntime && <DraftStatus draft={persistentDraft} lang={i18n?.language} />}
+      <div inert={!teamRuntime && persistentDraft.status === 'loading'}>
       <CommandQueuePanel
         items={queuedCommands}
         mode={queueMode}
@@ -760,6 +771,7 @@ const AionrsSendBox: React.FC<{
       <SendBox
         data-testid='aionrs-sendbox'
         onMobilePlusClick={isMobile ? () => setIsMobileSheetOpen(true) : undefined}
+        preserveInputOnSend={!teamRuntime && !teamSendMessage}
         value={content}
         onChange={handleContentChange}
         selectedWorkspaceItems={atPath}
@@ -768,6 +780,8 @@ const AionrsSendBox: React.FC<{
           setAtPath(items);
         }}
         selectedSessions={selectedSessions}
+        sessionNames={teamRuntime ? undefined : sessionNames}
+        onSessionNamesChange={teamRuntime ? undefined : setSessionNames}
         onSelectedSessionsChange={setSelectedSessions}
         crossSessionEnabled={crossSessionEnabled}
         isTeamConversation={Boolean(teamRuntime)}
@@ -775,7 +789,7 @@ const AionrsSendBox: React.FC<{
         active={teamRuntime?.isActive}
         onFocused={teamRuntime?.onFocus}
         disabled={!current_model?.use_model}
-        sendDisabled={isBusy}
+        sendDisabled={isBusy || (!teamRuntime && !persistentDraft.ready)}
         sendDisabledTooltip={
           isBusy
             ? t('conversation.commandQueue.midturnBlockedSendHint', {
@@ -871,7 +885,7 @@ const AionrsSendBox: React.FC<{
         slash_commands={slash_commands}
         onSlashBuiltinCommand={onSlashBuiltinCommand}
         onAddToDraft={handleAddToQueue}
-        addToDraftDisabled={!canQueueCurrentDraft}
+        addToDraftDisabled={!canQueueCurrentDraft || (!teamRuntime && !persistentDraft.ready)}
         addToDraftTooltip={
           isBusy
             ? t('conversation.commandQueue.addToQueueBusyHint', {
@@ -894,6 +908,7 @@ const AionrsSendBox: React.FC<{
           ) : undefined
         }
       />
+      </div>
       {isMobile && (
         <>
           <MobileActionSheet

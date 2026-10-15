@@ -234,6 +234,8 @@ const SendBox: React.FC<{
   value?: string;
   onChange?: (value: string) => void;
   onSend: (message: string) => Promise<void | false>;
+  /** [mycowork] ADR-0025：aionrs受理后由持久草稿按版本清除，失败保留。 */
+  preserveInputOnSend?: boolean;
   onStop?: () => Promise<void>;
   disabled?: boolean;
   /**
@@ -269,6 +271,9 @@ const SendBox: React.FC<{
   /** `@@` session references the user has picked. Authoritative; the visible
    *  token is only a label. */
   selectedSessions?: SessionRef[];
+  /** [mycowork] 恢复原名称绑定，@@正文删除才能真实撤回ID。 */
+  sessionNames?: Record<string, string>;
+  onSessionNamesChange?: (names: Record<string, string>) => void;
   onSelectedSessionsChange?: (sessions: SessionRef[]) => void;
   /** Master switch (spec §5.7). When off, `@@` must not trigger at all —
    *  otherwise the user picks a target the agent cannot deliver to. */
@@ -299,6 +304,7 @@ const SendBox: React.FC<{
   topRightOverlay?: React.ReactNode;
 }> = ({
   onSend,
+  preserveInputOnSend = false,
   onStop,
   prefix,
   className,
@@ -327,6 +333,8 @@ const SendBox: React.FC<{
   compactActions = false,
   selectedWorkspaceItems,
   selectedSessions,
+  sessionNames,
+  onSessionNamesChange,
   onSelectedSessionsChange,
   // Defaults to OFF: a call site that does not thread `sessions` through to
   // the wire must not offer `@@`, or the user picks a target that silently
@@ -381,6 +389,7 @@ const SendBox: React.FC<{
    *  `@@name` token back to a ref. Kept here rather than as a prop: only this
    *  component knows which names it inserted. */
   const sessionNameByIdRef = useRef<Record<string, string>>({});
+  if (sessionNames) sessionNameByIdRef.current = sessionNames;
   const mentionOwnedPathsRef = useRef<Set<string>>(new Set());
   const everMentionOwnedPathsRef = useRef<Set<string>>(new Set());
   const externalOwnedPathsRef = useRef<Set<string>>(new Set());
@@ -1227,7 +1236,8 @@ const SendBox: React.FC<{
       setDismissedAtSessionToken(`${activeAtSessionQuery.start}:${nextInsertion.slice(2)}`);
       setInput(nextValue);
       // Remember the name so reconciliation can map the token back to this id.
-      sessionNameByIdRef.current[item.id] = item.name;
+      sessionNameByIdRef.current = { ...sessionNameByIdRef.current, [item.id]: item.name };
+      onSessionNamesChange?.(sessionNameByIdRef.current);
       if (onSelectedSessionsChange) {
         const already = (selectedSessions ?? []).some((ref) => ref.id === item.id);
         if (!already) {
@@ -1245,7 +1255,7 @@ const SendBox: React.FC<{
         setCaretPosition(nextCaret);
       });
     },
-    [activeAtSessionQuery, getTextareaElement, input, onSelectedSessionsChange, selectedSessions, setInput]
+    [activeAtSessionQuery, getTextareaElement, input, onSelectedSessionsChange, onSessionNamesChange, selectedSessions, setInput]
   );
 
   // Deleting a `@@` token must retract the reference. Same shape as the file
@@ -1279,7 +1289,8 @@ const SendBox: React.FC<{
         buildAtSessionInsertion(target.name),
         isAtSessionBoundaryChar
       );
-      sessionNameByIdRef.current[target.id] = target.name;
+      sessionNameByIdRef.current = { ...sessionNameByIdRef.current, [target.id]: target.name };
+      onSessionNamesChange?.(sessionNameByIdRef.current);
       setInput(nextValue);
       if (!(selectedSessions ?? []).some((ref) => ref.id === target.id)) {
         onSelectedSessionsChange([...(selectedSessions ?? []), { id: target.id }]);
@@ -1294,7 +1305,7 @@ const SendBox: React.FC<{
         setCaretPosition(nextCaret);
       });
     },
-    [canMentionSessions, caretPosition, getTextareaElement, input, onSelectedSessionsChange, selectedSessions, setInput]
+    [canMentionSessions, caretPosition, getTextareaElement, input, onSelectedSessionsChange, onSessionNamesChange, selectedSessions, setInput]
   );
 
   useAddEventListener(
@@ -1615,13 +1626,17 @@ const SendBox: React.FC<{
 
     // 立即清空输入框，避免异步 onSend 完成后覆盖用户新输入
     // Clear input immediately to prevent async onSend completion from overwriting new user input
-    setInput('');
-    clearDomSnippets();
-    setReplyQuote(null);
+    if (!preserveInputOnSend) {
+      setInput('');
+      clearDomSnippets();
+      setReplyQuote(null);
+    }
 
     onSend(finalMessage)
       .then((result) => {
-        if (result === false) {
+        if (preserveInputOnSend) {
+          if (result !== false) { clearDomSnippets(); setReplyQuote(null); }
+        } else if (result === false) {
           setInput(finalMessage);
         }
       })

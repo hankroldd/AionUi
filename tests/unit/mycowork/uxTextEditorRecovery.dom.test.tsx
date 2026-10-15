@@ -24,8 +24,8 @@ vi.mock('@/renderer/pages/conversation/Preview/components/editors', () => {
     );
   return { MarkdownEditor: box('md-editor'), CodeEditor: box('code-editor') };
 });
-vi.mock('@/renderer/pages/conversation/Preview/components/viewers', () => ({
-  MarkdownViewer: ({ content }: { content: string }) => <div data-testid='md-preview'>{content}</div>,
+vi.mock('@/renderer/components/Markdown', () => ({
+  default: ({ children }: { children: string }) => <div data-testid='md-preview'>{children}</div>,
 }));
 
 configure({ asyncUtilTimeout: 4000 }); // 整机高负载时默认 1 秒的 findBy 会误报

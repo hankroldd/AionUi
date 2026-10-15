@@ -20,7 +20,6 @@ import {
 } from '@/renderer/mycowork-resource-navigation';
 import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
 import MarkdownView from '@/renderer/components/Markdown';
-import { MarkdownViewer } from '@/renderer/pages/conversation/Preview/components/viewers';
 import type { ISessionMcpServer, TChatConversation } from '@/common/config/storage';
 import {
   askDropChoice,
@@ -292,8 +291,8 @@ export const OfficeEditSlot: React.FC = () => {
 
 /**
  * [mycowork] D124: route `/office/edit-text/:resourceId` (MyCowork md/txt online editing with a write lease; save = new
- * version). The page lives in MyCowork packages/ui; the editor and the markdown preview are AionUi's own CodeMirror
- * editors and MarkdownViewer, passed in here because CodeMirror only resolves from this repo (MyCowork ADR-0020).
+ * version). The page lives in MyCowork packages/ui; CodeMirror resolves from this repo (MyCowork ADR-0020).
+ * MarkdownView applies the page's image/code overrides; raw HTML stays disabled (MyCowork A63).
  */
 export const OfficeTextEditSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
@@ -309,7 +308,7 @@ export const OfficeTextEditSlot: React.FC = () => {
           <CodeEditor value={value} onChange={onChange} />
         )
       }
-      renderPreview={(content) => <MarkdownViewer content={content} />}
+      renderPreview={(content, overrides) => <MarkdownView components={overrides}>{content}</MarkdownView>}
     />
   );
 };

@@ -1,6 +1,6 @@
 /**
  * [mycowork] D124: `/office/edit-text/:resourceId` (MyCowork md/txt online editing with a write lease).
- * Mocked boundaries: fetch (Bridge) and AionUi's CodeMirror editors / MarkdownViewer (replaced by a textarea / div so
+ * Mocked boundaries: fetch (Bridge) and AionUi's CodeMirror editors / MarkdownView (replaced by a textarea / div so
  * typing is possible in jsdom; the slot must still pick MarkdownEditor for markdown and CodeEditor for text).
  * Covers: open → edit → save with the base revision → new base + writeback conflict notice; a stale base
  * (REVISION_CONFLICT) keeps the typed text; AI_EDITING shows "please wait" and retries by itself at editable_at;
@@ -28,8 +28,8 @@ vi.mock('@/renderer/pages/conversation/Preview/components/editors', () => {
     );
   return { MarkdownEditor: box('md-editor'), CodeEditor: box('code-editor') };
 });
-vi.mock('@/renderer/pages/conversation/Preview/components/viewers', () => ({
-  MarkdownViewer: ({ content }: { content: string }) => <div data-testid='md-preview'>{content}</div>,
+vi.mock('@/renderer/components/Markdown', () => ({
+  default: ({ children }: { children: string }) => <div data-testid='md-preview'>{children}</div>,
 }));
 
 const fetchMock = vi.fn();

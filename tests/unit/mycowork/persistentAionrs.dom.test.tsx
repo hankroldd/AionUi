@@ -9,10 +9,11 @@ import { Message } from '@arco-design/web-react';
 import React, { useState } from 'react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
-const { layoutState, send, accepted } = vi.hoisted(() => ({
+const { layoutState, contextState, send, accepted } = vi.hoisted(() => ({
   send: vi.fn(),
   accepted: vi.fn(),
   layoutState: { isMobile: false },
+  contextState: { workspace: undefined as string | undefined },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -46,6 +47,7 @@ vi.mock('@/renderer/hooks/chat/useInputFocusRing', () => ({
 vi.mock('@/renderer/hooks/context/ConversationContext', () => ({
   useConversationContextSafe: () => ({
     conversation_id: 'conversation-a',
+    workspace: contextState.workspace,
     type: 'aionrs',
     loadedSkills: [],
     loadedMcpStatuses: [],
@@ -219,6 +221,7 @@ const original = {
 let saved: any;
 const response = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 beforeEach(() => {
+  contextState.workspace = undefined;
   resetAccountScopedState();
   sessionStorage.clear();
   saved = {
@@ -232,6 +235,8 @@ beforeEach(() => {
   send.mockReset().mockRejectedValue(new Error('受理失败'));
   accepted.mockReset();
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    if (String(url).includes('/tasks/lookup?') || String(url).endsWith('/context'))
+      return response(404, { error: { code: 'NOT_FOUND' } });
     if (String(url).includes('/drafts/')) {
       if (init?.method === 'PUT') {
         const next = JSON.parse(String(init.body));
@@ -288,14 +293,20 @@ describe('真实Aionrs持久草稿接线', () => {
 });
 
 it.each([
-  { label: 'upload→local', indices: [0, 2] },
-  { label: 'local→upload', indices: [2, 0] },
-])('$label首页交接恢复仅自动发送一次，原版本条件清源', async ({ indices }) => {
-  const state = { ...original, files: (indices as number[]).map((i) => original.files[i]), sessions: [] };
+  { label: 'upload→local', indices: [0, 2], workspace: undefined },
+  { label: 'local→upload', indices: [2, 0], workspace: undefined },
+  { label: 'upload→local默认目录', indices: [0, 2], workspace: '/fixture/generated' },
+  { label: 'local→upload默认目录', indices: [2, 0], workspace: '/fixture/generated' },
+])('$label首页交接恢复仅自动发送一次，原版本条件清源', async ({ indices, workspace }) => {
+  contextState.workspace = workspace;
+  const state = { ...original, files: (indices as number[]).map((i) => original.files[i]), sessions: [],
+    ...(workspace ? { workspace: '' } : {}) };
   const docs = new Map<string, typeof saved>();
   const source = { ...saved, input_location: 'guid', state, revision: 7 };
   docs.set('guid', source);
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    if (String(url).includes('/tasks/lookup?') || String(url).endsWith('/context'))
+      return response(404, { error: { code: 'NOT_FOUND' } });
     if (!String(url).includes('/drafts/')) return response(200, []);
     expect(new Headers(init?.headers).get('x-mycowork-draft-owner')).toBe('owner-a');
     const location = decodeURIComponent(String(url).split('/drafts/')[1]);

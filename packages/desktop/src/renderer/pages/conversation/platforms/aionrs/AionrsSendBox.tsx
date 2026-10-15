@@ -202,14 +202,19 @@ const AionrsSendBox: React.FC<{
   });
   const runtimeMode = runtimeConfig.mode;
   const runtimeThoughtLevel = runtimeConfig.thoughtLevel;
-  const draftState = useMemo<DraftState>(() => captureOfficeDraftState({
+  const draftState = useMemo<DraftState>(() => {
+    const input: DraftState = {
     content, files: collectChatFileRefs(uploadFile, atPath),
     sessions: selectedSessions.map(({ id }) => ({ id, name: sessionNames[id] ?? '' })), ...draftContext,
-  }, {
+    };
+    // 旧首条交接受理前保留原版本；自动补配置会使已保存的目标指针失效。
+    if (sessionStorage.getItem(`aionrs_initial_message_${conversation_id}`)) return input;
+    return captureOfficeDraftState(input, {
     workspace: conversationContext?.workspace, assistantId: conversationContext?.assistantId,
     model: current_model, permission: runtimeMode?.currentValue ?? currentMode,
     thoughtLevel: runtimeThoughtLevel?.currentValue,
-  }), [atPath, content, draftContext, selectedSessions, sessionNames, uploadFile,
+    });
+  }, [conversation_id, atPath, content, draftContext, selectedSessions, sessionNames, uploadFile,
     conversationContext?.workspace, conversationContext?.assistantId, current_model?.id, current_model?.use_model,
     runtimeMode?.currentValue, currentMode, runtimeThoughtLevel?.currentValue]);
   const persistentDraft = useConversationPersistentDraft(conversation_id, draftState, onRestoreDraft, !teamRuntime && !teamSendMessage && !teamPermission);

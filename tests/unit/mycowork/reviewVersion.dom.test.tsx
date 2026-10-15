@@ -11,6 +11,7 @@ import { VersionReview, ReviewCreationNotStarted, type ReviewAdapter } from '@my
 import { getScope, restoreScope, setScopeSelection } from '@mycowork/ui';
 
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status });
+const fenced = (value: string) => `审查说明\n\`\`\`json\n${value}\n\`\`\`\n以上为本轮意见。`;
 const base = (): Review => ({
   review_id: 'review-1',
   status: 'reviewing',
@@ -205,16 +206,8 @@ describe('fixed-version Review UI', () => {
     render(<VersionReview {...f.props} />);
     await start();
     await waitFor(() => expect(f.adapter.send).toHaveBeenCalledTimes(1));
-    expect(f.order.slice(0, 8)).toEqual([
-      'plan',
-      'review',
-      'session',
-      'create',
-      'verify',
-      'execution',
-      'send',
-      'execution',
-    ]);
+    expect(f.order.slice(0, 4)).toEqual(['plan', 'review', 'session', 'create']);
+    expect(f.order.slice(4, 8)).toEqual(['verify', 'execution', 'send', 'execution']);
     expect(f.calls.find((x) => x.path.endsWith('/context-plans'))?.body).toEqual({
       explicit_empty: true,
       use_project_defaults: false,
@@ -306,28 +299,37 @@ describe('fixed-version Review UI', () => {
     render(<VersionReview {...f.props} />);
     await start();
     await waitFor(() => expect(f.adapter.send).toHaveBeenCalledTimes(1));
+    const checked = JSON.parse(result()) as { findings: { evidence: Record<string, unknown>[] }[] };
+    checked.findings[0]!.evidence.push({ source: 'program_check', query: null });
     vi.mocked(f.adapter.observe).mockResolvedValue({
       status: 'idle',
       outputs: [
         result({ input_revision_id: 'revision-new' }),
         result({ review_id: 'foreign-review' }),
         result({ extra: true }),
+        fenced(result()) + '\n' + fenced(result()),
+        fenced(result().replace('"query":"虚构查询"', '"query":null')),
       ],
       tokensUsed: null,
     });
     await refresh();
     await screen.findByText(/会话已空闲，但未取得匹配/);
     expect(f.calls.filter((x) => x.path.endsWith('/rounds'))).toHaveLength(0);
-    vi.mocked(f.adapter.observe).mockResolvedValue({ status: 'idle', outputs: [result()], tokensUsed: null });
+    vi.mocked(f.adapter.observe).mockResolvedValue({
+      status: 'idle',
+      outputs: [fenced(JSON.stringify(checked))],
+      tokensUsed: null,
+    });
     await refresh();
     await waitFor(() => expect(f.getReview()?.status).toBe('completed'));
-    const report = f.calls.find((x) => x.path.endsWith('/rounds'))!.body;
+    const report = f.calls.find((x) => x.path.endsWith('/rounds'))!.body!;
     expect(report).toMatchObject({
       input_revision_id: 'revision-old',
       message_id: 'actual-message',
       turn_id: 'actual-turn',
       tokens_used: null,
     });
+    expect((report.findings as ReviewReport['findings'])[0]!.evidence[1]).toEqual({ source: 'program_check' });
     const shown = screen.getAllByTestId('version-review-results')[0]!;
     expect(within(shown).getByText('用量未观测')).toBeInTheDocument();
     expect(within(shown).getByText('Reviewer 查询: 虚构查询')).toBeInTheDocument();

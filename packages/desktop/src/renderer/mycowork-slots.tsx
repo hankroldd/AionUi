@@ -270,10 +270,12 @@ export const OfficeCompositionSlot: React.FC = () => {
 export const OfficeVersionsSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   const { resourceId = '' } = useParams();
+  const ownerKey = useOwnerKey();
   return (
     <VersionsPage
       lang={current.language}
       resourceId={resourceId}
+      ownerKey={ownerKey}
       renderMarkdown={(content, overrides) => <MarkdownView components={overrides}>{content}</MarkdownView>}
     />
   );

@@ -4,9 +4,8 @@
  * 边界：不新增发送API；只保存ID和输入意图，不保存provider对象、cookie或密钥（ADR-0025）。
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { DraftChoices, DraftDocument, DraftState } from '@mycowork/contracts';
+import type { DraftChoices, DraftDocument, DraftState, TaskRun } from '@mycowork/contracts';
 import {
-  acceptStoredDraft,
   adoptStoredDraft,
   DraftStatus,
   readDraft,
@@ -21,6 +20,7 @@ import type { GuidModelSelectionResult } from '@/renderer/pages/guid/hooks/useGu
 import type { GuidInputResult } from '@/renderer/pages/guid/hooks/useGuidInput';
 import type { IMcpServer } from '@/common/config/storage';
 import { collectChatFileRefs, splitChatFileRefs } from '@/renderer/utils/file/messageFiles';
+import { settleInitialSource } from './mycowork-task-send';
 
 export { DraftStatus };
 export type PersistentDraft = ReturnType<typeof usePersistentDraft>;
@@ -310,20 +310,9 @@ export function useConversationPersistentDraft(
     onRestore,
   });
   const attempt = useRef<string | undefined>(undefined);
-  const clearSource = async (handoff: InitialHandoff) => {
-    if (!owner.isCurrent()) return;
-    const source = await readDraft(handoff.source.input_location, owner.ownerKey!);
-    if (!owner.isCurrent() || !source || !same(pointer(source), handoff.source)) return;
-    await acceptStoredDraft(owner.ownerKey!, source, {
-      ...source.state,
-      content: '',
-      files: [],
-      sessions: [],
-      workspace: '',
-      scope: { items: [], views: [], origin: 'turn' },
-    });
-  };
-  const initial = async (send: (state: DraftState) => Promise<void>) => {
+  const clearSource = (handoff: InitialHandoff, taskAccepted = false) => owner.ownerKey
+    ? settleInitialSource({ ...owner, ownerKey: owner.ownerKey }, handoff.source, taskAccepted) : Promise.resolve();
+  const initial = async (send: (state: DraftState, saved: DraftDocument) => Promise<TaskRun | void>) => {
     if (!draft.ready || !enabled || !owner.isCurrent() || attempt.current === conversationId) return;
     const key = `${storagePrefix}${conversationId}`;
     const processed = `aionrs_initial_processed_${conversationId}`;
@@ -339,19 +328,23 @@ export function useConversationPersistentDraft(
     const sent = draft.saved.state;
     if (!same(state, sent)) return;
     attempt.current = conversationId;
-    await draft.flush();
+    const sending = await draft.flush();
+    if (!same(sending.state, sent)) return;
     if (!owner.isCurrent()) return;
     sessionStorage.setItem(processed, 'pending');
+    let receipt: TaskRun | void;
     try {
-      await send(sent);
+      receipt = await send(sent, sending);
     } catch {
       throw new Error('首条消息未确认受理，草稿已保留，请检查后重试。');
     }
     if (!owner.isCurrent()) return;
     sessionStorage.setItem(processed, 'accepted');
     try {
-      await draft.accept(sent, { ...sent, content: '', files: [], sessions: [] });
-      await clearSource(handoff);
+      const cleared: DraftState = { ...sent, content: '', files: [], sessions: [] };
+      if (receipt && receipt.draft_revision) await draft.settleTaskSubmission(sending, receipt.draft_revision, cleared);
+      else await draft.accept(sent, cleared);
+      await clearSource(handoff, Boolean(receipt));
     } catch {
       throw new Error('消息已受理，但草稿清理尚未保存；不会自动重复发送。');
     }
@@ -359,12 +352,18 @@ export function useConversationPersistentDraft(
     sessionStorage.removeItem(key);
     sessionStorage.removeItem(processed);
   };
-  const finishInitial = async (sent: DraftState) => {
+  const finishInitial = async (sent: DraftState, taskAccepted = false) => {
     const key = `${storagePrefix}${conversationId}`;
     const stored = sessionStorage.getItem(key);
     if (!stored || !owner.isCurrent()) return;
     const handoff = JSON.parse(stored) as InitialHandoff;
     if (handoff.ownerKey !== owner.ownerKey) return;
+    if (taskAccepted) {
+      await clearSource(handoff, true);
+      sessionStorage.removeItem(key);
+      sessionStorage.removeItem(`aionrs_initial_processed_${conversationId}`);
+      return;
+    }
     const source = await readDraft(handoff.source.input_location, owner.ownerKey!);
     if (
       !owner.isCurrent() ||

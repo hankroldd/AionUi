@@ -55,8 +55,8 @@ import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
 import { useAionrsMessage } from './useAionrsMessage';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
-import { DraftStatus, useConversationPersistentDraft } from '@/renderer/mycowork-slots';
-import type { DraftState } from '@mycowork/contracts';
+import { captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft } from '@/renderer/mycowork-slots';
+import type { DraftDocument, DraftState } from '@mycowork/contracts';
 import { withoutYolo } from '@/renderer/mycowork-approval-guard';
 
 const configErrorMessageKey = (error: unknown) => {
@@ -175,13 +175,6 @@ const AionrsSendBox: React.FC<{
     setSelectedSessions(state.sessions.map(({ id }) => ({ id })));
     setDraftContext({ workspace: state.workspace, scope: state.scope, choices: state.choices });
   }, [setAtPath, setContent, setUploadFile]);
-  const draftState = useMemo<DraftState>(() => ({
-    content, files: collectChatFileRefs(uploadFile, atPath),
-    sessions: selectedSessions.map(({ id }) => ({ id, name: sessionNames[id] ?? '' })), ...draftContext,
-  }), [atPath, content, draftContext, selectedSessions, sessionNames, uploadFile]);
-  const persistentDraft = useConversationPersistentDraft(conversation_id, draftState, onRestoreDraft, !teamRuntime && !teamSendMessage && !teamPermission);
-  const sendingDraftRef = useRef(false);
-
   const handleContentChange = useCallback(
     (val: string) => {
       setContent(val);
@@ -209,6 +202,19 @@ const AionrsSendBox: React.FC<{
   });
   const runtimeMode = runtimeConfig.mode;
   const runtimeThoughtLevel = runtimeConfig.thoughtLevel;
+  const draftState = useMemo<DraftState>(() => captureOfficeDraftState({
+    content, files: collectChatFileRefs(uploadFile, atPath),
+    sessions: selectedSessions.map(({ id }) => ({ id, name: sessionNames[id] ?? '' })), ...draftContext,
+  }, {
+    workspace: conversationContext?.workspace, assistantId: conversationContext?.assistantId,
+    model: current_model, permission: runtimeMode?.currentValue ?? currentMode,
+    thoughtLevel: runtimeThoughtLevel?.currentValue,
+  }), [atPath, content, draftContext, selectedSessions, sessionNames, uploadFile,
+    conversationContext?.workspace, conversationContext?.assistantId, current_model?.id, current_model?.use_model,
+    runtimeMode?.currentValue, currentMode, runtimeThoughtLevel?.currentValue]);
+  const persistentDraft = useConversationPersistentDraft(conversation_id, draftState, onRestoreDraft, !teamRuntime && !teamSendMessage && !teamPermission);
+  const draftStateRef = useLatestRef(draftState);
+  const sendingDraftRef = useRef(false);
 
   useEffect(() => {
     if (!runtimeMode?.currentValue) return;
@@ -274,7 +280,7 @@ const AionrsSendBox: React.FC<{
   });
 
   const executeCommand = useCallback(
-    async ({ input, files, sessions }: Pick<ConversationCommandQueueItem, 'input' | 'files' | 'sessions'>) => {
+    async ({ input, files, sessions }: Pick<ConversationCommandQueueItem, 'input' | 'files' | 'sessions'>, submitted?: DraftDocument, expectedState?: DraftState) => {
       if (teamPermission) await teamPermission.warmupSession();
       if (!current_model?.use_model) {
         Message.warning(t('conversation.chat.noModelSelected'));
@@ -293,6 +299,24 @@ const AionrsSendBox: React.FC<{
             emitter.emit('aionrs.workspace.refresh');
           }
           return;
+        }
+
+        if (persistentDraft.enabled) {
+          if (!submitted && await isOfficeConversation(conversation_id, conversationContext?.assistantId))
+            throw new Error('办公任务的队列发送尚未接通；已保留队列项，请编辑取回后明确发送。');
+          if (submitted) {
+            const office = await sendOfficeDraft(persistentDraft, submitted, { expectedState: expectedState!, conversationId: conversation_id, assistantId: conversationContext?.assistantId, lang: i18n?.language, deliveryContent: input });
+            if (office) {
+              const runtime = officeTaskRuntime(office);
+              if (runtime?.turn_id === office.turn_id) {
+                markSendStarted(); setWaitingResponse(runtime.is_processing); setActiveMsgId(office.msg_id);
+                markSendAccepted(office.turn_id, runtime, office.msg_id);
+              } else hydrateOfficeTaskRuntime(conversation_id, office);
+              emitter.emit('chat.history.refresh');
+              if (files.length > 0) emitter.emit('aionrs.workspace.refresh');
+              return office;
+            }
+          }
         }
 
         markSendStarted();
@@ -344,6 +368,9 @@ const AionrsSendBox: React.FC<{
       t,
       teamPermission,
       teamSendMessage,
+      persistentDraft,
+      conversationContext?.assistantId,
+      i18n?.language,
     ]
   );
 
@@ -366,7 +393,7 @@ const AionrsSendBox: React.FC<{
     enabled: true,
     isBusy,
     runtimeGate: commandQueueRuntimeGate,
-    onExecute: executeCommand,
+    onExecute: (item) => executeCommand(item).then(() => {}),
   });
 
   // [mycowork] ADR-0025：目标草稿已持久化，受理前保留交接和源草稿；失败不自动重发。
@@ -374,7 +401,7 @@ const AionrsSendBox: React.FC<{
     if (!persistentDraft.enabled || !current_model?.use_model || !persistentDraft.ready || isBusy || sendingDraftRef.current ||
       !sessionStorage.getItem(`aionrs_initial_message_${conversation_id}`) || sessionStorage.getItem(`aionrs_initial_processed_${conversation_id}`)) return;
     sendingDraftRef.current = true;
-    void persistentDraft.initial((state) => executeCommand({ input: state.content, files: state.files, sessions: state.sessions.map(({ id }) => ({ id })) }))
+    void persistentDraft.initial((state, saved) => executeCommand({ input: state.content, files: state.files, sessions: state.sessions.map(({ id }) => ({ id })) }, saved, state))
       .catch((error: unknown) => Message.error(error instanceof Error ? error.message : '首条消息未确认受理，草稿已保留，请检查后重试。'))
       .finally(() => { sendingDraftRef.current = false; });
   }, [conversation_id, current_model?.use_model, executeCommand, isBusy, persistentDraft]);
@@ -410,11 +437,12 @@ const AionrsSendBox: React.FC<{
     }
     sendingDraftRef.current = true;
     try {
-      await persistentDraft.flush();
+      const submitted = await persistentDraft.flush();
       if (!persistentDraft.isCurrent()) return false;
-      await executeCommand({ input: message, files: filesToSend, sessions });
-      await persistentDraft.accept(sent, { ...sent, content: '', files: [], sessions: [] });
-      await persistentDraft.finishInitial(sent);
+      const receipt = await executeCommand({ input: message, files: filesToSend, sessions }, submitted, sent);
+      if (receipt) await persistentDraft.settleTaskSubmission(submitted, receipt.draft_revision, { ...sent, content: '', files: [], sessions: [] });
+      else await persistentDraft.accept(sent, { ...sent, content: '', files: [], sessions: [] });
+      await persistentDraft.finishInitial(sent, Boolean(receipt));
     } finally { sendingDraftRef.current = false; }
   };
 
@@ -441,7 +469,16 @@ const AionrsSendBox: React.FC<{
   // mode governs (auto drains immediately, manual holds). Clears the draft
   // the same way a send would.
   const canQueueCurrentDraft = content.trim().length > 0;
-  const handleAddToQueue = useCallback(() => {
+  const handleAddToQueue = useCallback(async () => {
+    const captured = draftState;
+    if (persistentDraft.enabled) {
+      try {
+        if (await isOfficeConversation(conversation_id, conversationContext?.assistantId)) {
+          Message.warning('办公任务的队列发送尚未接通；输入已保留，请在空闲时明确发送。');
+          return;
+        }
+      } catch { Message.warning('无法确认会话资料范围，输入已保留，请稍后重试。'); return; }
+    }
     const filesToSend = collectChatFileRefs(uploadFile, atPath);
     // `@@` references must ride along, and must be released from the send box
     // the same way the draft text is — otherwise they leak into whatever the
@@ -451,11 +488,10 @@ const AionrsSendBox: React.FC<{
       files: filesToSend,
       sessions: selectedSessions.length > 0 ? selectedSessions : undefined,
     });
-    setContent('');
-    clearFiles();
-    setSelectedSessions([]);
-    emitter.emit('aionrs.selected.file.clear');
-  }, [atPath, clearFiles, content, enqueue, selectedSessions, setContent, uploadFile]);
+    if (draftStateRef.current === captured) {
+      setContent(''); clearFiles(); setSelectedSessions([]); emitter.emit('aionrs.selected.file.clear');
+    }
+  }, [atPath, clearFiles, content, enqueue, selectedSessions, setContent, uploadFile, conversation_id, conversationContext?.assistantId, draftState, draftStateRef, persistentDraft.enabled]);
 
   const handleEditQueuedCommand = useCallback(
     (item: ConversationCommandQueueItem) => {
@@ -714,6 +750,17 @@ const AionrsSendBox: React.FC<{
       return;
     }
     runtimeView.markStopRequested(turnId);
+    if (persistentDraft.enabled) {
+      try {
+        const stopped = await stopOfficeTurn(persistentDraft, conversation_id, turnId);
+        if (stopped) {
+          const runtime = officeTaskRuntime(stopped);
+          if (runtime) runtimeView.markStopAcknowledged(turnId, runtime);
+          if (!stopped.stop_confirmed) { Message.warning('此步骤未确认完成，请检查任务状态；不会停止后来的轮次。'); return; }
+          resetState(); resetActiveExecution('stop'); return;
+        }
+      } catch { Message.warning('停止请求尚未确认，此步骤未确认完成，请检查任务状态。'); return; }
+    }
     try {
       const result = await ipcBridge.conversation.stop.invoke({ conversation_id, turn_id: turnId });
       runtimeView.markStopAcknowledged(turnId, result.runtime);

@@ -335,3 +335,4 @@ const PreviewEditEntry: React.FC<{ relativePath?: string }> = ({ relativePath })
 // [mycowork] ADR-0025：原生文件只引用注册出口，持久化适配不散入平台组件。
 export { DraftStatus, handoffGuidDraft, useGuidPersistentDraft, useConversationPersistentDraft } from './mycowork-drafts';
 export type { PersistentDraft } from './mycowork-drafts';
+export { captureOfficeDraftState, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn } from './mycowork-task-send';

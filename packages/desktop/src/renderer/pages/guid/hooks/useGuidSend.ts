@@ -16,7 +16,7 @@ import { type TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
-import { bindGuidScope, withGuidScope, handoffGuidDraft, type PersistentDraft } from '@/renderer/mycowork-slots';
+import { bindGuidScope, withGuidScope, handoffGuidDraft, sendOfficeDraft, type PersistentDraft } from '@/renderer/mycowork-slots';
 
 export type GuidSendDeps = {
   persistentDraft?: PersistentDraft & { ownerKey?: string; isCurrent: () => boolean };
@@ -183,9 +183,17 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         return;
       }
       try {
+        const expectedState = persistent?.ownerKey ? persistent.captureSnapshot() : undefined;
         const savedDraft = persistent ? await persistent.flush() : undefined;
         if (persistent && !persistent.isCurrent()) throw new Error('登录状态已变化，请回到草稿重试。');
-        const conversation = await ipcBridge.conversation.create.invoke({
+        const office = savedDraft && persistent?.ownerKey && input.trim()
+          ? await sendOfficeDraft(persistent, savedDraft, { expectedState: expectedState!, assistantId: assistantConversationId, lang: localeKey }) : null;
+        if (office && persistent && savedDraft) {
+          try {
+            await persistent.settleTaskSubmission(savedDraft, office.draft_revision, { ...savedDraft.state, content: '', files: [], sessions: [], workspace: '', scope: { items: [], views: [], origin: 'turn' } });
+          } catch { Message.warning('任务已受理，草稿清理尚未保存；不会重复发送。'); }
+        }
+        const conversation = office ? { id: office.conversation_id } : await ipcBridge.conversation.create.invoke({
           name: input,
           model: current_model,
           assistant: {
@@ -211,7 +219,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           return;
         }
         if (persistent && !persistent.isCurrent()) throw new Error('登录状态已变化，请回到草稿重试。');
-        await bindGuidScope(conversation.id);
+        if (!office) await bindGuidScope(conversation.id);
 
         if (isCustomWorkspace) {
           updateWorkspaceTime(finalWorkspace);
@@ -229,7 +237,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         // Empty input = "start chat": create the conversation but do not stash an
         // initial message, so the window opens idle on the empty state instead of
         // auto-sending a blank first turn.
-        if (input.trim()) {
+        if (input.trim() && !office) {
           if (savedDraft && persistent) await handoffGuidDraft(conversation.id, savedDraft, persistent);
           else sessionStorage.setItem(`aionrs_initial_message_${conversation.id}`, JSON.stringify({ input, files: files.length ? files : undefined }));
         }

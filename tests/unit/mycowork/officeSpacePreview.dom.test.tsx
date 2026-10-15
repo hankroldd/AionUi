@@ -7,7 +7,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
-import { ResourcesPage } from '@mycowork/ui';
+import { PreviewBody, ResourcesPage, versionsText } from '@mycowork/ui';
 
 const fetchMock = vi.fn();
 const response = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => body });
@@ -123,6 +123,7 @@ describe('space preview toolbar', () => {
     render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
     const { dialog } = await open();
     await waitFor(() => expect(contentCalls()).toHaveLength(1));
+    const frame = await within(dialog).findByTitle(`${name} 的只读预览`);
     const reads = fetchMock.mock.calls.length;
     expect(dialog.querySelector('.mcw-space-preview-name')).toHaveTextContent(name);
     expect(within(dialog).getByRole('link', { name: '下载' })).toHaveAttribute(
@@ -135,12 +136,15 @@ describe('space preview toolbar', () => {
     );
     fireEvent.click(within(dialog).getByRole('button', { name: '放大' }));
     expect(within(dialog).getByRole('button', { name: '重置缩放' })).toHaveTextContent('125%');
-    expect(dialog.querySelector('.mcw-space-preview-scale')).toHaveStyle({ transform: 'scale(1.25)' });
+    expect(frame).toHaveClass('mcw-ver-frame-ppt');
+    expect(frame.getAttribute('srcdoc')).toContain('.main>.slide-container{zoom:1.25}');
+    expect((dialog.querySelector('.mcw-space-preview-scale') as HTMLElement).style.transform).toBe('');
     fireEvent.click(within(dialog).getByRole('button', { name: '缩小' }));
     fireEvent.click(within(dialog).getByRole('button', { name: '缩小' }));
     expect(within(dialog).getByRole('button', { name: '重置缩放' })).toHaveTextContent('75%');
+    expect(frame.getAttribute('srcdoc')).toContain('.main>.slide-container{zoom:0.75}');
     fireEvent.click(within(dialog).getByRole('button', { name: '重置缩放' }));
-    expect(dialog.querySelector('.mcw-space-preview-scale')).toHaveStyle({ transform: 'scale(1)' });
+    expect(frame.getAttribute('srcdoc')).toContain('.main>.slide-container{zoom:1}');
     expect(fetchMock.mock.calls).toHaveLength(reads);
   });
 
@@ -153,6 +157,55 @@ describe('space preview toolbar', () => {
     for (const action of ['Download', 'Versions and changes'])
       expect(within(dialog).getByRole('link', { name: action })).toBeInTheDocument();
     expect(within(dialog).queryByRole('textbox')).toBeNull();
+  });
+});
+
+describe('PPT-only srcDoc zoom', () => {
+  const text = versionsText('zh-CN');
+  const html =
+    '<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; ' +
+    "style-src 'unsafe-inline'; script-src 'unsafe-inline'\">" +
+    '<style>.main{align-items:center;overflow-y:auto}</style></head>' +
+    '<body><main class="main"><div class="slide-container">虚构幻灯片</div></main>' +
+    '<script>window.fixtureOriginal=true</script></body></html>';
+
+  it('updates the PPT display multiplier without refetching or altering the original hardened HTML', async () => {
+    fixture(() => page(html));
+    const props = { text, resourceId: 'res_0', fileName: '虚构.PPTX' };
+    const view = render(<PreviewBody {...props} pptZoom={50} />);
+    const frame = await screen.findByTitle('虚构.PPTX 的只读预览');
+    for (const zoom of [50, 100, 150, 200]) {
+      view.rerender(<PreviewBody {...props} pptZoom={zoom} />);
+      expect(frame).toHaveClass('mcw-ver-frame', 'mcw-ver-frame-ppt');
+      expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
+      const srcDoc = frame.getAttribute('srcdoc')!;
+      expect(srcDoc.startsWith(html)).toBe(true);
+      expect(srcDoc.slice(html.length)).toContain('.main{align-items:safe center}');
+      expect(srcDoc.slice(html.length)).toContain(`.main>.slide-container{zoom:${zoom / 100}}`);
+      expect(srcDoc.match(/<script>/g)).toHaveLength(1);
+      expect(document.querySelector('iframe')).toBe(frame);
+      expect(contentCalls()).toHaveLength(1);
+    }
+  });
+
+  it('keeps existing PPT callers without a multiplier byte-for-byte unchanged', async () => {
+    fixture(() => page(html));
+    render(<PreviewBody text={text} resourceId='res_0' fileName='虚构.pptx' />);
+    const frame = await screen.findByTitle('虚构.pptx 的只读预览');
+    expect(frame).not.toHaveClass('mcw-ver-frame-ppt');
+    expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
+    expect(frame).toHaveAttribute('srcdoc', html);
+    expect(contentCalls()).toHaveLength(1);
+  });
+
+  it.each(['docx', 'xlsx'])('does not apply the PPT multiplier to %s', async (extension) => {
+    fixture(() => page(html));
+    render(<PreviewBody text={text} resourceId='res_0' fileName={`虚构.${extension}`} pptZoom={150} />);
+    const frame = await screen.findByTitle(`虚构.${extension} 的只读预览`);
+    expect(frame).not.toHaveClass('mcw-ver-frame-ppt');
+    expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
+    expect(frame).toHaveAttribute('srcdoc', html);
+    expect(contentCalls()).toHaveLength(1);
   });
 });
 

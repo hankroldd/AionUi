@@ -150,6 +150,31 @@ describe('OfficeTextEditSlot preview privacy', () => {
     expectNoImageReads();
   });
 
+  it.each([
+    ['fenced formula', '```math\n\\frac{1}{2}\n```'],
+    ['remote formula image', '```math\n\\includegraphics{https://a63.invalid/fictional.png}\n```'],
+    ['local formula image', '```math\n\\includegraphics{/a63-fixture/fictional.png}\n```'],
+    [
+      'untrusted formula HTML',
+      '$\\href{https://a63.invalid/manual}{fixture}\\htmlStyle{background-image:url(https://a63.invalid/css.png)}{x}$',
+    ],
+  ])('%s only uses local formula layout without activating external content', async (name, source) => {
+    const preview = await mount(source);
+    if (name === 'fenced formula') {
+      expect(preview.querySelector('.katex')).not.toBeNull();
+      const changed = source + '\n本地公式原文保留（虚构）';
+      fireEvent.change(screen.getByTestId('source-editor'), { target: { value: changed } });
+      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+      await screen.findByText('已保存为新版本。');
+      const saved = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/save'));
+      expect(JSON.parse(String(saved?.[1]?.body)).content).toBe(changed);
+    }
+    expect(preview.querySelector('img, iframe, script, a, button, [style*="background-image"]')).toBeNull();
+    expectNoImageReads();
+    expect(boundary.mermaid).not.toHaveBeenCalled();
+    expect(boundary.wavedrom).not.toHaveBeenCalled();
+  });
+
   it('keeps headings, emphasis, lists, tables and inline code readable', async () => {
     const preview = await mount(
       '# 虚构标题\n\n**重点** 与 `原文`\n\n- 条目\n\n| 名称 | 值 |\n| --- | --- |\n| 虚构 | 1 |'

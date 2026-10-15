@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DraftDocument, DraftState } from '@mycowork/contracts';
+import { collectChatFileRefs, splitChatFileRefs } from '@/renderer/utils/file/messageFiles';
 import { getScope, resetAccountScopedState, restoreScope } from '@mycowork/ui';
 import {
   DraftStatus,
@@ -55,7 +56,7 @@ const doc = (location: string, state = sourceState, revision = 1): DraftDocument
   updated_at: '2026-10-15T00:00:00Z',
 });
 const docs = new Map<string, DraftDocument>();
-const writes: Array<{ location: string; state: DraftState }> = [];
+const writes: Array<{ location: string; state: DraftState; expected_revision: number }> = [];
 let failRead = false;
 let failWrite = false;
 const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
@@ -73,6 +74,8 @@ beforeEach(() => {
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       const location = decodeURIComponent(String(url).split('/drafts/')[1] ?? '');
+      if (new Headers(init?.headers).get('x-mycowork-draft-owner') !== identity.owner)
+        return reply(403, { error: { code: 'FORBIDDEN' } });
       if (init?.method === 'PUT') {
         if (failWrite) return reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE' } });
         const value = JSON.parse(String(init.body));
@@ -80,7 +83,7 @@ beforeEach(() => {
         if (value.expected_revision !== (old?.revision ?? 0))
           return reply(409, { error: { code: 'REVISION_CONFLICT' } });
         const saved = { ...doc(location, value.state, (old?.revision ?? 0) + 1), submission_id: value.submission_id };
-        writes.push({ location, state: value.state });
+        writes.push({ location, state: value.state, expected_revision: value.expected_revision });
         docs.set(location, saved);
         return reply(200, saved);
       }
@@ -168,7 +171,10 @@ function GuidHarness({
 
 function ConversationHarness({ send, auto = true }: { send: (state: DraftState) => Promise<void>; auto?: boolean }) {
   const [state, setState] = useState<DraftState>({ content: '', files: [], sessions: [] });
-  const restore = useCallback((next: DraftState) => setState(next), []);
+  const restore = useCallback((next: DraftState) => {
+    const { uploadFiles, atPath } = splitChatFileRefs(next.files);
+    setState({ ...next, files: collectChatFileRefs(uploadFiles, atPath) });
+  }, []);
   const draft = useConversationPersistentDraft('conversation-a', state, restore, true);
   useEffect(() => {
     if (auto && draft.ready) void draft.initial(send).catch(() => {});
@@ -182,6 +188,7 @@ function ConversationHarness({ send, auto = true }: { send: (state: DraftState) 
         onChange={(e) => setState({ ...state, content: e.target.value })}
       />
       <output data-testid='restored'>{JSON.stringify(state)}</output>
+      <button onClick={() => void draft.finishInitial(state)}>完成明确受理</button>
     </>
   );
 }
@@ -314,6 +321,67 @@ describe('真实持久草稿与原生适配', () => {
     render(<ConversationHarness send={send} />);
     await waitFor(() => expect(screen.getByLabelText('对话输入')).toHaveValue(sourceState.content));
     expect(send).toHaveBeenCalledTimes(1);
+  });
+  for (const localFirst of [true, false]) {
+    for (const changedSource of [false, true]) {
+      it(`${localFirst ? 'local→upload' : 'upload→local'}恢复只自动发送一次，${changedSource ? '保留新版源草稿' : '按原版本清源'}`, async () => {
+        const local = { kind: 'local' as const, path: '/fixture/local.txt' };
+        const upload = { kind: 'upload' as const, path: '/fixture/upload.txt' };
+        const files = localFirst ? [local, upload] : [upload, local];
+        const source = doc('guid', { ...sourceState, files }, 7);
+        docs.set('guid', source);
+        await handoffGuidDraft('conversation-a', source, { ownerKey: 'owner-a', isCurrent: () => true });
+        expect(docs.get('guid')?.state.files).toEqual(files);
+        let accepted!: () => void;
+        const send = vi.fn(
+          (_state: DraftState) =>
+            new Promise<void>((resolve) => {
+              accepted = resolve;
+            })
+        );
+        const first = render(<ConversationHarness send={send} />);
+        await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+        expect(send.mock.calls[0][0].files).toEqual([upload, local]);
+        expect(docs.get('conversation:conversation-a')?.state.files).toEqual([upload, local]);
+        expect(docs.get('conversation:conversation-a')?.revision).toBe(1);
+        first.rerender(<ConversationHarness send={send} />);
+        if (changedSource) docs.set('guid', doc('guid', { ...sourceState, content: '另一个首页问题', files }, 8));
+        await act(async () => accepted());
+        await waitFor(() => expect(docs.get('conversation:conversation-a')?.state.content).toBe(''));
+        expect(docs.get('guid')?.state.content).toBe(changedSource ? '另一个首页问题' : '');
+        expect(writes.filter((value) => value.location === 'guid').map((value) => value.expected_revision)).toEqual(
+          changedSource ? [] : [7]
+        );
+        first.unmount();
+        render(<ConversationHarness send={send} />);
+        await waitFor(() => expect(screen.getByLabelText('对话输入')).toHaveValue(''));
+        expect(send).toHaveBeenCalledTimes(1);
+      });
+    }
+  }
+  it('混合附件手动消息明确受理后仍按原源版本清除', async () => {
+    const files = [
+      { kind: 'local' as const, path: '/fixture/local.txt' },
+      { kind: 'upload' as const, path: '/fixture/upload.txt' },
+    ];
+    const source = doc('guid', { ...sourceState, files }, 7);
+    docs.set('guid', source);
+    await handoffGuidDraft('conversation-a', source, { ownerKey: 'owner-a', isCurrent: () => true });
+    render(<ConversationHarness send={vi.fn()} auto={false} />);
+    await waitFor(() => expect(screen.getByLabelText('对话输入')).toHaveValue(sourceState.content));
+    fireEvent.click(screen.getByRole('button', { name: '完成明确受理' }));
+    await waitFor(() => expect(docs.get('guid')?.state.content).toBe(''));
+    expect(writes.filter((value) => value.location === 'guid').map((value) => value.expected_revision)).toEqual([7]);
+  });
+  it('旧页交接保留原owner断言，cookie已换账号时不写新账号草稿', async () => {
+    docs.set('guid', doc('guid', { ...sourceState, content: 'B账号原草稿' }));
+    identity.owner = 'owner-b';
+    await expect(
+      handoffGuidDraft('conversation-a', doc('guid'), { ownerKey: 'owner-a', isCurrent: () => true })
+    ).rejects.toThrow();
+    expect(writes).toHaveLength(0);
+    expect(docs.get('guid')?.state.content).toBe('B账号原草稿');
+    expect(docs.has('conversation:conversation-a')).toBe(false);
   });
   it('目标持久写入失败不产生自动发送交接', async () => {
     failWrite = true;

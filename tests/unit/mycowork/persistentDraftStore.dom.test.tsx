@@ -101,6 +101,31 @@ const mount = async () => {
   return view;
 };
 
+it('另一标签页切换账号后，旧页读写和卸载保存仍绑定原账号并保留输入', async () => {
+  saved = makeDoc({ ...empty(), content: 'A的虚构草稿' });
+  let cookieOwner = 'owner-a';
+  const owners: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_path: string, init?: RequestInit) => {
+      const owner = new Headers(init?.headers).get('x-mycowork-draft-owner');
+      owners.push(String(owner));
+      if (owner !== cookieOwner) return reply(401, { error: { code: 'UNAUTHENTICATED' } });
+      return reply(200, saved);
+    })
+  );
+  await mount();
+  cookieOwner = 'owner-b';
+  edit('A继续填写的虚构正文');
+  fireEvent.click(screen.getByText('保存', { exact: true }));
+  await waitFor(() => expect(screen.getByTestId('result')).toHaveTextContent('failed'));
+  expect(screen.getByLabelText('正文')).toHaveValue('A继续填写的虚构正文');
+  expect(saved!.state.content).toBe('A的虚构草稿');
+  window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
+  await waitFor(() => expect(owners.length).toBeGreaterThanOrEqual(3));
+  expect(owners.every((owner) => owner === 'owner-a')).toBe(true);
+});
+
 it('正文及引用保存后，刷新重新读服务端，submission_id在编辑期间保持', async () => {
   saved = makeDoc({
     content: '旧虚构草稿',

@@ -134,6 +134,7 @@ vi.mock('@/renderer/components/chat/SpeechInputButton', () => ({ default: () => 
 vi.mock('@/renderer/components/media/UploadProgressBar', () => ({ default: () => null }));
 
 import AionrsSendBox from '@/renderer/pages/conversation/platforms/aionrs/AionrsSendBox';
+import { handoffGuidDraft } from '@/renderer/mycowork-drafts';
 import { resetAccountScopedState } from '@mycowork/ui';
 
 import { cleanup } from '@testing-library/react';
@@ -284,4 +285,45 @@ describe('真实Aionrs持久草稿接线', () => {
     expect(send.mock.calls[0][0].sessions).toBeUndefined();
     expect(saved.state.sessions).toEqual([]);
   });
+});
+
+it.each([
+  { label: 'upload→local', indices: [0, 2] },
+  { label: 'local→upload', indices: [2, 0] },
+])('$label首页交接恢复仅自动发送一次，原版本条件清源', async ({ indices }) => {
+  const state = { ...original, files: (indices as number[]).map((i) => original.files[i]), sessions: [] };
+  const docs = new Map<string, typeof saved>();
+  const source = { ...saved, input_location: 'guid', state, revision: 7 };
+  docs.set('guid', source);
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    if (!String(url).includes('/drafts/')) return response(200, []);
+    expect(new Headers(init?.headers).get('x-mycowork-draft-owner')).toBe('owner-a');
+    const location = decodeURIComponent(String(url).split('/drafts/')[1]);
+    if (init?.method === 'PUT') {
+      const input = JSON.parse(String(init.body));
+      const old = docs.get(location);
+      if (input.expected_revision !== (old?.revision ?? 0))
+        return response(409, { error: { code: 'REVISION_CONFLICT' } });
+      docs.set(location, {
+        ...source,
+        input_location: location,
+        state: input.state,
+        revision: (old?.revision ?? 0) + 1,
+        submission_id: input.submission_id,
+      });
+    }
+    return docs.has(location) ? response(200, docs.get(location)) : response(404, { error: { code: 'NOT_FOUND' } });
+  });
+  await handoffGuidDraft('conversation-a', source, { ownerKey: 'owner-a', isCurrent: () => true });
+  expect(docs.get('guid')?.state.files).toEqual(state.files);
+  send.mockResolvedValue({ msg_id: 'msg-a', turn_id: 'turn-a' });
+  const first = render(tree());
+  await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+  expect(send.mock.calls[0][0].files).toEqual([original.files[0], original.files[2]]);
+  await waitFor(() => expect(docs.get('guid')?.state.content).toBe(''));
+  await waitFor(() => expect(screen.getByTestId('sendbox-input')).toHaveValue(''));
+  first.unmount();
+  render(tree());
+  await waitFor(() => expect(screen.getByTestId('sendbox-input')).toHaveValue(''));
+  expect(send).toHaveBeenCalledTimes(1);
 });

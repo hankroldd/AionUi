@@ -20,6 +20,7 @@ import type { GuidAssistantSelectionResult } from '@/renderer/pages/guid/hooks/u
 import type { GuidModelSelectionResult } from '@/renderer/pages/guid/hooks/useGuidModelSelection';
 import type { GuidInputResult } from '@/renderer/pages/guid/hooks/useGuidInput';
 import type { IMcpServer } from '@/common/config/storage';
+import { collectChatFileRefs, splitChatFileRefs } from '@/renderer/utils/file/messageFiles';
 
 export { DraftStatus };
 export type PersistentDraft = ReturnType<typeof usePersistentDraft>;
@@ -43,6 +44,11 @@ const pointer = ({ input_location, revision, submission_id }: DraftDocument): Dr
   revision,
   submission_id,
 });
+
+function conversationDraftState(state: DraftState): DraftState {
+  const { uploadFiles, atPath } = splitChatFileRefs(state.files);
+  return { ...state, files: collectChatFileRefs(uploadFiles, atPath) };
+}
 
 function useCurrentOwner() {
   const ownerKey = useOwnerKey();
@@ -245,16 +251,22 @@ export async function handoffGuidDraft(
 ): Promise<void> {
   if (!owner.ownerKey || !owner.isCurrent()) throw new Error('登录状态已变化，请回到草稿重试。');
   const inputLocation = `conversation:${conversationId}`;
-  const existing = await readDraft(inputLocation);
+  // 原生输入分上传/本机两栏；先按同一表示保存，恢复和自动保存才保持同一版本。
+  const targetState = conversationDraftState(source.state);
+  const existing = await readDraft(inputLocation, owner.ownerKey);
   if (!owner.isCurrent()) throw new Error('登录状态已变化，请回到草稿重试。');
-  if (existing && !same(existing.state, source.state)) throw new Error('目标会话已有草稿，请先处理草稿冲突。');
+  if (existing && !same(existing.state, targetState)) throw new Error('目标会话已有草稿，请先处理草稿冲突。');
   const target =
     existing ??
-    (await writeDraft(inputLocation, {
-      expected_revision: 0,
-      submission_id: source.submission_id,
-      state: source.state,
-    }));
+    (await writeDraft(
+      inputLocation,
+      {
+        expected_revision: 0,
+        submission_id: source.submission_id,
+        state: targetState,
+      },
+      owner.ownerKey
+    ));
   if (!owner.isCurrent()) throw new Error('登录状态已变化，请回到草稿重试。');
   adoptStoredDraft(owner.ownerKey, target);
   sessionStorage.setItem(
@@ -284,7 +296,7 @@ export function useConversationPersistentDraft(
   const attempt = useRef<string | undefined>(undefined);
   const clearSource = async (handoff: InitialHandoff) => {
     if (!owner.isCurrent()) return;
-    const source = await readDraft(handoff.source.input_location);
+    const source = await readDraft(handoff.source.input_location, owner.ownerKey!);
     if (!owner.isCurrent() || !source || !same(pointer(source), handoff.source)) return;
     await acceptStoredDraft(owner.ownerKey!, source, {
       ...source.state,
@@ -337,8 +349,14 @@ export function useConversationPersistentDraft(
     if (!stored || !owner.isCurrent()) return;
     const handoff = JSON.parse(stored) as InitialHandoff;
     if (handoff.ownerKey !== owner.ownerKey) return;
-    const source = await readDraft(handoff.source.input_location);
-    if (!owner.isCurrent() || !source || !same(pointer(source), handoff.source) || !same(sent, source.state)) return;
+    const source = await readDraft(handoff.source.input_location, owner.ownerKey!);
+    if (
+      !owner.isCurrent() ||
+      !source ||
+      !same(pointer(source), handoff.source) ||
+      !same(sent, conversationDraftState(source.state))
+    )
+      return;
     sessionStorage.setItem(`aionrs_initial_processed_${conversationId}`, 'accepted');
     await clearSource(handoff);
     if (!owner.isCurrent()) return;

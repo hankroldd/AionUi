@@ -117,6 +117,24 @@ it('does not hand off on Enter or during Chinese composition', async () => {
   expect(input).toHaveValue('  解释关键变化  ');
 });
 
+it('collapses and reopens the question without losing its draft or handing it off', async () => {
+  render(<ResourcesPage lang='zh-CN' ownerKey='fixture-owner' onAskScope={ask} />);
+  const dialog = await open();
+  await edit(dialog, '保留的虚构问题');
+  const toggle = within(dialog).getByRole('button', { name: '询问此文件', expanded: true });
+  fireEvent.click(toggle);
+  expect(within(dialog).queryByRole('textbox', { name: '询问此文件的问题' })).toBeNull();
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  expect(within(dialog).getByRole('textbox', { name: '询问此文件的问题' })).toHaveValue('保留的虚构问题');
+  expect(ask).not.toHaveBeenCalled();
+  fireEvent.click(submit(dialog));
+  await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+  expect(ask.mock.calls[0][2]).toBe('保留的虚构问题');
+  expect(ask.mock.calls[0][0].requiredResourceIds).toEqual(['res_a']);
+});
+
 it('IME Escape keeps the real Arco preview and the in-progress file question open', async () => {
   render(<ResourcesPage lang='zh-CN' ownerKey='fixture-owner' onAskScope={ask} />);
   const dialog = await open();
@@ -144,6 +162,28 @@ it('hides the unavailable question entry when Host did not provide a navigation 
   const dialog = await open();
   expect(within(dialog).queryByRole('button', { name: '询问此文件' })).toBeNull();
   expect(within(dialog).queryByRole('textbox')).toBeNull();
+});
+
+it('keeps the question, disabled reason and reload beside the unscaled preview viewport', async () => {
+  catalogStatus = 503;
+  render(<ResourcesPage lang='zh-CN' ownerKey='fixture-owner' onAskScope={ask} />);
+  const dialog = await open();
+  const question = within(dialog).getByRole('complementary', { name: '询问此文件' });
+  const viewport = dialog.querySelector('.mcw-space-preview-viewport');
+  const scale = dialog.querySelector('.mcw-space-preview-scale');
+  expect(question.parentElement).toHaveClass('mcw-space-preview-main');
+  expect(viewport).not.toContainElement(question);
+  expect(scale).not.toContainElement(question);
+  expect(within(question).getByText(/无法确认可选知识库/)).toBeInTheDocument();
+  expect(within(question).getByRole('button', { name: '询问此文件' })).toBeDisabled();
+  catalogStatus = 200;
+  fireEvent.click(within(question).getByRole('button', { name: '重试' }));
+  await waitFor(() => expect(within(question).getByRole('button', { name: '询问此文件' })).toBeEnabled());
+  const input = await edit(dialog, '保持虚构问题');
+  fireEvent.click(within(dialog).getByRole('button', { name: '放大' }));
+  expect(input).toHaveValue('保持虚构问题');
+  expect(within(question).getByRole('button', { name: '进入对话草稿' })).toBeEnabled();
+  expect(ask).not.toHaveBeenCalled();
 });
 
 it.each(['secret', 'bridge-only', 'catalog-failed', 'source-revoked'])(

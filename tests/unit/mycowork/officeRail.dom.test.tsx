@@ -6,8 +6,8 @@
  */
 import React from 'react';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
@@ -34,7 +34,13 @@ vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', () => ({
 import MyCoworkRail from '@/renderer/mycowork-rail';
 
 function RouteProbe() {
-  return <output data-testid='route'>{useLocation().pathname}</output>;
+  const navigate = useNavigate();
+  return (
+    <>
+      <output data-testid='route'>{useLocation().pathname}</output>
+      <button onClick={() => void navigate('/office/memory')}>fixture navigation</button>
+    </>
+  );
 }
 function mount(route = '/guid', mobile = false) {
   return render(
@@ -47,6 +53,9 @@ function mount(route = '/guid', mobile = false) {
 async function account() {
   fireEvent.click(screen.getByRole('button', { name: '账户菜单' }));
   await screen.findByRole('menu', { name: '账户菜单' });
+}
+async function advanceTooltipTimers(milliseconds: number) {
+  await act(async () => vi.advanceTimersByTimeAsync(milliseconds));
 }
 describe('MyCowork icon rail', () => {
   beforeEach(() => {
@@ -88,6 +97,9 @@ describe('MyCowork icon rail', () => {
   it('mobile rail keeps accessible labels and menus without hover tooltips covering the Space header', async () => {
     vi.useFakeTimers();
     mount('/office/space', true);
+    const buttons = Array.from(screen.getByRole('navigation').querySelectorAll('button'));
+    expect(buttons).toHaveLength(6);
+    expect(buttons.every((button) => button.tabIndex >= 0)).toBe(true);
     const trigger = screen.getByRole('button', { name: '账户菜单' });
     fireEvent.mouseEnter(trigger);
     trigger.focus();
@@ -97,6 +109,91 @@ describe('MyCowork icon rail', () => {
     await account();
     expect(screen.getByRole('menu', { name: '账户菜单' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '空间' })).toHaveAttribute('aria-current', 'page');
+  });
+  it('replaces the hover tooltip when another rail button is focused and ignores the old delayed close', async () => {
+    vi.useFakeTimers();
+    mount();
+    const home = screen.getByRole('button', { name: '首页' });
+    const more = screen.getByRole('button', { name: '更多' });
+    fireEvent.mouseEnter(home);
+    await advanceTooltipTimers(210);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('首页');
+    fireEvent.mouseLeave(home);
+    act(() => more.focus());
+    expect(screen.getAllByRole('tooltip')).toHaveLength(1);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('更多');
+    await advanceTooltipTimers(210);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('更多');
+    fireEvent.keyDown(more, { key: 'Escape', keyCode: 27 });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect(document.activeElement).toBe(more);
+  });
+  it('keeps only one visible tooltip when moving between rail icons', async () => {
+    vi.useFakeTimers();
+    mount();
+    const home = screen.getByRole('button', { name: '首页' });
+    const more = screen.getByRole('button', { name: '更多' });
+    fireEvent.mouseEnter(home);
+    await advanceTooltipTimers(210);
+    fireEvent.mouseLeave(home);
+    fireEvent.mouseEnter(more);
+    await advanceTooltipTimers(210);
+    expect(screen.getAllByRole('tooltip')).toHaveLength(1);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('更多');
+  });
+  it('closes a tooltip on rail navigation and can reopen the same tooltip afterwards', async () => {
+    vi.useFakeTimers();
+    mount();
+    const home = screen.getByRole('button', { name: '首页' });
+    fireEvent.mouseEnter(home);
+    await advanceTooltipTimers(210);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('首页');
+    fireEvent.click(screen.getByRole('button', { name: '空间' }));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.mouseEnter(home);
+    await advanceTooltipTimers(210);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('首页');
+  });
+  it('closes the active tooltip when navigation comes from outside the rail', async () => {
+    vi.useFakeTimers();
+    mount();
+    fireEvent.mouseEnter(screen.getByRole('button', { name: '首页' }));
+    await advanceTooltipTimers(210);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('首页');
+    fireEvent.click(screen.getByRole('button', { name: 'fixture navigation' }));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+  it('does not reopen a pending tooltip after the route changes', async () => {
+    vi.useFakeTimers();
+    mount();
+    fireEvent.mouseEnter(screen.getByRole('button', { name: '首页' }));
+    fireEvent.click(screen.getByRole('button', { name: 'fixture navigation' }));
+    await advanceTooltipTimers(210);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+  it.each(['更多', '账户菜单'])('closes the current tooltip when the %s menu opens', async (label) => {
+    vi.useFakeTimers();
+    mount();
+    fireEvent.mouseEnter(screen.getByRole('button', { name: '首页' }));
+    await advanceTooltipTimers(210);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('首页');
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    await advanceTooltipTimers(400);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect(screen.getByRole('menu', { name: label })).toBeInTheDocument();
+  });
+  it('does not restore a pending hover tooltip after quickly opening and closing a menu from the keyboard', async () => {
+    vi.useFakeTimers();
+    mount();
+    fireEvent.mouseEnter(screen.getByRole('button', { name: '首页' }));
+    const more = screen.getByRole('button', { name: '更多' });
+    act(() => more.focus());
+    fireEvent.click(more);
+    fireEvent.keyDown(more, { key: 'Escape', keyCode: 27 });
+    await advanceTooltipTimers(400);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(document.activeElement).toBe(more);
   });
   it('More has only the two requested routes, with keyboard escape returning focus', async () => {
     mount();

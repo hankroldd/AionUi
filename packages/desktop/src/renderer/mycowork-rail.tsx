@@ -6,6 +6,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Dropdown, Message, Tooltip } from '@arco-design/web-react';
+import type { TooltipProps } from '@arco-design/web-react';
 import { AllApplication, Brain, Home, More, Time, User } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -17,7 +18,6 @@ import { useFeedback } from '@/renderer/hooks/context/FeedbackContext';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useThemeContext } from '@/renderer/hooks/context/ThemeContext';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
-import { cleanupSiderTooltips } from '@/renderer/utils/ui/siderTooltip';
 import { blurActiveElement } from '@/renderer/utils/ui/focus';
 
 function handleMenuKeys(event: React.KeyboardEvent<HTMLDivElement>, close: () => void): void {
@@ -51,16 +51,19 @@ type RailPopupProps = {
   account?: boolean;
   active?: boolean;
   mobile: boolean;
+  visible: boolean;
+  onVisibleChange: (visible: boolean) => void;
+  tooltipProps: TooltipProps;
   children: (close: () => void) => React.ReactNode;
 };
 function RailPopup(props: RailPopupProps): React.ReactElement {
-  const [visible, setVisible] = useState(false);
+  const { visible, onVisibleChange } = props;
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const close = (event?: React.KeyboardEvent) => {
     event?.preventDefault();
     event?.stopPropagation();
-    setVisible(false);
+    onVisibleChange(false);
     trigger.current?.focus();
   };
   useEffect(() => {
@@ -73,7 +76,7 @@ function RailPopup(props: RailPopupProps): React.ReactElement {
       trigger='click'
       position={props.mobile ? 'bottom' : props.account ? 'tr' : 'br'}
       popupVisible={visible}
-      onVisibleChange={setVisible}
+      onVisibleChange={onVisibleChange}
       droplist={
         <div
           ref={menu}
@@ -87,12 +90,7 @@ function RailPopup(props: RailPopupProps): React.ReactElement {
       }
     >
       <span className={`mcw-rail-control${props.account ? ' is-account' : ''}`}>
-        <Tooltip
-          disabled={visible || props.mobile}
-          content={props.label}
-          position={props.mobile ? 'bottom' : 'right'}
-          className='mcw-rail-tooltip'
-        >
+        <Tooltip {...props.tooltipProps} content={props.label}>
           <Button
             type='text'
             ref={trigger}
@@ -198,7 +196,7 @@ function AccountItems(props: {
   );
 }
 
-function useRailActions(mobile: boolean, lang: string) {
+function useRailActions(mobile: boolean, lang: string, closePopups: () => void) {
   const text = navigationText(lang);
   const navigate = useNavigate();
   const { user, status, logout } = useAuth();
@@ -211,7 +209,7 @@ function useRailActions(mobile: boolean, lang: string) {
   const showLogout = !window.electronAPI && status === 'authenticated';
   const handleLogout = useCallback(async () => {
     if (busy) return;
-    cleanupSiderTooltips();
+    closePopups();
     blurActiveElement();
     closePreview();
     setBusy(true);
@@ -227,7 +225,7 @@ function useRailActions(mobile: boolean, lang: string) {
     } finally {
       setBusy(false);
     }
-  }, [busy, logout, closePreview, clearPreviewForScope, layout, mobile, text.logoutFailed]);
+  }, [busy, logout, closePreview, clearPreviewForScope, layout, mobile, text.logoutFailed, closePopups]);
   useEffect(() => {
     if (!showLogout) return;
     const handle = (event: KeyboardEvent) => {
@@ -240,7 +238,7 @@ function useRailActions(mobile: boolean, lang: string) {
     return () => window.removeEventListener('keydown', handle);
   }, [showLogout, handleLogout]);
   const onNavigate = (route: string) => {
-    cleanupSiderTooltips();
+    closePopups();
     blurActiveElement();
     if (!route.startsWith('/settings')) closePreview();
     void navigate(route, route === '/office/space' ? { state: spaceState() } : undefined);
@@ -283,11 +281,51 @@ function MoreItems(props: { lang: string; close: () => void; onNavigate: (route:
   );
 }
 
+function useRailPopups(mobile: boolean, locationKey: string) {
+  const [popup, setPopup] = useState<{ kind: 'tooltip' | 'menu'; id: string } | null>(null);
+  const closePopups = useCallback(() => setPopup(null), []);
+  useEffect(() => {
+    closePopups();
+  }, [locationKey, mobile, closePopups]);
+  const tooltipProps = (id: string): TooltipProps => {
+    const visible = !mobile && popup?.kind === 'tooltip' && popup.id === id;
+    return {
+      disabled: mobile || popup?.kind === 'menu',
+      trigger: mobile ? 'hover' : ['hover', 'focus'],
+      // 无延迟打开回调，避免路由或菜单关闭后又弹出旧提示。
+      triggerProps: { mouseEnterDelay: 0 },
+      escToClose: true,
+      popupHoverStay: false,
+      position: 'right',
+      className: 'mcw-rail-tooltip',
+      popupVisible: visible,
+      // Arco 默认退出动画仍绘制旧气泡；受控隐藏使替换当帧只剩一个。
+      style: { visibility: visible ? 'visible' : 'hidden' },
+      onVisibleChange: (next) => {
+        setPopup((current) => {
+          if (next) return current?.kind === 'menu' ? current : { kind: 'tooltip', id };
+          return current?.kind === 'tooltip' && current.id === id ? null : current;
+        });
+      },
+    };
+  };
+  const menuProps = (id: string) => ({
+    visible: popup?.kind === 'menu' && popup.id === id,
+    onVisibleChange: (next: boolean) =>
+      setPopup((current) =>
+        next ? { kind: 'menu', id } : current?.kind === 'menu' && current.id === id ? null : current
+      ),
+    tooltipProps: tooltipProps(id),
+  });
+  return { closePopups, tooltipProps, menuProps };
+}
+
 export default function MyCoworkRail({ mobile = false }: { mobile?: boolean }): React.ReactElement {
   const { i18n } = useTranslation();
   const text = navigationText(i18n.language);
-  const actions = useRailActions(mobile, i18n.language);
-  const { pathname } = useLocation();
+  const { pathname, key } = useLocation();
+  const { closePopups, tooltipProps, menuProps } = useRailPopups(mobile, key);
+  const actions = useRailActions(mobile, i18n.language, closePopups);
   const space =
     pathname.startsWith('/office/space') ||
     pathname.startsWith('/office/resources') ||
@@ -305,13 +343,7 @@ export default function MyCoworkRail({ mobile = false }: { mobile?: boolean }): 
   return (
     <nav aria-label={text.nav} className={`mcw-rail${mobile ? ' mcw-rail-mobile' : ''}`}>
       {entries.map(({ label, route, active, Icon }) => (
-        <Tooltip
-          key={route}
-          disabled={mobile}
-          content={label}
-          position={mobile ? 'bottom' : 'right'}
-          className='mcw-rail-tooltip'
-        >
+        <Tooltip key={route} {...tooltipProps(route)} content={label}>
           <Button
             type='text'
             htmlType='button'
@@ -324,10 +356,10 @@ export default function MyCoworkRail({ mobile = false }: { mobile?: boolean }): 
           </Button>
         </Tooltip>
       ))}
-      <RailPopup label={text.more} icon={<More size={20} />} active={more} mobile={mobile}>
+      <RailPopup {...menuProps('more')} label={text.more} icon={<More size={20} />} active={more} mobile={mobile}>
         {(close) => <MoreItems lang={i18n.language} close={close} onNavigate={actions.onNavigate} />}
       </RailPopup>
-      <RailPopup label={text.account} icon={<User size={20} />} account mobile={mobile}>
+      <RailPopup {...menuProps('account')} label={text.account} icon={<User size={20} />} account mobile={mobile}>
         {(close) => <AccountItems {...actions} close={close} />}
       </RailPopup>
     </nav>

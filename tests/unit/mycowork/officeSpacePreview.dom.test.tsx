@@ -102,6 +102,23 @@ describe('space names and read-only fullscreen shell', () => {
 });
 
 describe('space preview toolbar', () => {
+  it('retains the long text ending while changing display zoom without another read', async () => {
+    const ending = '虚构长文本末尾，仅验证正文保留，不模拟浏览器布局';
+    fixture(() => page(`${'虚构正文\n'.repeat(400)}${ending}`));
+    render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
+    fireEvent.click(await screen.findByRole('button', { name: '虚构备忘.txt' }));
+    const dialog = await screen.findByRole('dialog', { name: '当前内容预览' });
+    await within(dialog).findByText(new RegExp(ending));
+    for (const zoom of [100, 150, 200]) {
+      for (let step = 0; step < (zoom === 100 ? 0 : 2); step++)
+        fireEvent.click(within(dialog).getByRole('button', { name: '放大' }));
+      expect(within(dialog).getByRole('button', { name: '重置缩放' })).toHaveTextContent(`${zoom}%`);
+      expect(within(dialog).getByTestId('preview-body').textContent).toContain(ending);
+      expect(contentCalls()).toHaveLength(1);
+    }
+    expect(document.querySelector('iframe')).toBeNull();
+  });
+
   it('provides complete filename and current-content links while zooming only the display', async () => {
     render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
     const { dialog } = await open();

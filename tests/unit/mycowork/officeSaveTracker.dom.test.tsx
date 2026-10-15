@@ -18,6 +18,8 @@ import { editorText } from '@mycowork/ui/pages/office-editor/messages.ts';
 import { OfficeEditSlot, OfficeVersionsSlot } from '@/renderer/mycowork-slots';
 import { settleTracker } from './saveTrackerTeardown';
 
+// [mycowork] 分支适配独立12例、分支链路共31例DOM另测；这里仅测既有版本功能。
+vi.mock('@/renderer/mycowork-branches', () => ({ useBranchAdapter: () => undefined }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ sessionId: 'eds_1', resourceId: 'res_1' }),

@@ -24,6 +24,8 @@ vi.mock('@/renderer/pages/conversation/Preview/components/viewers', async (orig)
   ...(await orig<object>()),
   MarkdownViewer: markdownViewer,
 }));
+// [mycowork] 分支适配独立12例、分支链路共31例DOM另测；这里仅测既有版本功能。
+vi.mock('@/renderer/mycowork-branches', () => ({ useBranchAdapter: () => undefined }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ resourceId: 'res_1' }),

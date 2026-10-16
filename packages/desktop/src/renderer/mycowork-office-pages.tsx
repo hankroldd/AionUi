@@ -2,11 +2,14 @@
  * [mycowork] 办公页路由挂载点（导入/空间/知识/能力/设置/计划/记忆），从 mycowork-slots.tsx 拆出（A506 行数上限）；
  * 外部一律经 mycowork-slots 再导出引用。
  */
-import React, { useLayoutEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { ipcBridge } from '@/common';
+import { getClientBusinessSetting } from '@/renderer/services/clientBusinessSettings';
+import { hasAvailableModels } from '@/renderer/pages/guid/utils/modelUtils';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { MYCOWORK_MEMORY_SIDER_ID, MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-sider-ids';
 import { useOwnerKey, useResourceQuestionNavigation } from '@/renderer/mycowork-resource-navigation';
@@ -112,8 +115,35 @@ export const OfficeCapabilitiesSlot: React.FC = () => {
 /** Mount point: route `/office/setup` (MyCowork P00 first-run setup checklist, state derived from real capability checks). */
 export const OfficeSetupSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
-  return <SetupPage lang={current.language} />;
+  return <SetupPage lang={current.language} modelStatus={useSetupModelStatus()} />;
 };
+
+/**
+ * [mycowork] R001/D285：模型两步的状态只经宿主自己的接口读（provider 列表 + 工具设置里的图像模型），每次进页重读。
+ * 对话模型 = 有启用的 provider 带 aionrs 可用模型（同对话页 getAvailableModels 口径）；读失败或返回非列表就不下结论。
+ * 图像模型只在工具设置明确选了模型且开关打开时算已配置，读失败按“稍后再说”。
+ */
+function useSetupModelStatus(): { chat?: boolean; image?: boolean } {
+  const [status, setStatus] = useState<{ chat?: boolean; image?: boolean }>({});
+  useEffect(() => {
+    let live = true;
+    ipcBridge.mode.listProviders.invoke().then(
+      (list) =>
+        live &&
+        Array.isArray(list) &&
+        setStatus((s) => ({ ...s, chat: list.some((p) => p.enabled !== false && hasAvailableModels(p)) })),
+      () => {}
+    );
+    getClientBusinessSetting('tools.imageGenerationModel').then(
+      (m) => live && setStatus((s) => ({ ...s, image: Boolean(m?.switch && m.id && m.use_model) })),
+      () => {}
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  return status;
+}
 
 /** Mount point: route `/office/schedules` (MyCowork P14 office schedules: list + turn off/on; separate from AionUi `/scheduled`). */
 export const OfficeSchedulesSlot: React.FC = () => {

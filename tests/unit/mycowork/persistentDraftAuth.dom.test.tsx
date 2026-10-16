@@ -20,6 +20,7 @@ vi.mock('@/common', () => ({ ipcBridge: { conversation: { create: { invoke: boun
 vi.mock('@/renderer/mycowork-slots', () => ({
   withGuidScope: async (extra: unknown) => extra,
   bindGuidScope: async () => {},
+  notifyCapabilityBlocked: () => false, // R036：发送失败不走“去配置”通知，原错误分支照旧
   handoffGuidDraft: vi.fn(),
 }));
 vi.mock('@/renderer/utils/emitter', () => ({ emitter: { emit: vi.fn() } }));

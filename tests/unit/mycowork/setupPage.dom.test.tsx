@@ -32,12 +32,13 @@ describe('OfficeSetupSlot', () => {
 
   it('derives step states from capabilities; image model is optional and skippable', async () => {
     fetchMock.mockResolvedValue(
-      reply(200, { capabilities: [cap('knowledge.retrieval', 'ready'), cap('office.native-edit', 'not_configured')] }),
+      reply(200, { capabilities: [cap('knowledge.retrieval', 'ready'), cap('office.native-edit', 'not_configured'), cap('office.online-edit', 'limited')] }),
     );
     render(<OfficeSetupSlot />);
     const kb = await screen.findByTestId('setup-knowledge');
     expect(within(kb).getByText('已就绪')).toBeInTheDocument();
     expect(within(screen.getByTestId('setup-native')).getByText('待设置')).toBeInTheDocument();
+    expect(within(screen.getByTestId('setup-online')).getByText('可用，写入待验收')).toBeInTheDocument(); // limited 不当待办
     const image = screen.getByTestId('setup-image');
     expect(within(image).getByText('可选')).toBeInTheDocument();
     expect(within(image).getByText('稍后再说')).toBeInTheDocument();

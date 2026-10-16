@@ -24,7 +24,7 @@ const cap = (over: object) => ({
   ...over,
 });
 const LIST = [
-  cap({ id: 'knowledge', state: 'temporarily_unavailable', reason: '资料服务暂时连不上（虚构）' }),
+  cap({ id: 'knowledge', state: 'temporarily_unavailable', reason: '服务端原样文案（虚构）' }),
   cap({ id: 'office-edit', version_verified: false }),
 ];
 
@@ -40,7 +40,8 @@ describe('OfficeCapabilitiesSlot', () => {
     render(<OfficeCapabilitiesSlot />);
     const row = await screen.findByTestId('capability-knowledge');
     expect(within(row).getByText('暂时故障')).toBeInTheDocument();
-    expect(within(row).getByText('资料服务暂时连不上（虚构）')).toBeInTheDocument();
+    expect(within(row).getByText('检查未通过，可重新检查')).toBeInTheDocument();
+    expect(within(row).queryByText('服务端原样文案（虚构）')).toBeNull(); // 界面按状态取本地化文案，不直出服务端中文
     expect(within(row).queryByText('版本未验证')).toBeNull();
     const other = screen.getByTestId('capability-office-edit');
     expect(within(other).getByText('可使用')).toBeInTheDocument();

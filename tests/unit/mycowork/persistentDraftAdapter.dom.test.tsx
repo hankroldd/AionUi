@@ -209,6 +209,18 @@ describe('真实持久草稿与原生适配', () => {
     await waitFor(() => expect(writes.some((value) => value.state.content === '继续输入')).toBe(true));
     expect(JSON.stringify(writes)).not.toContain('never-persist');
   });
+  it('对话中刚严格收缩带来的新计划不被旧草稿的范围覆盖', async () => {
+    docs.set('guid', doc('guid'));
+    restoreScope({
+      items: [{ source_id: 'src-keep', name: '保留库' }],
+      views: [],
+      origin: 'turn',
+      carriedPlanId: 'plan-new',
+    });
+    render(<GuidHarness />);
+    await waitFor(() => expect(screen.getByLabelText('首页输入')).toHaveValue(sourceState.content));
+    expect(getScope()).toMatchObject({ carriedPlanId: 'plan-new', items: [{ source_id: 'src-keep' }] });
+  });
   it('明确路由提问和目录优先，已保存范围不覆盖明确项目意图', async () => {
     docs.set('guid', doc('guid'));
     restoreScope({ items: [], views: [], origin: 'turn', projectId: 'explicit-project' });

@@ -8,6 +8,7 @@ import type { DraftChoices, DraftDocument, DraftState, TaskRun } from '@mycowork
 import {
   adoptStoredDraft,
   DraftStatus,
+  getScope,
   readDraft,
   restoreScope,
   usePersistentDraft,
@@ -184,7 +185,9 @@ export function useGuidPersistentDraft(options: GuidOptions) {
           ? ''
           : (state.workspace ?? '')
     );
-    if (!nav?.mycoworkScopeDraft && !nav?.mycoworkProjectId && state.scope) restoreScope(state.scope);
+    // A strict narrowing in a conversation (MyCowork D19) just carried a new plan here; the older draft must not undo it (R008)
+    if (!nav?.mycoworkScopeDraft && !nav?.mycoworkProjectId && !getScope().carriedPlanId && state.scope)
+      restoreScope(state.scope);
     setRestoredChoices(nav?.selectedAssistantId || nav?.resetAssistant ? undefined : state.choices);
   }, []);
   const state = useMemo<DraftState>(

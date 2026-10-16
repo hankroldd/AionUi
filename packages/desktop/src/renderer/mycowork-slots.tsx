@@ -29,6 +29,7 @@ import {
   CompositionPage,
   ImportsPage,
   KnowledgePage,
+  CapabilitiesPage,
   MemoryPage,
   ResourcesPage,
   VersionsPage,
@@ -273,6 +274,12 @@ async function resolveOutputConversationName(id: string): Promise<string | undef
 export const OfficeKnowledgeSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   return <KnowledgePage lang={current.language} />;
+};
+
+/** Mount point: route `/office/capabilities` (MyCowork P10 capability center: read-only status list + per-item re-check). */
+export const OfficeCapabilitiesSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  return <CapabilitiesPage lang={current.language} />;
 };
 
 /** Mount point: route `/office/memory` (MyCowork P11 memory: review, accept/reject/disable, pause precipitation). */

@@ -264,6 +264,7 @@ function MoreItems(props: { lang: string; close: () => void; onNavigate: (route:
       {[
         [text.knowledge, '/office/knowledge'],
         [text.imports, '/office/imports'],
+        [text.capabilities, '/office/capabilities'],
       ].map(([label, route]) => (
         <Button
           type='text'
@@ -332,7 +333,8 @@ export default function MyCoworkRail({ mobile = false }: { mobile?: boolean }): 
     /^\/office\/trash\/?$/.test(pathname);
   const scheduled = pathname.startsWith('/scheduled');
   const memory = pathname.startsWith('/office/memory');
-  const more = pathname.startsWith('/office/knowledge') || pathname.startsWith('/office/imports');
+  const more = pathname.startsWith('/office/knowledge') || pathname.startsWith('/office/imports') ||
+    pathname.startsWith('/office/capabilities');
   const home = !space && !scheduled && !memory && !more && !pathname.startsWith('/settings');
   const entries = [
     { label: text.home, route: '/guid', active: home, Icon: Home },

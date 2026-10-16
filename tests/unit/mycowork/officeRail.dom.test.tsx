@@ -195,12 +195,12 @@ describe('MyCowork icon rail', () => {
     expect(more).toHaveAttribute('aria-expanded', 'false');
     expect(document.activeElement).toBe(more);
   });
-  it('More has only the two requested routes, with keyboard escape returning focus', async () => {
+  it('More has only the three requested routes, with keyboard escape returning focus', async () => {
     mount();
     const trigger = screen.getByRole('button', { name: '更多' });
     fireEvent.click(trigger);
     const menu = await screen.findByRole('menu', { name: '更多' });
-    expect(screen.getAllByRole('menuitem').map((n) => n.textContent)).toEqual(['知识管理', '导入记录']);
+    expect(screen.getAllByRole('menuitem').map((n) => n.textContent)).toEqual(['知识管理', '导入记录', '能力中心']);
     const first = screen.getByRole('menuitem', { name: '知识管理' });
     first.focus();
     fireEvent.keyDown(first, { key: 'ArrowDown' });

@@ -7,8 +7,9 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { ReviewAdapter, ReviewObservation } from '@mycowork/ui';
 import { ReviewCreationNotStarted } from '@mycowork/ui';
-import type { ReviewExecution, ReviewSession } from '@mycowork/contracts';
+import type { Review, ReviewExecution, ReviewSession } from '@mycowork/contracts';
 import { ipcBridge } from '@/common';
+import type { IMessageToolCall } from '@/common/chat/chatLib';
 import type { ISessionMcpServer, TProviderWithModel } from '@/common/config/storage';
 import { useOwnerKey } from '@/renderer/mycowork-resource-navigation';
 import { useGuidModelSelection } from '@/renderer/pages/guid/hooks/useGuidModelSelection';
@@ -70,7 +71,55 @@ async function verify(conversationId: string, session: ReviewSession, check: Che
     throw new Error('review_isolation_mismatch');
 }
 
-async function outputs(execution: ReviewExecution, check: CheckOwner): Promise<string[]> {
+const absolutePath = (path: string): boolean => /^(?:\/|[A-Za-z]:[\\/])/.test(path);
+const record = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+async function expectedImages(workspace: string, review: Review, check: CheckOwner): Promise<string[]> {
+  const raw = await owned(ipcBridge.fs.readFile.invoke({ path: `${workspace}/review-input.json`, workspace }), check);
+  let input: unknown;
+  try {
+    input = typeof raw === 'string' ? JSON.parse(raw) : undefined;
+  } catch (cause) {
+    throw new Error('review_input_unconfirmed', { cause });
+  }
+  if (
+    !record(input) ||
+    input.resource_id !== review.resource_id ||
+    input.input_revision_id !== review.input_revision_id
+  )
+    throw new Error('review_input_unconfirmed');
+  if (input.format === 'text' && input.render === null) return [];
+  const render = input.render;
+  if (
+    input.format !== 'pptx' ||
+    !record(render) ||
+    !Number.isSafeInteger(render.expected_pages) ||
+    Number(render.expected_pages) < 1 ||
+    render.completed_pages !== render.expected_pages ||
+    !Array.isArray(render.pages) ||
+    render.pages.length !== render.expected_pages ||
+    render.pages.some(
+      (page, index) => !record(page) || page.page !== index + 1 || page.png !== `render-${index + 1}.png`
+    )
+  )
+    throw new Error('review_input_unconfirmed');
+  return render.pages.map((_page, index) => `${workspace}/render-${index + 1}.png`);
+}
+
+function viewedImage(tool: IMessageToolCall['content']): string | undefined {
+  const path = (tool.input ?? tool.args)?.file_path;
+  return tool.name === 'ViewImage' &&
+    tool.status === 'completed' &&
+    !tool.error &&
+    typeof path === 'string' &&
+    absolutePath(path) &&
+    tool.output === `Image loaded from ${path} and attached to the next model turn.`
+    ? path
+    : undefined;
+}
+
+async function outputs(execution: ReviewExecution, images: string[], check: CheckOwner) {
   if (!execution.message_id || !execution.turn_id) throw new Error('review_turn_unknown');
   const conversation_id = apiId(execution.conversation_id);
   const read = (cursor?: string): Promise<MessagePage> =>
@@ -94,19 +143,31 @@ async function outputs(execution: ReviewExecution, check: CheckOwner): Promise<s
   )
     throw new Error('review_message_anchor_missing');
   let items = page.items.slice(anchor + 1);
-  const result: string[] = [];
+  const result = {
+    texts: [] as string[],
+    viewed: new Set<string>(),
+    renderingVerifiedFrom: images.length === 0 ? 0 : null,
+  };
   const cursors = new Set<string>();
   for (;;) {
     for (const item of items) {
       if (item.conversation_id !== execution.conversation_id) throw new Error('review_message_scope_mismatch');
       if (item.position === 'right') return result;
+      if (item.type === 'tool_call') {
+        const path = viewedImage(item.content);
+        if (path) {
+          result.viewed.add(path);
+          if (result.renderingVerifiedFrom === null && images.every((image) => result.viewed.has(image)))
+            result.renderingVerifiedFrom = result.texts.length;
+        }
+      }
       if (
         item.position === 'left' &&
         item.type === 'text' &&
         item.status === 'finish' &&
         typeof item.content.content === 'string'
       )
-        result.push(item.content.content);
+        result.texts.push(item.content.content);
     }
     if (!page.has_more_after) return result;
     const cursor = page.newest_cursor;
@@ -170,12 +231,20 @@ async function send(conversationId: string, prompt: string, check: CheckOwner) {
   return { message_id: sent.msg_id, turn_id: sent.turn_id };
 }
 
-async function observe(execution: ReviewExecution, check: CheckOwner): Promise<ReviewObservation> {
+async function observe(execution: ReviewExecution, review: Review, check: CheckOwner): Promise<ReviewObservation> {
   const conversation = await owned(getConversationOrNull(apiId(execution.conversation_id)), check);
   if (!conversation) throw new Error('review_executor_lost');
   if (conversation.id !== execution.conversation_id || conversation.type !== 'aionrs')
     throw new Error('review_isolation_mismatch');
-  const texts = await outputs(execution, check);
+  const workspace = conversation.extra.workspace;
+  if (
+    typeof workspace !== 'string' ||
+    !absolutePath(workspace) ||
+    workspace.split(/[\\/]/).at(-1) !== `MyCowork 审查 ${review.review_id}`
+  )
+    throw new Error('review_isolation_mismatch');
+  const images = await expectedImages(workspace, review, check);
+  const observed = await outputs(execution, images, check);
   // shortcut: /usage 的 _meta 没有轮次关联；公开 API 提供可信 turn anchor 后再报告消耗。
   try {
     await owned(ipcBridge.conversation.getUsage.invoke({ conversation_id: apiId(execution.conversation_id) }), check);
@@ -184,8 +253,9 @@ async function observe(execution: ReviewExecution, check: CheckOwner): Promise<R
   }
   return {
     status: conversation.runtime?.state === 'idle' ? 'idle' : 'running',
-    outputs: texts,
+    outputs: observed.texts,
     tokensUsed: null,
+    renderingVerifiedFrom: observed.renderingVerifiedFrom,
   };
 }
 
@@ -230,8 +300,8 @@ export function useReviewAdapter(): ReviewAdapter {
       async send(conversationId, prompt) {
         return send(conversationId, prompt, capture());
       },
-      async observe(execution) {
-        return observe(execution, capture());
+      async observe(execution, review) {
+        return observe(execution, review, capture());
       },
       async cancel(execution) {
         const check = capture();

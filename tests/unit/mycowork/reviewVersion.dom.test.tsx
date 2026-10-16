@@ -9,7 +9,6 @@ import '@arco-design/web-react/lib/_util/react-19-adapter';
 import type { Review, ReviewExecution, ReviewReport } from '@mycowork/contracts';
 import { VersionReview, ReviewCreationNotStarted, type ReviewAdapter } from '@mycowork/ui/reviews/index.ts';
 import { getScope, restoreScope, setScopeSelection } from '@mycowork/ui';
-
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status });
 const fenced = (value: string) => `审查说明\n\`\`\`json\n${value}\n\`\`\`\n以上为本轮意见。`;
 const base = (): Review => ({
@@ -66,7 +65,7 @@ function setup(options: { fail?: string; recovered?: Review; createUnknown?: boo
       if (options.sendUnknown) throw new Error('unknown');
       return { message_id: 'actual-message', turn_id: 'actual-turn' };
     }),
-    observe: vi.fn(async () => ({ status: 'running', outputs: [], tokensUsed: null })),
+    observe: vi.fn(async () => ({ status: 'running', outputs: [], tokensUsed: null, renderingVerifiedFrom: 0 })),
     cancel: vi.fn(async () => {
       order.push('cancel');
     }),
@@ -190,7 +189,6 @@ async function refresh() {
     await Promise.resolve();
   });
 }
-
 beforeEach(() => {
   restoreScope({ items: [], views: [], origin: 'turn' });
 });
@@ -199,7 +197,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
-
 describe('fixed-version Review UI', () => {
   it('confirms rules and freezes an independent explicit-empty scope, then records real ACK before one send', async () => {
     const f = setup();
@@ -225,7 +222,6 @@ describe('fixed-version Review UI', () => {
     ]);
     expect(f.adapter.send).toHaveBeenCalledWith('actual-conversation', '可信固定版本任务，不含Writer历史');
   });
-
   it.each(['execution', 'turn-execution', 'rounds'])(
     'retries a failed %s registration without creating or sending twice',
     async (stage) => {
@@ -239,7 +235,12 @@ describe('fixed-version Review UI', () => {
         await waitFor(() => expect(f.adapter.send).toHaveBeenCalledTimes(1));
       } else {
         await waitFor(() => expect(f.adapter.send).toHaveBeenCalledTimes(1));
-        vi.mocked(f.adapter.observe).mockResolvedValue({ status: 'idle', outputs: [result()], tokensUsed: null });
+        vi.mocked(f.adapter.observe).mockResolvedValue({
+          status: 'idle',
+          outputs: [result()],
+          tokensUsed: null,
+          renderingVerifiedFrom: 0,
+        });
         await refresh();
         await screen.findByText(/审查请求失败/);
         await refresh();
@@ -249,7 +250,6 @@ describe('fixed-version Review UI', () => {
       expect(f.adapter.send).toHaveBeenCalledTimes(1);
     }
   );
-
   it('retries a proven pre-POST failure on the original review; no lost status or second review', async () => {
     const f = setup();
     vi.mocked(f.adapter.create).mockRejectedValueOnce(new ReviewCreationNotStarted(new Error('model not ready')));
@@ -261,7 +261,6 @@ describe('fixed-version Review UI', () => {
     expect(f.calls.filter((x) => x.path === '/bridge/v1/reviews')).toHaveLength(1);
     expect(f.calls.some((x) => x.path.endsWith('/lost'))).toBe(false);
   });
-
   it('stops the acknowledged turn when its second execution registration failed', async () => {
     const f = setup({ fail: 'turn-execution' });
     render(<VersionReview {...f.props} />);
@@ -279,7 +278,6 @@ describe('fixed-version Review UI', () => {
     expect(f.adapter.create).toHaveBeenCalledTimes(1);
     expect(f.adapter.send).toHaveBeenCalledTimes(1);
   });
-
   it.each(['create', 'send'])('records unknown %s and never replays it', async (stage) => {
     const f = setup({ createUnknown: stage === 'create', sendUnknown: stage === 'send' });
     render(<VersionReview {...f.props} />);
@@ -311,6 +309,7 @@ describe('fixed-version Review UI', () => {
         fenced(result().replace('"query":"虚构查询"', '"query":null')),
       ],
       tokensUsed: null,
+      renderingVerifiedFrom: 0,
     });
     await refresh();
     await screen.findByText(/会话已空闲，但未取得匹配/);
@@ -319,6 +318,7 @@ describe('fixed-version Review UI', () => {
       status: 'idle',
       outputs: [fenced(JSON.stringify(checked))],
       tokensUsed: null,
+      renderingVerifiedFrom: 0,
     });
     await refresh();
     await waitFor(() => expect(f.getReview()?.status).toBe('completed'));
@@ -349,7 +349,7 @@ describe('fixed-version Review UI', () => {
     });
     render(<VersionReview {...f.props} />);
     await ready();
-    await waitFor(() => expect(f.adapter.observe).toHaveBeenCalledWith(saved.execution));
+    await waitFor(() => expect(f.adapter.observe).toHaveBeenCalledWith(saved.execution, saved));
     expect(f.adapter.create).not.toHaveBeenCalled();
     expect(f.adapter.send).not.toHaveBeenCalled();
     fireEvent.click(screen.getAllByRole('button', { name: '停止审查' })[0]!);

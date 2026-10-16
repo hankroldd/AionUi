@@ -10,6 +10,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { BackendHttpError } from '@/common/adapter/httpBridge';
 import { useReviewAdapter } from '@/renderer/mycowork-reviews';
 import { ReviewCreationNotStarted } from '@mycowork/ui';
+import type { Review } from '@mycowork/contracts';
 
 const api = vi.hoisted(() => ({
   owner: 'fixture-owner',
@@ -20,6 +21,7 @@ const api = vi.hoisted(() => ({
   usage: vi.fn(),
   stop: vi.fn(),
   skills: vi.fn(),
+  readFile: vi.fn(),
 }));
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -31,7 +33,7 @@ vi.mock('@/common', () => ({
       stop: { invoke: api.stop },
     },
     database: { getConversationMessages: { invoke: api.messages } },
-    fs: { listAvailableSkills: { invoke: api.skills } },
+    fs: { listAvailableSkills: { invoke: api.skills }, readFile: { invoke: api.readFile } },
   },
 }));
 vi.mock('@/renderer/mycowork-resource-navigation', () => ({ useOwnerKey: () => api.owner }));
@@ -45,7 +47,7 @@ vi.mock('@/renderer/pages/guid/hooks/useGuidModelSelection', () => ({
 const session = {
   review_id: 'review-fixture',
   plan_id: 'plan-fixture',
-  workspace: '/fixture/review',
+  workspace: '/fixture/MyCowork 审查 review-fixture',
   prompt: '仅审查固定版本',
   input_revision_id: 'revision-fixture',
   input_content_sha256: 'a'.repeat(64),
@@ -55,6 +57,11 @@ const session = {
     transport: { type: 'streamable_http' as const, url: '/bridge/mcp', headers: { Authorization: 'fixture' } },
   },
 };
+const review = {
+  review_id: session.review_id,
+  resource_id: 'resource-fixture',
+  input_revision_id: session.input_revision_id,
+} as Review;
 const execution = { conversation_id: 'ack/chat', message_id: 'user-ack', turn_id: 'host-turn' };
 const message = (id: string, content: string, position = 'left') => ({
   id,
@@ -89,6 +96,14 @@ function deferred<T>() {
 beforeEach(() => {
   vi.clearAllMocks();
   api.owner = 'fixture-owner';
+  api.readFile.mockResolvedValue(
+    JSON.stringify({
+      resource_id: review.resource_id,
+      input_revision_id: review.input_revision_id,
+      format: 'text',
+      render: null,
+    })
+  );
   api.create.mockResolvedValue({ id: execution.conversation_id });
   api.get.mockResolvedValue(conversation());
   api.send.mockResolvedValue({ msg_id: execution.message_id, turn_id: execution.turn_id });
@@ -224,10 +239,11 @@ it.each(['create', 'send'] as const)('does not replay an unknown %s response', a
 
 it('reads only assistant text after the ACK and does not mislabel context occupancy as consumed tokens', async () => {
   const { result } = mount();
-  expect(await result.current.observe(execution)).toEqual({
+  expect(await result.current.observe(execution, review)).toEqual({
     status: 'idle',
     outputs: ['{"review_id":"review-fixture"}'],
     tokensUsed: null,
+    renderingVerifiedFrom: 0,
   });
   expect(api.messages).toHaveBeenCalledExactlyOnceWith({
     conversation_id: 'ack%2Fchat',
@@ -253,7 +269,7 @@ it('follows public message cursors and stops before any later user turn', async 
       has_more_after: false,
     });
   const { result } = mount();
-  expect((await result.current.observe(execution)).outputs).toEqual(['新意见']);
+  expect((await result.current.observe(execution, review)).outputs).toEqual(['新意见']);
   expect(api.messages.mock.calls[1]![0]).toEqual({
     conversation_id: 'ack%2Fchat',
     after: 'next',
@@ -265,7 +281,7 @@ it('follows public message cursors and stops before any later user turn', async 
 it('missing ACK cannot turn old assistant text into this review result', async () => {
   api.messages.mockResolvedValue({ items: [message('old', '旧意见')], has_more_after: false });
   const { result } = mount();
-  await expect(result.current.observe(execution)).rejects.toThrow('review_message_anchor_missing');
+  await expect(result.current.observe(execution, review)).rejects.toThrow('review_message_anchor_missing');
 });
 
 it('idle with no completed assistant output remains an empty observation', async () => {
@@ -277,7 +293,12 @@ it('idle with no completed assistant output remains an empty observation', async
     has_more_after: false,
   });
   const { result } = mount();
-  expect(await result.current.observe(execution)).toEqual({ status: 'idle', outputs: [], tokensUsed: null });
+  expect(await result.current.observe(execution, review)).toEqual({
+    status: 'idle',
+    outputs: [],
+    tokensUsed: null,
+    renderingVerifiedFrom: 0,
+  });
 });
 
 it('rejects a message from a different conversation after the anchor', async () => {
@@ -286,7 +307,7 @@ it('rejects a message from a different conversation after the anchor', async () 
     has_more_after: false,
   });
   const { result } = mount();
-  await expect(result.current.observe(execution)).rejects.toThrow('review_message_scope_mismatch');
+  await expect(result.current.observe(execution, review)).rejects.toThrow('review_message_scope_mismatch');
 });
 
 it('repeated cursors cannot loop forever or present an incomplete result', async () => {
@@ -298,7 +319,7 @@ it('repeated cursors cannot loop forever or present an incomplete result', async
     })
     .mockResolvedValue({ items: [], has_more_after: true, newest_cursor: 'same' });
   const { result } = mount();
-  await expect(result.current.observe(execution)).rejects.toThrow('review_messages_incomplete');
+  await expect(result.current.observe(execution, review)).rejects.toThrow('review_messages_incomplete');
   expect(api.messages).toHaveBeenCalledTimes(2);
 });
 
@@ -312,7 +333,7 @@ it('reports missing native conversation as executor lost', async () => {
     })
   );
   const { result } = mount();
-  await expect(result.current.observe(execution)).rejects.toThrow('review_executor_lost');
+  await expect(result.current.observe(execution, review)).rejects.toThrow('review_executor_lost');
   expect(api.messages).not.toHaveBeenCalled();
 });
 
@@ -328,7 +349,7 @@ it('cancels only the known original turn', async () => {
 it('an unavailable usage endpoint does not discard readable review output', async () => {
   api.usage.mockRejectedValue(new Error('fixture usage unavailable'));
   const { result } = mount();
-  expect((await result.current.observe(execution)).tokensUsed).toBeNull();
+  expect((await result.current.observe(execution, review)).tokensUsed).toBeNull();
 });
 
 it('owner change during an awaited call rejects the stale result', async () => {

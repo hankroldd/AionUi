@@ -33,6 +33,7 @@ import {
   capabilityReturnTarget,
   parseCapabilityReturn,
   SetupPage,
+  SchedulesPage,
   MemoryPage,
   ResourcesPage,
   VersionsPage,
@@ -302,6 +303,12 @@ export const OfficeCapabilitiesSlot: React.FC = () => {
 export const OfficeSetupSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   return <SetupPage lang={current.language} />;
+};
+
+/** Mount point: route `/office/schedules` (MyCowork P14 office schedules: list + turn off/on; separate from AionUi `/scheduled`). */
+export const OfficeSchedulesSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  return <SchedulesPage lang={current.language} />;
 };
 
 /** Mount point: route `/office/memory` (MyCowork P11 memory: review, accept/reject/disable, pause precipitation). */

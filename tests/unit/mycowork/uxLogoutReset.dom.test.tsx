@@ -9,7 +9,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Message, Notification } from '@arco-design/web-react';
 import { runTrashBatch } from '@mycowork/ui/pages/resources/trash-batch-notice.tsx';
-import { trashBatchState } from '@mycowork/ui/pages/resources/trash-batch.ts';
+import { resetAccountScopedState } from '@mycowork/ui';
+import { startTrashBatch, trashBatchState } from '@mycowork/ui/pages/resources/trash-batch.ts';
 import { purgeBatch, startPurge } from '@mycowork/ui/pages/trash/purge-batch.ts';
 import { publishNotice } from '@mycowork/ui/pages/versions/publication-notice.tsx';
 import { reportClosed } from '@mycowork/ui/pages/office-editor/save-notices.tsx';
@@ -79,4 +80,25 @@ it('退出登录后：失败提示与写回冲突通知消失、三类批次状�
   expect(trashBatchState().total).toBe(0);
   expect(purgeBatch().total).toBe(0);
   expect(purgeBatch().failed).toHaveLength(0);
+});
+
+it('退出登录后：在途批次不再为剩余文件发起移入回收站的 POST', async () => {
+  resetAccountScopedState();
+  const posts: string[] = [];
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    if (String(url).endsWith('/metadata')) {
+      await gate;
+      return reply(200, { metadata_revision: 1, tag_ids: [] });
+    }
+    posts.push(String(url));
+    return reply(200, {});
+  });
+  const items = Array.from({ length: 5 }, (_, i) => ({ resource_id: `res_${i}`, file_name: `f${i}.md` }) as never);
+  expect(startTrashBatch(items)).toBe(true);
+  resetAccountScopedState();
+  release();
+  await new Promise((r) => setTimeout(r, 100));
+  expect(posts).toHaveLength(0);
 });

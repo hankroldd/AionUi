@@ -397,4 +397,25 @@ describe('fixed-version Review UI', () => {
     expect(f.calls.some((x) => x.path.endsWith('/stop'))).toBe(false);
     expect(f.adapter.cancel).not.toHaveBeenCalled();
   });
+  it.each(['completed', 'stopped'])('offers 重新审查 only after a %s review, and it submits a new submission id', async (end) => {
+    const f = setup();
+    render(<VersionReview {...f.props} />);
+    await start();
+    await waitFor(() => expect(f.adapter.send).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('button', { name: '重新审查' })).toBeNull();
+    if (end === 'completed') {
+      vi.mocked(f.adapter.observe).mockResolvedValue({ status: 'idle', outputs: [result()], tokensUsed: null, renderingVerifiedFrom: 0 });
+      await refresh();
+      await waitFor(() => expect(f.getReview()?.status).toBe('completed'));
+    } else {
+      fireEvent.click(screen.getAllByRole('button', { name: '停止审查' })[0]!);
+      await waitFor(() => expect(f.getReview()?.status).toBe('cancelled'));
+    }
+    fireEvent.click(await screen.findByRole('button', { name: '重新审查' }));
+    fireEvent.click(await screen.findByRole('button', { name: '开始审查' }));
+    await waitFor(() => expect(f.calls.filter((x) => x.path === '/bridge/v1/reviews')).toHaveLength(2));
+    const ids = f.calls.filter((x) => x.path === '/bridge/v1/reviews').map((x) => x.body?.submission_id);
+    expect(ids[0]).toBeTruthy();
+    expect(ids[1]).not.toBe(ids[0]);
+  });
 });

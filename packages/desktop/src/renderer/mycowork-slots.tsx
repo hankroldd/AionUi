@@ -3,45 +3,19 @@
  * Each AionUi insertion point is a 1–2 line call into this file; components and Bridge calls
  * live in MyCowork packages/ui (resolved via the `@mycowork/ui` build alias). Ledger: MyCowork upstream/PATCHES.md.
  */
-import React, { useEffect, useLayoutEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import i18n from 'i18next';
 import useSWR from 'swr';
 import { useTranslation } from 'react-i18next';
-import { useInRouterContext, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { BookOpen } from '@icon-park/react';
 import { ipcBridge } from '@/common';
-import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
-import { useAuth } from '@/renderer/hooks/context/AuthContext';
-import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
-import { MYCOWORK_MEMORY_SIDER_ID, MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-sider-ids';
-import {
-  useGuidResourceSelection,
-  useOwnerKey,
-  useResourceQuestionNavigation,
-} from '@/renderer/mycowork-resource-navigation';
-import { CodeEditor, MarkdownEditor } from '@/renderer/pages/conversation/Preview/components/editors';
-import MarkdownView from '@/renderer/components/Markdown';
+import { useGuidResourceSelection, useOwnerKey } from '@/renderer/mycowork-resource-navigation';
 import type { ISessionMcpServer, TChatConversation } from '@/common/config/storage';
 import { useBranchAdapter } from '@/renderer/mycowork-branches';
-import { useReviewAdapter } from '@/renderer/mycowork-reviews';
 import {
   askDropChoice,
-  CompositionPage,
-  ImportsPage,
-  KnowledgePage,
-  CapabilitiesPage,
-  capabilityReturnTarget,
   notifyCapabilityBlocked,
-  useCapabilityReturn,
-  SetupPage,
-  SchedulesPage,
-  MemoryPage,
-  ResourcesPage,
-  VersionsPage,
-  parseCitedRevision,
-  OfficeEditorPage,
-  PreviewEditButton,
-  TextEditorPage,
   ProjectScopeEntry,
   ScopeChip,
   ScopeStrip,
@@ -218,211 +192,28 @@ export const bindGuidScope = (conversationId: string): Promise<void> =>
   bindScopedConversation(conversationId, i18n.language);
 
 /**
- * Mount point: route `/office/imports` (MyCowork P07 import queue). Router state `mycoworkProjectId` (from a project
- * entry) labels the batch with that project; the home page never guesses a project (MyCowork D23, R018).
- */
-export const OfficeImportsSlot: React.FC = () => {
-  const { i18n: current } = useTranslation();
-  const state = useLocation().state as { mycoworkProjectId?: unknown } | null;
-  const projectId = typeof state?.mycoworkProjectId === 'string' ? state.mycoworkProjectId : undefined;
-  return <ImportsPage lang={current.language} {...(projectId ? { projectId } : {})} />;
-};
-
-/** 页面仍持有数据，两个portal只共享原生容器与手机收起回调。 */
-function useOfficeSidebar(id: string) {
-  const layout = useLayoutContext();
-  const [sidebar, setSidebar] = useState<HTMLElement | null>(null);
-  useLayoutEffect(() => {
-    setSidebar(document.getElementById(id));
-  }, [id]);
-  return {
-    navigationContainer: sidebar,
-    ...(layout
-      ? {
-          onCollapse: () => layout.setSiderCollapsed(true),
-          onSelect: () => layout.isMobile && layout.setSiderCollapsed(true),
-        }
-      : {}),
-  };
-}
-
-/** 空间的数据仍由页面持有，portal 只把同一导航挂入原生二级栏。 */
-export const OfficeResourcesSlot: React.FC = () => {
-  const { i18n: current } = useTranslation();
-  const navigation = useOfficeSidebar(MYCOWORK_SPACE_SIDER_ID);
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const trash = /^\/office\/trash\/?$/.test(pathname);
-  const { user, status } = useAuth();
-  const ownerKey = status === 'authenticated' ? (user?.id ?? 'local') : undefined;
-  const onAskScope = useResourceQuestionNavigation(ownerKey);
-  return (
-    <ResourcesPage
-      key={`${status}:${user?.id ?? ''}`}
-      lang={current.language}
-      {...navigation}
-      trash={trash}
-      onTrashChange={(next) => {
-        if (next !== trash) void navigate(next ? '/office/trash' : '/office/space');
-      }}
-      ownerKey={ownerKey}
-      resolveConversationName={resolveOutputConversationName}
-      onAskScope={onAskScope}
-      renderMarkdown={(content, overrides) => <MarkdownView components={overrides}>{content}</MarkdownView>}
-    />
-  );
-};
-
-/** 使用当前登录原生GET校验会话归属；不把Bridge登记ID当成权限，也不复用全局标题缓存。 */
-async function resolveOutputConversationName(id: string): Promise<string | undefined> {
-  if (!id || id === '.' || id === '..') return undefined;
-  return (await getConversationOrNull(encodeURIComponent(id)))?.name.trim() || undefined;
-}
-
-/** [mycowork] ADR-0022：知识管理预留页，不连接任何管理 API。 */
-export const OfficeKnowledgeSlot: React.FC = () => {
-  const { i18n: current } = useTranslation();
-  return <KnowledgePage lang={current.language} />;
-};
-
-/**
- * Mount point: route `/office/capabilities` (MyCowork P10 capability center: read-only status list + per-item re-check).
- * A validated return intent from a blocked task (router state, same account, whitelisted origin) adds "back to my task".
- */
-export const OfficeCapabilitiesSlot: React.FC = () => {
-  const { i18n: current } = useTranslation();
-  const navigate = useNavigate();
-  const intent = useCapabilityReturn(useLocation().state, useOwnerKey());
-  const returnTo = intent && {
-    capabilityId: intent.capabilityId,
-    onReturn: () => {
-      const target = capabilityReturnTarget(intent);
-      void navigate(target.path, { state: target.state });
-    },
-  };
-  return <CapabilitiesPage lang={current.language} returnTo={returnTo ?? undefined} />;
-};
-
-/** Mount point: route `/office/setup` (MyCowork P00 first-run setup checklist, state derived from real capability checks). */
-export const OfficeSetupSlot: React.FC = () => {
-  const { i18n: current } = useTranslation();
-  return <SetupPage lang={current.language} />;
-};
-
-/** Mount point: route `/office/schedules` (MyCowork P14 office schedules: list + turn off/on; separate from AionUi `/scheduled`). */
-export const OfficeSchedulesSlot: React.FC = () => {
-  const { i18n: current } = useTranslation();
-  return <SchedulesPage lang={current.language} />;
-};
-
-/** Mount point: route `/office/memory` (MyCowork P11 memory: review, accept/reject/disable, pause precipitation). */
-export const OfficeMemorySlot: React.FC = () => {
-  const { i18n: current } = useTranslation();
-  const navigation = useOfficeSidebar(MYCOWORK_MEMORY_SIDER_ID);
-  return <MemoryPage lang={current.language} {...navigation} />;
-};
-
-/**
  * Mount point: file drop into a chat/Guid input (useDragUpload). Asks "import as resources" (MyCowork P07 import
  * queue) or "attach to this turn" (AionUi's behaviour, also on cancel/close). Returns true when the drop was taken.
  */
 export const mycoworkDropIntercept = (files: File[]): Promise<boolean> => askDropChoice(i18n.language, files);
 
-/**
- * Mount point: route `/office/compositions/:decisionId` (MyCowork P09 page plan / template review, the `review_url`
- * returned by the runtime's `template_recommend`). A new choice creates a new decision version; the URL follows it.
- */
-export const OfficeCompositionSlot: React.FC = () => {
-  const { i18n: current } = useTranslation();
-  const navigate = useNavigate();
-  const { decisionId = '' } = useParams();
-  return (
-    <CompositionPage
-      lang={current.language}
-      decisionId={decisionId}
-      onVersion={(id) => void navigate(`/office/compositions/${encodeURIComponent(id)}`, { replace: true })}
-    />
-  );
-};
-
-/**
- * Mount point: route `/office/resources/:resourceId/versions` (MyCowork P12 versions: timeline, compare, restore, publish,
- * read-only preview of the current version). [mycowork] D138: markdown is rendered with AionUi's chat MarkdownView, not the
- * preview MarkdownViewer, whose selection toolbar offers "add to chat" (a dead button outside the chat page, MyCowork A59).
- * Markdown images are not loaded (they would reveal the reader); R040 object selections ask via the Space scope navigation.
- */
-export const OfficeVersionsSlot: React.FC = () => {
-  const { i18n: current } = useTranslation();
-  const { resourceId = '' } = useParams();
-  const ownerKey = useOwnerKey();
-  const branchAdapter = useBranchAdapter();
-  const reviewAdapter = useReviewAdapter();
-  const onAskScope = useResourceQuestionNavigation(ownerKey);
-  const citedRevisionId = parseCitedRevision(useLocation().search); // R014：AI 当时读到的版本（navigation-intent §10）
-  return (
-    <VersionsPage
-      citedRevisionId={citedRevisionId}
-      lang={current.language}
-      resourceId={resourceId}
-      ownerKey={ownerKey}
-      branchAdapter={branchAdapter}
-      reviewAdapter={reviewAdapter}
-      onAskScope={onAskScope}
-      renderMarkdown={(content, overrides) => <MarkdownView components={overrides}>{content}</MarkdownView>}
-    />
-  );
-};
-
-/**
- * Mount point: route `/office/edit/:sessionId` (MyCowork P04 "preview → edit": the ONLYOFFICE editor for a Bridge edit
- * session; "finish" waits for the editing service to report the save instead of assuming it). Entry: the versions page.
- */
-export const OfficeEditSlot: React.FC = () => {
-  const { i18n: current } = useTranslation();
-  const { sessionId = '' } = useParams();
-  return <OfficeEditorPage lang={current.language} sessionId={sessionId} />;
-};
-
-/**
- * [mycowork] D124: route `/office/edit-text/:resourceId` (MyCowork md/txt online editing with a write lease; save = new
- * version). The page lives in MyCowork packages/ui; CodeMirror resolves from this repo (MyCowork ADR-0020).
- * MarkdownView applies the page's image/code overrides; raw HTML stays disabled (MyCowork A63).
- */
-export const OfficeTextEditSlot: React.FC = () => {
-  const { i18n: current } = useTranslation();
-  const { resourceId = '' } = useParams();
-  return (
-    <TextEditorPage
-      lang={current.language}
-      resourceId={resourceId}
-      renderEditor={({ value, onChange, format }) =>
-        format === 'markdown' ? (
-          <MarkdownEditor value={value} onChange={onChange} />
-        ) : (
-          <CodeEditor value={value} onChange={onChange} />
-        )
-      }
-      renderPreview={(content, overrides) => <MarkdownView components={overrides}>{content}</MarkdownView>}
-    />
-  );
-};
-
-/**
- * [mycowork] D125: mount point in the preview tab toolbar — an "Edit" button that opens the file of this conversation's
- * workspace in a separate editor (the preview itself stays read-only, MyCowork 01 §10). Only on `/conversation/:id`.
- * The panel is rendered by the app Layout, outside the conversation route element, so the id comes from matching the
- * location (useParams is empty there — found in a real browser).
- */
-export const PreviewEditSlot: React.FC<{ relativePath?: string }> = (props) =>
-  // useMatch throws outside a Router; upstream's PreviewPanel tests render the panel without one.
-  useInRouterContext() ? <PreviewEditEntry {...props} /> : null;
-
-const PreviewEditEntry: React.FC<{ relativePath?: string }> = ({ relativePath }) => {
-  const { i18n: current } = useTranslation();
-  const id = useMatch('/conversation/:id')?.params.id;
-  if (!id) return null;
-  return <PreviewEditButton lang={current.language} conversationId={id} relativePath={relativePath} />;
-};
+// [mycowork] A506：办公页挂载点拆在独立文件，这里是唯一对外出口（Router 与测试 mock 都认这个模块）。
+export {
+  OfficeImportsSlot,
+  OfficeResourcesSlot,
+  OfficeKnowledgeSlot,
+  OfficeCapabilitiesSlot,
+  OfficeSetupSlot,
+  OfficeSchedulesSlot,
+  OfficeMemorySlot,
+} from './mycowork-office-pages';
+export {
+  OfficeCompositionSlot,
+  OfficeVersionsSlot,
+  OfficeEditSlot,
+  OfficeTextEditSlot,
+  PreviewEditSlot,
+} from './mycowork-office-edit-slots';
 
 // [mycowork] ADR-0025：原生文件只引用注册出口，持久化适配不散入平台组件。
 export {

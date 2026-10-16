@@ -267,7 +267,32 @@ describe('OfficeImportsSlot', () => {
   it('entered from a project (router state) opens the upload dialog at once and says files go to that project', async () => {
     bridge({ afterCreate: [item({})] });
     render(<OfficeImportsSlot />);
-    expect(await screen.findByText('这次导入的资料会归到当前项目')).toBeInTheDocument();
+    expect(await screen.findByText(/^这次导入的资料会归到当前项目/)).toBeInTheDocument();
     expect(calls('POST', '/import-batches')).toHaveLength(0);
+  });
+
+  it('R018: from a project every file defaults to that project; one can be cleared per item; nothing is sent before confirm', async () => {
+    bridge({ afterCreate: [item({})] });
+    const base = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
+    let n = 0;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+      url === '/bridge/v1/uploads'
+        ? reply(201, { upload_id: `up_${++n}`, file_name: `f${n}.md`, size: 5, sha256: 'x', duplicate_of: [] })
+        : base(url, init),
+    );
+    render(<OfficeImportsSlot />);
+    await screen.findByText(/^这次导入的资料会归到当前项目/);
+    await drop('甲.md');
+    await drop('乙.md');
+    const keep = await screen.findAllByRole('radio', { name: '归入当前项目' });
+    expect(keep).toHaveLength(2);
+    keep.forEach((r) => expect(r).toBeChecked());
+    fireEvent.click(screen.getAllByRole('radio', { name: '不归入项目' })[1]!);
+    expect(calls('POST', '/import-batches')).toHaveLength(0);
+    await act(async () => fireEvent.click(await screen.findByRole('button', { name: '确认导入' })));
+    await waitFor(() => expect(calls('POST', '/import-batches')).toHaveLength(1));
+    const body = JSON.parse(String(calls('POST', '/import-batches')[0]![1].body));
+    expect(body.project_id).toBe('proj-1');
+    expect(body.items.map((i: { project_id?: string | null }) => i.project_id)).toEqual([undefined, null]);
   });
 });

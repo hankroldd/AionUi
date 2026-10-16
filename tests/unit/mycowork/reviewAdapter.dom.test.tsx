@@ -40,7 +40,7 @@ vi.mock('@/renderer/mycowork-resource-navigation', () => ({ useOwnerKey: () => a
 vi.mock('@/renderer/pages/guid/hooks/useGuidModelSelection', () => ({
   useGuidModelSelection: () => ({
     current_model: { id: 'provider-fixture', use_model: 'model-fixture', api_key: 'discard-fixture-private' },
-    modelList: [],
+    modelList: [{ id: 'provider-fixture', name: '虚构网关', platform: 'custom', models: ['model-fixture'] }],
   }),
 }));
 
@@ -75,6 +75,7 @@ const message = (id: string, content: string, position = 'left') => ({
 const conversation = () => ({
   id: execution.conversation_id,
   type: 'aionrs',
+  model: { provider_id: 'provider-fixture', model: 'model-fixture', use_model: null },
   runtime: { state: 'idle', can_send_message: true, has_task: false, is_processing: false, turn_id: null },
   extra: {
     workspace: session.workspace,
@@ -171,6 +172,7 @@ it.each(['', ' ', undefined])('rejects a create ACK with invalid id %s without r
 
 it('verifies the same acknowledged conversation, exact directory and dedicated MCP', async () => {
   const { result } = mount();
+  await result.current.create(session);
   await result.current.verify(execution.conversation_id, session);
   expect(api.get).toHaveBeenCalledExactlyOnceWith({ id: 'ack%2Fchat' });
 });
@@ -387,5 +389,6 @@ it('unmount invalidates pending work and StrictMode still permits current work',
   const current = renderHook(() => useReviewAdapter(), {
     wrapper: ({ children }) => <StrictMode>{children}</StrictMode>,
   });
+  await current.result.current.create(session);
   await expect(current.result.current.verify(execution.conversation_id, session)).resolves.toBeUndefined();
 });

@@ -12,7 +12,7 @@ import { ipcBridge } from '@/common';
 import type { IMessageToolCall } from '@/common/chat/chatLib';
 import type { ISessionMcpServer, TProviderWithModel } from '@/common/config/storage';
 import { useOwnerKey } from '@/renderer/mycowork-resource-navigation';
-import { useGuidModelSelection } from '@/renderer/pages/guid/hooks/useGuidModelSelection';
+import { safeModel, useReviewModelSelector, type ReviewModel } from '@/renderer/mycowork-review-model-selector';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 
 type CheckOwner = () => void;
@@ -32,11 +32,6 @@ async function owned<T>(pending: Promise<T>, check: CheckOwner): Promise<T> {
   }
 }
 
-function safeModel(model: { id?: string; use_model?: string } | undefined): TProviderWithModel {
-  if (!model?.id?.trim() || !model.use_model?.trim()) throw new Error('review_model_unavailable');
-  return { id: model.id, use_model: model.use_model, platform: '', name: '', base_url: '', api_key: '' };
-}
-
 function sameServer(actual: ISessionMcpServer | undefined, expected: SessionServer): boolean {
   return (
     actual?.id === expected.id &&
@@ -49,7 +44,12 @@ function sameServer(actual: ISessionMcpServer | undefined, expected: SessionServ
   );
 }
 
-async function verify(conversationId: string, session: ReviewSession, check: CheckOwner): Promise<void> {
+async function verify(
+  conversationId: string,
+  session: ReviewSession,
+  expectedModel: ReviewModel | undefined,
+  check: CheckOwner
+): Promise<void> {
   const conversation = await owned(getConversationOrNull(apiId(conversationId)), check);
   if (!conversation) throw new Error('review_executor_lost');
   if (conversation.type !== 'aionrs') throw new Error('review_isolation_mismatch');
@@ -69,6 +69,14 @@ async function verify(conversationId: string, session: ReviewSession, check: Che
     (extra.session_mode !== undefined && extra.session_mode !== 'default')
   )
     throw new Error('review_isolation_mismatch');
+  const actual: unknown = conversation.model;
+  if (
+    !expectedModel ||
+    !record(actual) ||
+    actual.provider_id !== expectedModel.id ||
+    actual.model !== expectedModel.use_model
+  )
+    throw new Error('review_model_mismatch');
 }
 
 const absolutePath = (path: string): boolean => /^(?:\/|[A-Za-z]:[\\/])/.test(path);
@@ -209,6 +217,24 @@ async function create(session: ReviewSession, model: TProviderWithModel, check: 
   return created.id;
 }
 
+async function createSelected(
+  session: ReviewSession,
+  selected: () => ReviewModel,
+  captured: Map<string, ReviewModel>,
+  check: CheckOwner
+): Promise<string> {
+  let model: ReviewModel, payload: TProviderWithModel;
+  try {
+    model = selected();
+    payload = safeModel(model);
+  } catch (cause) {
+    throw new ReviewCreationNotStarted(cause);
+  }
+  const id = await create(session, payload, check);
+  captured.set(id, model);
+  return id;
+}
+
 async function send(conversationId: string, prompt: string, check: CheckOwner) {
   const sent = await owned(
     ipcBridge.conversation.sendMessage.invoke({
@@ -262,14 +288,16 @@ async function observe(execution: ReviewExecution, review: Review, check: CheckO
 /** 审查只调用公开会话接口；每次异步返回后复核账号及挂载生命周期。 */
 export function useReviewAdapter(): ReviewAdapter {
   const ownerKey = useOwnerKey();
-  const { current_model, modelList } = useGuidModelSelection('aionrs');
-  const owner = useRef({ ownerKey, active: true });
-  if (owner.current.ownerKey !== ownerKey) owner.current = { ownerKey, active: true };
+  const { selected, renderModelSelector } = useReviewModelSelector();
+  const owner = useRef({ ownerKey, active: true, models: new Map<string, ReviewModel>() });
+  if (owner.current.ownerKey !== ownerKey)
+    owner.current = { ownerKey, active: true, models: new Map<string, ReviewModel>() };
   useEffect(() => {
     const instance = owner.current;
     instance.active = true;
     return () => {
       instance.active = false;
+      instance.models.clear();
     };
   }, [ownerKey]);
   return useMemo<ReviewAdapter>(() => {
@@ -283,19 +311,12 @@ export function useReviewAdapter(): ReviewAdapter {
       return check;
     };
     return {
+      renderModelSelector,
       async create(session) {
-        const check = capture();
-        const provider = modelList[0];
-        let model: TProviderWithModel;
-        try {
-          model = safeModel(current_model ?? (provider && { id: provider.id, use_model: provider.models[0] }));
-        } catch (cause) {
-          throw new ReviewCreationNotStarted(cause);
-        }
-        return create(session, model, check);
+        return createSelected(session, selected, instance.models, capture());
       },
       verify(conversationId, session) {
-        return verify(conversationId, session, capture());
+        return verify(conversationId, session, instance.models.get(conversationId), capture());
       },
       async send(conversationId, prompt) {
         return send(conversationId, prompt, capture());
@@ -315,5 +336,5 @@ export function useReviewAdapter(): ReviewAdapter {
         );
       },
     };
-  }, [ownerKey, current_model, modelList]);
+  }, [ownerKey, selected, renderModelSelector]);
 }

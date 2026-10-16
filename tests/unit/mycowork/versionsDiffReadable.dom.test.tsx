@@ -15,6 +15,7 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ resourceId: 'res_1' }),
   useLocation: () => ({ pathname: '/' }),
+  useNavigate: () => vi.fn(), // 版本页挂范围导航（R040）
 }));
 
 const fetchMock = vi.fn();

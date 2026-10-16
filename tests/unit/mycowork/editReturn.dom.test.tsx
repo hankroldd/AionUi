@@ -20,6 +20,7 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ sessionId: 'eds_1', resourceId: 'res_md' }),
   useLocation: () => ({ pathname: '/' }),
+  useNavigate: () => vi.fn(), // 版本页挂范围导航（R040）
 }));
 vi.mock('@/renderer/pages/conversation/Preview/components/editors', () => {
   const box =

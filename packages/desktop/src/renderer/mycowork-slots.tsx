@@ -309,8 +309,7 @@ export const OfficeCompositionSlot: React.FC = () => {
  * Mount point: route `/office/resources/:resourceId/versions` (MyCowork P12 versions: timeline, compare, restore, publish,
  * read-only preview of the current version). [mycowork] D138: markdown is rendered with AionUi's chat MarkdownView, not the
  * preview MarkdownViewer, whose selection toolbar offers "add to chat" (a dead button outside the chat page, MyCowork A59).
- * The page hands over element overrides: markdown images are not loaded (a remote image would reveal the
- * reader's IP/time to its host; a path would be read from this machine by LocalImageView).
+ * Markdown images are not loaded (they would reveal the reader); R040 object selections ask via the Space scope navigation.
  */
 export const OfficeVersionsSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
@@ -318,6 +317,7 @@ export const OfficeVersionsSlot: React.FC = () => {
   const ownerKey = useOwnerKey();
   const branchAdapter = useBranchAdapter();
   const reviewAdapter = useReviewAdapter();
+  const onAskScope = useResourceQuestionNavigation(ownerKey);
   return (
     <VersionsPage
       lang={current.language}
@@ -325,6 +325,7 @@ export const OfficeVersionsSlot: React.FC = () => {
       ownerKey={ownerKey}
       branchAdapter={branchAdapter}
       reviewAdapter={reviewAdapter}
+      onAskScope={onAskScope}
       renderMarkdown={(content, overrides) => <MarkdownView components={overrides}>{content}</MarkdownView>}
     />
   );

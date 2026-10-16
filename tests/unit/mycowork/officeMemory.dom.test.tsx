@@ -140,7 +140,7 @@ describe('OfficeMemorySlot', () => {
   it('an unavailable Bridge is explained in plain words, not as an error code', async () => {
     fetchMock.mockResolvedValue(reply(503, {}));
     render(<OfficeMemorySlot />);
-    expect(await screen.findByText('资料服务暂不可用，请稍后重试；已保存的内容不受影响。')).toBeInTheDocument();
+    expect(await screen.findByText('资料服务暂不可用，请稍后重试；已保存的内容不受影响，手头的文件仍可打开和编辑，只是暂时不能语义检索。')).toBeInTheDocument();
     expect(screen.queryByText(/unavailable/)).toBeNull();
   });
 

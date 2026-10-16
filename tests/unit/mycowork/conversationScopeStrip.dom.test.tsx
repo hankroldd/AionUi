@@ -73,7 +73,10 @@ describe('ConversationScopeSlot', () => {
     streamListeners.clear();
     fetchMock.mockReset();
     navigateMock.mockReset();
-    vi.stubGlobal('fetch', fetchMock);
+    // 范围条里的记忆建议徽标（R058）另读 /memory-items，这里统一回空，不占用本文件对 fetchMock 的计数与顺序
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+      String(url).includes('/memory-items') ? Promise.resolve(reply(200, { items: [], total: 0 })) : fetchMock(url, init),
+    );
   });
   afterEach(() => vi.unstubAllGlobals());
 

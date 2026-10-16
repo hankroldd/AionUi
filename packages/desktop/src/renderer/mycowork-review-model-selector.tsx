@@ -4,7 +4,7 @@
  * 边界：只选择已配置可用模型；不保存全局默认，不传递provider凭据。
  * 关联：PR10 E1；renderer/mycowork-reviews.tsx。
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Button, Dropdown, Menu } from '@arco-design/web-react';
 import type { IProvider, TProviderWithModel } from '@/common/config/storage';
 import {
@@ -36,6 +36,8 @@ function ModelSelector({
   label: string;
   onSelect: (model: ReviewModel) => void;
 }) {
+  const [visible, setVisible] = useState(false);
+  const unavailable = disabled || choices.length === 0;
   const groups = new Map<string, RuntimeSelectorModelGroup>();
   for (const choice of choices) {
     if (!groups.has(choice.id)) groups.set(choice.id, { key: choice.id, title: choice.providerName, models: [] });
@@ -43,8 +45,10 @@ function ModelSelector({
   }
   return (
     <Dropdown
-      disabled={disabled || choices.length === 0}
+      disabled={unavailable}
       trigger='click'
+      popupVisible={!unavailable && visible}
+      onVisibleChange={(next) => setVisible(!unavailable && next)}
       droplist={
         <Menu>
           <RuntimeSelectorModelList
@@ -53,13 +57,16 @@ function ModelSelector({
             disabled={disabled}
             onSelect={(id) => {
               const choice = choices.find((item) => key(item) === id);
-              if (!disabled && choice) onSelect({ id: choice.id, use_model: choice.use_model });
+              if (!disabled && choice) {
+                setVisible(false);
+                onSelect({ id: choice.id, use_model: choice.use_model });
+              }
             }}
           />
         </Menu>
       }
     >
-      <Button disabled={disabled || choices.length === 0} aria-label={label} data-testid='review-model-selector'>
+      <Button disabled={unavailable} aria-label={label} data-testid='review-model-selector'>
         {current?.use_model || label}
       </Button>
     </Dropdown>

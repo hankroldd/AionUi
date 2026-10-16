@@ -69,12 +69,13 @@ async function verify(
     (extra.session_mode !== undefined && extra.session_mode !== 'default')
   )
     throw new Error('review_isolation_mismatch');
+  // 宿主fromApiConversation已将REST的provider_id/model归一为id/use_model。
   const actual: unknown = conversation.model;
   if (
     !expectedModel ||
     !record(actual) ||
-    actual.provider_id !== expectedModel.id ||
-    actual.model !== expectedModel.use_model
+    actual.id !== expectedModel.id ||
+    actual.use_model !== expectedModel.use_model
   )
     throw new Error('review_model_mismatch');
 }

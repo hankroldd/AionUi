@@ -5,7 +5,7 @@
  * 关联：PR10 E1；renderer/mycowork-reviews.tsx。
  */
 import React, { useState } from 'react';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ReviewAdapter } from '@mycowork/ui';
 import type { IProvider, TProviderWithModel } from '@/common/config/storage';
@@ -21,13 +21,21 @@ const api = vi.hoisted(() => ({
   select: vi.fn(),
   persist: vi.fn(),
 }));
-vi.mock('@/common', () => ({
-  ipcBridge: {
-    conversation: { create: { invoke: api.create }, get: { invoke: api.get }, sendMessage: { invoke: api.send } },
-    fs: { listAvailableSkills: { invoke: api.skills } },
-    mode: { updateProvider: { invoke: api.persist } },
-  },
-}));
+vi.mock('@/common', async () => {
+  const { withResponseMap } = await import('@/common/adapter/httpBridge');
+  const { fromApiConversation } = await import('@/common/adapter/apiModelMapper');
+  return {
+    ipcBridge: {
+      conversation: {
+        create: { invoke: api.create },
+        get: withResponseMap({ provider: () => {}, invoke: api.get }, fromApiConversation),
+        sendMessage: { invoke: api.send },
+      },
+      fs: { listAvailableSkills: { invoke: api.skills } },
+      mode: { updateProvider: { invoke: api.persist } },
+    },
+  };
+});
 vi.mock('@/renderer/mycowork-resource-navigation', () => ({ useOwnerKey: () => 'fixture-owner' }));
 vi.mock('@/renderer/pages/guid/hooks/useGuidModelSelection', () => ({
   useGuidModelSelection: () => {
@@ -99,9 +107,19 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it('verifies the real host IPC normalization of the REST model before sending', async () => {
+  render(<Screen />);
+  const id = await adapter.create(session);
+  await adapter.verify(id, session);
+  await adapter.send(id, session.prompt);
+  expect(api.get).toHaveBeenCalledExactlyOnceWith({ id });
+  expect(api.send).toHaveBeenCalledTimes(1);
+});
+
 it('selects an available configured model for create without forwarding credentials or persisting a default', async () => {
   render(<Screen />);
   await choose(plus);
+  await waitFor(() => expect(screen.queryAllByRole('menuitem')).toHaveLength(0));
   expect(screen.getByRole('button', { name: '审查模型' })).toHaveTextContent(plus);
   expect(await adapter.create(session)).toBe('created-fixture');
   expect(api.create.mock.calls[0]![0].model).toEqual({

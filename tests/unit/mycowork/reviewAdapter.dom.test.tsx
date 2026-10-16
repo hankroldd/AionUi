@@ -8,6 +8,7 @@ import React, { StrictMode } from 'react';
 import { cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { BackendHttpError } from '@/common/adapter/httpBridge';
+import { fromApiConversation } from '@/common/adapter/apiModelMapper';
 import { useReviewAdapter } from '@/renderer/mycowork-reviews';
 import { ReviewCreationNotStarted } from '@mycowork/ui';
 import type { Review } from '@mycowork/contracts';
@@ -72,18 +73,19 @@ const message = (id: string, content: string, position = 'left') => ({
   backend_turn_id: 'different-backend-turn',
   status: 'finish',
 });
-const conversation = () => ({
-  id: execution.conversation_id,
-  type: 'aionrs',
-  model: { provider_id: 'provider-fixture', model: 'model-fixture', use_model: null },
-  runtime: { state: 'idle', can_send_message: true, has_task: false, is_processing: false, turn_id: null },
-  extra: {
-    workspace: session.workspace,
-    skills: [],
-    mcp_server_ids: [],
-    session_mcp_servers: [session.session_mcp_server],
-  },
-});
+const conversation = () =>
+  fromApiConversation({
+    id: execution.conversation_id,
+    type: 'aionrs',
+    model: { provider_id: 'provider-fixture', model: 'model-fixture', use_model: null },
+    runtime: { state: 'idle', can_send_message: true, has_task: false, is_processing: false, turn_id: null },
+    extra: {
+      workspace: session.workspace,
+      skills: [],
+      mcp_server_ids: [],
+      session_mcp_servers: [session.session_mcp_server],
+    },
+  });
 function mount() {
   return renderHook(() => useReviewAdapter());
 }

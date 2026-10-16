@@ -36,6 +36,7 @@ import {
   MemoryPage,
   ResourcesPage,
   VersionsPage,
+  parseCitedRevision,
   OfficeEditorPage,
   PreviewEditButton,
   TextEditorPage,
@@ -346,8 +347,10 @@ export const OfficeVersionsSlot: React.FC = () => {
   const branchAdapter = useBranchAdapter();
   const reviewAdapter = useReviewAdapter();
   const onAskScope = useResourceQuestionNavigation(ownerKey);
+  const citedRevisionId = parseCitedRevision(useLocation().search); // R014：AI 当时读到的版本（navigation-intent §10）
   return (
     <VersionsPage
+      citedRevisionId={citedRevisionId}
       lang={current.language}
       resourceId={resourceId}
       ownerKey={ownerKey}

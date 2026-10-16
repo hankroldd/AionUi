@@ -200,7 +200,7 @@ describe('MyCowork icon rail', () => {
     const trigger = screen.getByRole('button', { name: '更多' });
     fireEvent.click(trigger);
     const menu = await screen.findByRole('menu', { name: '更多' });
-    expect(screen.getAllByRole('menuitem').map((n) => n.textContent)).toEqual(['知识管理', '导入记录', '能力中心']);
+    expect(screen.getAllByRole('menuitem').map((n) => n.textContent)).toEqual(['知识管理', '导入记录', '能力中心', '首次设置']);
     const first = screen.getByRole('menuitem', { name: '知识管理' });
     first.focus();
     fireEvent.keyDown(first, { key: 'ArrowDown' });

@@ -30,6 +30,7 @@ import {
   ImportsPage,
   KnowledgePage,
   CapabilitiesPage,
+  SetupPage,
   MemoryPage,
   ResourcesPage,
   VersionsPage,
@@ -280,6 +281,12 @@ export const OfficeKnowledgeSlot: React.FC = () => {
 export const OfficeCapabilitiesSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   return <CapabilitiesPage lang={current.language} />;
+};
+
+/** Mount point: route `/office/setup` (MyCowork P00 first-run setup checklist, state derived from real capability checks). */
+export const OfficeSetupSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  return <SetupPage lang={current.language} />;
 };
 
 /** Mount point: route `/office/memory` (MyCowork P11 memory: review, accept/reject/disable, pause precipitation). */

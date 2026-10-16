@@ -97,6 +97,7 @@ describe('withGuidScope for the scene assistant (A197)', () => {
       scopes: [{ selector: 'knowledge_base', id: 'src_a' }],
       use_project_defaults: false,
     });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({ assistant_id: SCENE }); // D263：场景技能读取
   });
 
   it('with project default sources the request is the project selector (no explicit_empty)', async () => {

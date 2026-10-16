@@ -185,7 +185,9 @@ export const withGuidScope = async <T extends CreateExtra>(
   const scoped = await prepareScopedSession(
     i18n.language,
     (extra.default_files?.length ?? 0) > 0,
-    isSceneAssistant(assistantId)
+    isSceneAssistant(assistantId),
+    true,
+    assistantId // [mycowork] D263: Bridge maps a scene assistant to its allowed skills (skill_read); other ids grant nothing
   );
   if (!scoped) return extra;
   if (overrides && (!overrides.permission || overrides.permission === 'yolo')) overrides.permission = 'default';

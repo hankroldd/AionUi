@@ -263,4 +263,11 @@ describe('OfficeImportsSlot', () => {
       expect(reads()).toHaveLength(1);
     });
   });
+
+  it('entered from a project (router state) opens the upload dialog at once and says files go to that project', async () => {
+    bridge({ afterCreate: [item({})] });
+    render(<OfficeImportsSlot />);
+    expect(await screen.findByText('这次导入的资料会归到当前项目')).toBeInTheDocument();
+    expect(calls('POST', '/import-batches')).toHaveLength(0);
+  });
 });

@@ -40,6 +40,7 @@ const renderRow = (conversations: TChatConversation[]) =>
           element={<ProjectScopeSlot group={{ workspace: '/w/a', conversations }} isMobile={false} />}
         />
         <Route path='/guid' element={<GuidProbe />} />
+        <Route path='/office/imports' element={<GuidProbe />} />
       </Routes>
     </MemoryRouter>
   );
@@ -138,6 +139,16 @@ describe('ProjectScopeSlot', () => {
     fireEvent.click(screen.getByRole('button', { name: '基于本项目提问' }));
     const state = JSON.parse((await screen.findByTestId('guid-state')).textContent ?? 'null');
     expect(state).toEqual({ workspace: '/w/a', mycoworkProjectId: 'proj-1' });
+    expect(bindingCalls()).toEqual([]);
+  });
+
+  it('"import into this project" opens the import page with the project id, writing nothing', async () => {
+    fetchMock.mockResolvedValue(reply(200, CATALOG));
+    renderRow([conv('c1', 'proj-1')]);
+    await openEntry();
+    fireEvent.click(screen.getByRole('button', { name: '导入资料到本项目' }));
+    const state = JSON.parse((await screen.findByTestId('guid-state')).textContent ?? 'null');
+    expect(state).toEqual({ mycoworkProjectId: 'proj-1' });
     expect(bindingCalls()).toEqual([]);
   });
 });

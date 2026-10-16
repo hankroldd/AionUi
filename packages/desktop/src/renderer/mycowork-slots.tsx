@@ -137,7 +137,8 @@ export const ConversationScopeSlot: React.FC<{ conversation_id: string }> = ({ c
  * Mount point: sidebar "Projects" row action (MyCowork 02 P03 "ask about this project / link knowledge bases").
  * AionUi project ids are opaque and only reach the renderer on conversations (`project_id`), so the entry is
  * shown only when a conversation of this workspace group carries one. "Ask" opens the Guid page in the project's
- * workspace (as AionUi's own "+") plus `mycoworkProjectId`; saving the project default is a separate action.
+ * workspace (as AionUi's own "+") plus `mycoworkProjectId`; "Import" opens /office/imports with the same id (R018);
+ * saving the project default is a separate action.
  */
 export const ProjectScopeSlot: React.FC<{
   group: { workspace: string; conversations: TChatConversation[] };
@@ -152,6 +153,7 @@ export const ProjectScopeSlot: React.FC<{
       lang={current.language}
       projectId={projectId}
       onAsk={() => void navigate('/guid', { state: { workspace, mycoworkProjectId: projectId } })}
+      onImport={() => void navigate('/office/imports', { state: { mycoworkProjectId: projectId } })}
       className={`flex-center cursor-pointer transition-colors text-t-secondary hover:text-t-primary size-20px rd-4px sider-action-btn ${isMobile ? 'flex' : 'hidden group-hover:flex'}`}
     >
       <BookOpen theme='outline' size='14' fill='currentColor' className='block leading-none' />

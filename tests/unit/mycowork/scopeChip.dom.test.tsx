@@ -13,7 +13,8 @@ import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 // Same as renderer/main.tsx: Arco's global Message needs the React 19 adapter (tests load the CJS lib build).
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { Message } from '@arco-design/web-react';
-import { ScopeChip, setScopeSelection } from '@mycowork/ui';
+import { ScopeChip, getScope, restoreScope, setScopeSelection } from '@mycowork/ui';
+import { scopePlanRequest } from '@mycowork/ui/scope-picker/scoped-session';
 
 const fetchMock = vi.fn();
 const reply = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => body });
@@ -306,6 +307,35 @@ describe('ScopeChip', () => {
     expect(screen.getByText('2026电商 / 竞品')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '应用到本轮' }));
     expect(await screen.findByRole('button', { name: '资料范围：电商竞品' })).toBeInTheDocument();
+  });
+
+  it('excluding a file from a whole knowledge base is sent as excludes and shown on the chip; clearing removes it (R008)', async () => {
+    route();
+    render(<ScopeChip lang='zh-CN' />);
+    await openDialog();
+    tick(await screen.findByText('产品知识库').then(() => '产品知识库'));
+    fireEvent.click(await screen.findByRole('button', { name: '挑选文件' }));
+    fireEvent.click(await screen.findByRole('button', { name: '排除 价格带.xlsx' }));
+    expect(screen.getByRole('button', { name: '取消排除 价格带.xlsx' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '应用到本轮' }));
+    expect(await screen.findByRole('button', { name: '资料范围：产品知识库（排除 1 份）' })).toBeInTheDocument();
+    const req = scopePlanRequest(getScope());
+    expect(req?.excludes).toEqual([{ kind: 'resource', id: 'res_2' }]);
+    expect(req?.scopes).toEqual([{ selector: 'knowledge_base', id: 'src_a' }]); // 仍是整库，排除最后生效
+    await openDialog();
+    fireEvent.click(await screen.findByRole('button', { name: '清除排除规则' }));
+    fireEvent.click(screen.getByRole('button', { name: '应用到本轮' }));
+    expect(await screen.findByRole('button', { name: '资料范围：产品知识库' })).toBeInTheDocument();
+    expect(scopePlanRequest(getScope())?.excludes).toBeUndefined();
+  });
+
+  it('a draft with malformed excludes is rejected', () => {
+    const draft = { items: [], views: [], origin: 'turn' };
+    expect(() => restoreScope({ ...draft, excludes: [{ kind: 'resource', id: 'res_2' }] })).not.toThrow();
+    expect(getScope().excludes).toEqual([{ kind: 'resource', id: 'res_2' }]);
+    expect(() => restoreScope({ ...draft, excludes: [{ kind: 'file', id: 'res_2' }] })).toThrow();
+    expect(() => restoreScope({ ...draft, excludes: [{ kind: 'resource' }] })).toThrow();
+    expect(() => restoreScope({ ...draft, excludes: 'res_2' })).toThrow();
   });
 
   it('clears the round selection when the chip unmounts (leaving the page)', () => {

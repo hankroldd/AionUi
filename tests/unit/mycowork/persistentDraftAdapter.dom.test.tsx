@@ -220,6 +220,8 @@ describe('真实持久草稿与原生适配', () => {
     render(<GuidHarness />);
     await waitFor(() => expect(screen.getByLabelText('首页输入')).toHaveValue(sourceState.content));
     expect(getScope()).toMatchObject({ carriedPlanId: 'plan-new', items: [{ source_id: 'src-keep' }] });
+    resetAccountScopedState(); // 换账号：上一个账号收缩带来的计划不能留给下一个账号
+    expect(getScope().carriedPlanId).toBeUndefined();
   });
   it('明确路由提问和目录优先，已保存范围不覆盖明确项目意图', async () => {
     docs.set('guid', doc('guid'));

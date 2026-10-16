@@ -283,6 +283,7 @@ it('办公拒绝保留输入，办公加入队列也保留输入且没有投递'
   sendCurrent();
   await waitFor(() => expect(count('/bridge/v1/tasks')).toBe(1));
   await waitFor(() => expect(document.body).toHaveTextContent('任务尚未受理'));
+  expect(document.body).toHaveTextContent('模型服务请求过多'); // R068：分型原因随提示给出
   expect(input).toHaveValue('保留的虚构办公输入');
   expect(ipcCount('conversation.sendMessage')).toBe(0);
 });

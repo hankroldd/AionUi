@@ -168,6 +168,7 @@ export async function fixtureFetch(raw: string, init?: RequestInit): Promise<Res
       created_at: '2026-10-15T12:00:00Z',
       status: fixture.rejectTask ? 'failed' : 'running',
       delivery_phase: fixture.rejectTask ? 'rejected' : 'accepted',
+      ...(fixture.rejectTask ? { failure: { kind: 'rate_limited' } } : {}), // R068：拒绝带分型原因
       conversation_id: fixture.conversation,
       msg_id: 'user-task-msg',
       turn_id: 'host-task-turn',

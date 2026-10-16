@@ -14,6 +14,7 @@ import {
   isSceneAssistant,
   lookupOfficeTask,
   officeTaskAccepted,
+  officeTaskFailureText,
   readOfficeTask,
   stopOfficeTask,
   submitOfficeTask,
@@ -99,15 +100,16 @@ export async function sendOfficeDraft(
   const result = await submitOfficeTask({ ...owner, draft: saved, ...options });
   if (!result) return null;
   if (!officeTaskAccepted(result.run)) {
+    const why = officeTaskFailureText(result.run, 'zh-CN') ?? ''; // R068：按失败分型给原因，没有就不编造
     if (result.run.status === 'failed' && result.run.delivery_phase === 'rejected') {
       await draft.accept(saved.state, saved.state);
-      throw new Error('任务尚未受理：投递已明确拒绝，输入已保留；请检查后再次点击发送。');
+      throw new Error(`任务尚未受理：投递已明确拒绝，输入已保留；请检查后再次点击发送。${why}`);
     }
     const unknown = result.run.delivery_phase === 'unknown' || result.run.status === 'recovery_required';
     throw new Error(
-      unknown
+      (unknown
         ? '此提交的受理结果尚未确认，输入已保留；不会自动重复发送。'
-        : '任务尚未受理，输入已保留，请检查任务状态。'
+        : '任务尚未受理，输入已保留，请检查任务状态。') + why
     );
   }
   let accepted = result.run;

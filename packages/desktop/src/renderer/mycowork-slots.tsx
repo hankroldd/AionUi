@@ -31,7 +31,8 @@ import {
   KnowledgePage,
   CapabilitiesPage,
   capabilityReturnTarget,
-  parseCapabilityReturn,
+  notifyCapabilityBlocked,
+  useCapabilityReturn,
   SetupPage,
   SchedulesPage,
   MemoryPage,
@@ -115,11 +116,13 @@ export const GuidScopeSlot: React.FC<{ assistantId?: string | undefined }> = ({ 
  * conversation context whenever an assistant turn of this conversation finishes (the same `finish` frame the
  * chat hooks consume); keyed by conversation so a switch never shows the previous conversation's scope.
  * A strict narrowing of the scope (MyCowork D19) opens the Guid page, where the next send starts a new
- * conversation on the narrowed plan; this conversation stays readable.
+ * conversation on the narrowed plan; this conversation stays readable. A Bridge 503 while changing sources offers
+ * "configure" with a validated return intent back to this conversation (MyCowork R036, D283).
  */
 export const ConversationScopeSlot: React.FC<{ conversation_id: string }> = ({ conversation_id }) => {
   const { i18n: current } = useTranslation();
   const navigate = useNavigate();
+  const ownerKey = useOwnerKey();
   const [turns, setTurns] = useState(0);
   useEffect(
     () =>
@@ -135,6 +138,7 @@ export const ConversationScopeSlot: React.FC<{ conversation_id: string }> = ({ c
       conversationId={conversation_id}
       refreshKey={turns}
       onStrictShrink={() => void navigate('/guid')}
+      onBlocked={(error) => notifyCapabilityBlocked(error, ownerKey, current.language, (path, state) => void navigate(path, { state }), { origin: 'conversation', conversationId: conversation_id })}
     />
   );
 };
@@ -288,7 +292,7 @@ export const OfficeKnowledgeSlot: React.FC = () => {
 export const OfficeCapabilitiesSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   const navigate = useNavigate();
-  const intent = parseCapabilityReturn(useLocation().state, useOwnerKey());
+  const intent = useCapabilityReturn(useLocation().state, useOwnerKey());
   const returnTo = intent && {
     capabilityId: intent.capabilityId,
     onReturn: () => {

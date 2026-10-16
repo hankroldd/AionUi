@@ -4,12 +4,15 @@
  * 边界：不新增发送API；只保存ID和输入意图，不保存provider对象、cookie或密钥（ADR-0025）。
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import i18n from 'i18next';
 import type { DraftChoices, DraftDocument, DraftState, TaskRun } from '@mycowork/contracts';
 import {
   adoptStoredDraft,
   DraftStatus,
   getScope,
+  isCapabilityReturn,
   readDraft,
+  recheckReturnedScope,
   restoreScope,
   usePersistentDraft,
   useScope,
@@ -149,8 +152,8 @@ function choiceBlocker(options: GuidOptions, restoredChoices: DraftChoices | und
 export function useGuidPersistentDraft(options: GuidOptions) {
   const owner = useCurrentOwner();
   const scope = useScope();
-  const latest = useRef(options);
-  latest.current = options;
+  const latest = useRef({ ...options, ownerKey: owner.ownerKey });
+  latest.current = { ...options, ownerKey: owner.ownerKey };
   // 原生助手选择会replace清空路由state；初次异步恢复仍须记住明确输入意图。
   const navigation = useRef(options.navigation);
   const consumedNavigation = useRef(false);
@@ -188,6 +191,8 @@ export function useGuidPersistentDraft(options: GuidOptions) {
     // A strict narrowing in a conversation (MyCowork D19) just carried a new plan here; the older draft must not undo it (R008)
     if (!nav?.mycoworkScopeDraft && !nav?.mycoworkProjectId && !getScope().carriedPlanId && state.scope)
       restoreScope(state.scope);
+    // R036：从能力中心回来（同账号）只在这一次恢复后只读核对资料范围；不发送（navigation-intent §9）
+    if (isCapabilityReturn(nav, latest.current.ownerKey)) void recheckReturnedScope(i18n.language);
     setRestoredChoices(nav?.selectedAssistantId || nav?.resetAssistant ? undefined : state.choices);
   }, []);
   const state = useMemo<DraftState>(

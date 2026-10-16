@@ -30,6 +30,8 @@ import {
   ImportsPage,
   KnowledgePage,
   CapabilitiesPage,
+  capabilityReturnTarget,
+  parseCapabilityReturn,
   SetupPage,
   MemoryPage,
   ResourcesPage,
@@ -277,10 +279,22 @@ export const OfficeKnowledgeSlot: React.FC = () => {
   return <KnowledgePage lang={current.language} />;
 };
 
-/** Mount point: route `/office/capabilities` (MyCowork P10 capability center: read-only status list + per-item re-check). */
+/**
+ * Mount point: route `/office/capabilities` (MyCowork P10 capability center: read-only status list + per-item re-check).
+ * A validated return intent from a blocked task (router state, same account, whitelisted origin) adds "back to my task".
+ */
 export const OfficeCapabilitiesSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
-  return <CapabilitiesPage lang={current.language} />;
+  const navigate = useNavigate();
+  const intent = parseCapabilityReturn(useLocation().state, useOwnerKey());
+  const returnTo = intent && {
+    capabilityId: intent.capabilityId,
+    onReturn: () => {
+      const target = capabilityReturnTarget(intent);
+      void navigate(target.path, { state: target.state });
+    },
+  };
+  return <CapabilitiesPage lang={current.language} returnTo={returnTo ?? undefined} />;
 };
 
 /** Mount point: route `/office/setup` (MyCowork P00 first-run setup checklist, state derived from real capability checks). */
@@ -404,6 +418,7 @@ export {
   useConversationPersistentDraft,
 } from './mycowork-drafts';
 export type { PersistentDraft } from './mycowork-drafts';
+export { notifyCapabilityBlocked } from '@mycowork/ui';
 export {
   captureOfficeDraftState,
   hydrateOfficeTaskRuntime,

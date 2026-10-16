@@ -16,7 +16,7 @@ import { type TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
-import { bindGuidScope, withGuidScope, handoffGuidDraft, sendOfficeDraft, type PersistentDraft } from '@/renderer/mycowork-slots';
+import { bindGuidScope, withGuidScope, handoffGuidDraft, notifyCapabilityBlocked, sendOfficeDraft, type PersistentDraft } from '@/renderer/mycowork-slots';
 
 export type GuidSendDeps = {
   persistentDraft?: PersistentDraft & { ownerKey?: string; isCurrent: () => boolean };
@@ -343,6 +343,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       })
       .catch((error) => {
         console.error('Failed to send message:', error);
+        // [mycowork] R036：资料服务不可用时提示带“去配置”，输入与范围已在持久草稿里
+        if (notifyCapabilityBlocked(error, deps.persistentDraft?.ownerKey, localeKey, (path, state) => void navigate(path, { state }))) return;
         Message.error(getConversationCreateErrorMessage(error, t));
       })
       .finally(() => {
@@ -362,6 +364,9 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     setFiles,
     setDir,
     t,
+    deps.persistentDraft,
+    localeKey,
+    navigate,
   ]);
 
   // Calculate button disabled state

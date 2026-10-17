@@ -9,6 +9,8 @@
  */
 import net, { type Socket } from 'node:net';
 import type { IncomingMessage } from 'node:http';
+import { reconstructRequest } from './remote-guard.js';
+import { sessionDeniedResponse, type createSessionGate } from './session-gate.js';
 
 const MAX_STATUS_BYTES = 8192;
 const WAIT_MS = 10_000;
@@ -60,4 +62,33 @@ export function spliceUpgradeAfter101(client: Socket, backendPort: number, reque
   client.on('error', tearDown);
   upstream.on('close', tearDown);
   client.on('close', tearDown);
+}
+
+/**
+ * Non-loopback upgrades (already past the A67 path guard) must be a well-formed WebSocket upgrade with no pipelined bytes,
+ * hold a valid session, and are relayed only up to the backend's 101 — no request smuggling behind a refused upgrade.
+ */
+export function handleLanUpgrade(
+  socket: Socket,
+  req: IncomingMessage,
+  head: Buffer,
+  backendPort: number,
+  gate: ReturnType<typeof createSessionGate>
+): void {
+  if (!isWebSocketUpgrade(req) || head.length > 0) {
+    socket.end('HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');
+    return;
+  }
+  const peer = socket.remoteAddress ?? '';
+  void gate(req.headers.cookie, peer).then((verdict) => {
+    if (socket.destroyed) return;
+    if (verdict === 'ok') {
+      spliceUpgradeAfter101(socket, backendPort, reconstructRequest(req, Buffer.alloc(0), peer));
+      return;
+    }
+    const d = sessionDeniedResponse(verdict);
+    socket.end(
+      `HTTP/1.1 ${d.status} ${d.status === 401 ? 'Unauthorized' : 'Service Unavailable'}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(d.body)}\r\nConnection: close\r\n\r\n${d.body}`
+    );
+  });
 }

@@ -14,7 +14,6 @@
 import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import net, { type Socket } from 'node:net';
-import tls from 'node:tls';
 import serveHandler from 'serve-handler';
 import {
   UPGRADE_ALLOWED,
@@ -26,8 +25,10 @@ import {
   reconstructRequest,
   writeRemoteForbidden,
 } from './remote-guard.js';
-import { createSessionGate, needsSession, peerHeaders, secureCookies, sessionDeniedResponse } from './session-gate.js';
-import { isWebSocketUpgrade, spliceUpgradeAfter101 } from './upgrade-splice.js';
+import { networkUrlFor, startTlsListener } from './lan-tls.js';
+import { createSessionGate, needsSession, peerHeaders, secureCookies, writeSessionDenied } from './session-gate.js';
+import { BRIDGE_UNAVAILABLE, bridgeHeaders, isBlockedWatchRequest, notifyBridgeLogout } from './mycowork-proxy.js';
+import { handleLanUpgrade } from './upgrade-splice.js';
 
 export type StaticServerOptions = {
   staticDir: string;
@@ -48,6 +49,8 @@ export type StaticServerHandle = {
   lanIP?: string;
   stop: () => Promise<void>;
 };
+
+export { isBlockedWatchRequest } from './mycowork-proxy.js';
 
 const DEFAULT_PORT = 25808;
 
@@ -126,56 +129,9 @@ function forward(
   req.pipe(proxy);
 }
 
-// [mycowork] D35/A35: the officecli watch preview (proxied by aioncore) is read-only here. Its server also
-// rewrites the live document (/api/send, /api/batch), retargets the preview to any local file (/api/switch)
-// and echoes host paths (/api/status); only the page, its SSE stream and selection reports may pass.
-// Default-deny: anything under the watch proxy prefix (any case, any port spelling such as `+41234` or `%34…`,
-// which aioncore still accepts) must match the strict whitelist exactly, or it is refused.
-const WATCH_PREFIX = /^\/api\/(?:office-watch-proxy|ppt-proxy)(?:[/?]|$)/i;
-const WATCH_PAGE = /^\/api\/(?:office-watch-proxy|ppt-proxy)\/[0-9]+(?:\/|\/events)?(?:\?.*)?$/;
-const WATCH_SELECTION = /^\/api\/(?:office-watch-proxy|ppt-proxy)\/[0-9]+\/api\/selection(?:\?.*)?$/;
-
-export function isBlockedWatchRequest(method: string, url: string): boolean {
-  if (!WATCH_PREFIX.test(url)) return false;
-  if (method === 'GET') return !WATCH_PAGE.test(url);
-  return !(method === 'POST' && WATCH_SELECTION.test(url));
-}
-
 function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort: number): void {
   const headers = peerHeaders(req.headers, req.socket.remoteAddress, isLoopbackAddr(req.socket.remoteAddress));
   forward(req, res, new URL(`http://127.0.0.1:${backendPort}`), headers, { error: 'BACKEND_UNREACHABLE' });
-}
-
-// [mycowork] ADR-0011: same-origin reverse proxy /bridge/* to the MyCowork Bridge.
-// Only the aionui-session cookie may leave for the Bridge (cf. Grafana CVE-2022-39201).
-const BRIDGE_UNAVAILABLE = { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'bridge unavailable' } };
-
-function sessionCookieOnly(cookie: string | undefined): string | undefined {
-  return cookie
-    ?.split(';')
-    .map((c) => c.trim())
-    .find((c) => c.startsWith('aionui-session='));
-}
-
-function bridgeHeaders(req: IncomingMessage): http.IncomingHttpHeaders {
-  const { cookie, ...rest } = peerHeaders(req.headers, req.socket.remoteAddress, isLoopbackAddr(req.socket.remoteAddress));
-  const session = sessionCookieOnly(cookie);
-  return session ? { ...rest, cookie: session } : rest;
-}
-
-// Fire-and-forget: tell the Bridge to drop its identity cache for this session (ADR-0011 D21).
-// Never awaited, errors ignored — logout itself must not depend on the Bridge.
-function notifyBridgeLogout(bridge: URL, req: IncomingMessage): void {
-  const session = sessionCookieOnly(req.headers.cookie);
-  if (!session) return;
-  const notify = http.request(new URL('/bridge/v1/session/end', bridge), {
-    method: 'POST',
-    headers: { cookie: session },
-  });
-  notify.on('response', (r) => r.resume());
-  notify.on('error', () => {});
-  notify.setTimeout(2000, () => notify.destroy());
-  notify.end();
 }
 
 // Max bytes we peek before forcing a routing decision. An HTTP request-line
@@ -273,8 +229,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       if (!isLoopbackAddr(req.socket.remoteAddress) && needsSession(req.url)) {
         const verdict = await sessionGate(req.headers.cookie, req.socket.remoteAddress);
         if (verdict !== 'ok') {
-          const d = sessionDeniedResponse(verdict);
-          res.writeHead(d.status, { 'content-type': 'application/json' }).end(d.body);
+          writeSessionDenied(res, verdict);
           return;
         }
       }
@@ -339,24 +294,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       spliceToTcpEndpoint(socket, opts.backendPort, reconstructRequest(req, head));
       return;
     }
-    // [mycowork] R061: non-loopback upgrades must be a well-formed WebSocket upgrade with no pipelined bytes, hold a valid
-    // session, and are relayed only up to the backend's 101 (see upgrade-splice.ts) — no request smuggling behind a refused upgrade.
-    if (!isWebSocketUpgrade(req) || head.length > 0) {
-      socket.end('HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');
-      return;
-    }
-    const peer = socket.remoteAddress ?? '';
-    void sessionGate(req.headers.cookie, peer).then((verdict) => {
-      if (socket.destroyed) return;
-      if (verdict === 'ok') {
-        spliceUpgradeAfter101(socket, opts.backendPort, reconstructRequest(req, Buffer.alloc(0), peer));
-        return;
-      }
-      const d = sessionDeniedResponse(verdict);
-      socket.end(
-        `HTTP/1.1 ${d.status} ${d.status === 401 ? 'Unauthorized' : 'Service Unavailable'}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(d.body)}\r\nConnection: close\r\n\r\n${d.body}`
-      );
-    });
+    handleLanUpgrade(socket, req, head, opts.backendPort, sessionGate);
   });
 
   // Loopback: peek the first line and raw-TCP splice to backend (/ws, /api/stt/stream)
@@ -415,33 +353,14 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     });
   });
 
-  // [mycowork] Built-in TLS listener: every TLS connection (loopback or not) goes through the
-  // in-process http.Server, so the A67 guard sees the real remoteAddress of the TLSSocket.
-  let tls_server: tls.Server | undefined;
-  if (opts.tls) {
-    const { cert, key, port: tlsPort, host: tlsHost = '0.0.0.0' } = opts.tls;
-    const srv = tls.createServer({ cert, key, minVersion: 'TLSv1.2' }, (sock) => {
-      http_server.emit('connection', sock);
-    });
-    await new Promise<void>((resolve, reject) => {
-      srv.once('error', reject);
-      srv.listen(tlsPort, tlsHost, () => {
-        srv.off('error', reject);
-        resolve();
-      });
-    });
-    tls_server = srv;
-  }
+  // [mycowork] Built-in TLS listener (see lan-tls.ts)
+  const tls_server = opts.tls ? await startTlsListener(http_server, opts.tls) : undefined;
   const tlsPortActual = (tls_server?.address() as { port: number } | null)?.port;
 
   const actualPort = (tcp_server.address() as { port: number } | null)?.port ?? port;
   const lanIP = allowRemote || tls_server ? (opts.tls?.host && opts.tls.host !== '0.0.0.0' ? opts.tls.host : (getLanIP() ?? undefined)) : undefined;
   const localUrl = `http://127.0.0.1:${actualPort}`;
-  const networkUrl = lanIP
-    ? tlsPortActual
-      ? `https://${lanIP}:${tlsPortActual}`
-      : `http://${lanIP}:${actualPort}`
-    : undefined;
+  const networkUrl = networkUrlFor(lanIP, actualPort, tlsPortActual);
 
   return {
     port: actualPort,

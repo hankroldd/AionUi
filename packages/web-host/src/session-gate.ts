@@ -9,6 +9,7 @@
  * same check the Bridge uses) answers 200. Only positive answers are cached, briefly.
  */
 import { createHash } from 'node:crypto';
+import type { ServerResponse } from 'node:http';
 import { normalizeGuardPath } from './remote-guard.js';
 
 // Endpoints the login page needs before a session exists (renderer AuthContext.tsx:50,89 /api/auth/user probe,
@@ -84,4 +85,10 @@ export function sessionDeniedResponse(verdict: SessionVerdict): { status: number
   return verdict === 'unavailable'
     ? { status: 503, body: body('AUTH_UNAVAILABLE') }
     : { status: 401, body: body('UNAUTHORIZED') };
+}
+
+/** HTTP denial for a failed session verdict (JSON body, status from sessionDeniedResponse). */
+export function writeSessionDenied(res: ServerResponse, verdict: SessionVerdict): void {
+  const d = sessionDeniedResponse(verdict);
+  res.writeHead(d.status, { 'content-type': 'application/json' }).end(d.body);
 }

@@ -69,10 +69,23 @@ describe('mycoworkDropIntercept', () => {
   });
 
   it('Esc closes the choice as attach to this turn', async () => {
+    const wrappers = () => Array.from(document.querySelectorAll('.arco-modal-wrapper'));
+    const before = wrappers().length;
     const taken = mycoworkDropIntercept([new File(['hi'], 'esc.pptx')]);
-    await screen.findAllByRole('button', { name: '附加到本轮' });
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape', code: 'Escape', keyCode: 27 });
+    // 必须等到“本次”确认框出现：上个用例淡出中的确认框还在 DOM 里，findAllByRole 会立刻命中它，Esc 就按到别人身上
+    await waitFor(() => expect(wrappers().length).toBeGreaterThan(before), { timeout: 8000 });
+    const mine = wrappers().at(-1) as HTMLElement;
+    let settled = false;
+    void taken.then(() => (settled = true));
+    // Esc 监听挂在弹窗内的 FocusLock 上（按在内部按钮上才冒泡到它）；弹窗挂载后才生效，负载下首次按键可能落空：重按到它关闭为止
+    await waitFor(
+      () => {
+        fireEvent.keyDown(mine.querySelector('button') ?? mine, { key: 'Escape', code: 'Escape', keyCode: 27 });
+        expect(settled).toBe(true);
+      },
+      { timeout: 8000 }
+    );
     await expect(taken).resolves.toBe(false);
     expect(window.location.hash).toBe('#/guid');
-  });
+  }, 20_000);
 });

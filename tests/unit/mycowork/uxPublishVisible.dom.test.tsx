@@ -36,6 +36,7 @@ async function publish() {
 afterEach(() => {
   cleanup();
   Message.clear();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -51,16 +52,18 @@ describe('发布结果提示一定看得见', () => {
   });
 
   it('受理很快：不闪“正在发布”，直接显示带“查看版本与变化”的结果，并停留至少 4 秒', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true }); // 停留时间用假时钟推进，不靠真实等待；findBy 的上限放宽以扛并发负载
     serve(accepted);
     render(dialog());
     await publish();
-    expect(await screen.findByText(/已提交发布 v34 到「虚构知识库」，入库在后台进行/)).toBeInTheDocument();
+    expect(await screen.findByText(/已提交发布 v34 到「虚构知识库」，入库在后台进行/, {}, { timeout: 8000 })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '查看版本与变化' }).getAttribute('href')).toBe('#/office/resources/resource-1/versions');
-    await act(() => new Promise((r) => setTimeout(r, 700))); // 越过“正在发布”的延迟：它不能冒出来盖住结果
+    await act(() => vi.advanceTimersByTimeAsync(700)); // 越过“正在发布”的延迟：它不能冒出来盖住结果
     expect(screen.queryByText('正在发布到「虚构知识库」…')).toBeNull();
-    await act(() => new Promise((r) => setTimeout(r, 3500)));
+    // 分小步推进：弹窗到期后的移除是“计时器 → 渲染 → 再计时”的链，一次推大步会把后半段留在没跑的队列里，缩短停留也测不出来
+    for (let t = 0; t < 3500; t += 250) await act(() => vi.advanceTimersByTimeAsync(250));
     expect(screen.getByText(/已提交发布 v34/)).toBeInTheDocument();
-  }, 10_000);
+  }, 20_000);
 
   it('请求超过 600 毫秒才出现“正在发布”，结果到了换成同一条', async () => {
     let release!: (r: Response) => void;

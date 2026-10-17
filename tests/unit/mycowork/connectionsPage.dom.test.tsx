@@ -130,6 +130,23 @@ describe('OfficeConnectionsSlot', () => {
     expect(k.textContent).toContain('officecli 9.9.9');
   });
 
+  it('带小节进入只定位一次：之后测试连接不把视图拉回该小节', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    render(
+      at({
+        pathname: '/office/connections',
+        state: { mycoworkConnectionsReturn: { ownerKey: 'owner-a', section: 'office', to: 'capabilities' } },
+      })
+    );
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+    const k = screen.getByTestId('conn-knowledge');
+    fireEvent.click(within(k).getByRole('button', { name: '测试连接' }));
+    await waitFor(() => expect(within(k).getByText('可使用')).toBeInTheDocument());
+    expect(scroll).toHaveBeenCalledTimes(1);
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+
   it('带返回意图：返回先重检该节能力再跳转；意图非法则不显示返回', async () => {
     const entry = (state: object) => ({ pathname: '/office/connections', state });
     const view = render(

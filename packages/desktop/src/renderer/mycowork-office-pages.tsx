@@ -21,6 +21,10 @@ import {
   capabilityReturnTarget,
   useCapabilityReturn,
   SetupPage,
+  ConnectionsPage,
+  connectionsEntryState,
+  connectionsReturnTarget,
+  useConnectionsReturn,
   SchedulesPage,
   MemoryPage,
   ResourcesPage,
@@ -101,7 +105,10 @@ export const OfficeKnowledgeSlot: React.FC = () => {
 export const OfficeCapabilitiesSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   const navigate = useNavigate();
-  const intent = useCapabilityReturn(useLocation().state, useOwnerKey());
+  const ownerKey = useOwnerKey();
+  const intent = useCapabilityReturn(useLocation().state, ownerKey);
+  const navigateToConnections = (capabilityId: string): void =>
+    void navigate('/office/connections', { state: connectionsEntryState(ownerKey, capabilityId, intent) });
   const returnTo = intent && {
     capabilityId: intent.capabilityId,
     onReturn: () => {
@@ -109,13 +116,15 @@ export const OfficeCapabilitiesSlot: React.FC = () => {
       void navigate(target.path, { state: target.state });
     },
   };
-  return <CapabilitiesPage lang={current.language} returnTo={returnTo ?? undefined} />;
+  return (
+    <CapabilitiesPage lang={current.language} returnTo={returnTo ?? undefined} onConfigure={navigateToConnections} />
+  );
 };
 
 /** Mount point: route `/office/setup` (MyCowork P00 first-run setup checklist, state derived from real capability checks). */
 export const OfficeSetupSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
-  return <SetupPage lang={current.language} modelStatus={useSetupModelStatus()} />;
+  return <SetupPage lang={current.language} modelStatus={useSetupModelStatus()[0]} />;
 };
 
 /**
@@ -123,8 +132,9 @@ export const OfficeSetupSlot: React.FC = () => {
  * 对话模型 = 有启用的 provider 带 aionrs 可用模型（同对话页 getAvailableModels 口径）；读失败或返回非列表就不下结论。
  * 图像模型只在工具设置明确选了模型且开关打开时算已配置，读失败按“稍后再说”。
  */
-function useSetupModelStatus(): { chat?: boolean; image?: boolean } {
+function useSetupModelStatus(): [{ chat?: boolean; image?: boolean }, () => void] {
   const [status, setStatus] = useState<{ chat?: boolean; image?: boolean }>({});
+  const [round, setRound] = useState(0);
   useEffect(() => {
     let live = true;
     ipcBridge.mode.listProviders.invoke().then(
@@ -141,9 +151,37 @@ function useSetupModelStatus(): { chat?: boolean; image?: boolean } {
     return () => {
       live = false;
     };
-  }, []);
-  return status;
+  }, [round]);
+  return [status, (): void => setRound((n) => n + 1)];
 }
+
+/**
+ * Mount point: route `/office/connections` (MyCowork P15 connections & data sources, slice A: status + test connection).
+ * A validated return intent (router state, same account, whitelisted target) adds "back to capabilities / my task".
+ */
+export const OfficeConnectionsSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  const navigate = useNavigate();
+  const back = useConnectionsReturn(useLocation().state, useOwnerKey());
+  const [modelStatus, reread] = useSetupModelStatus();
+  const returnTo = back && {
+    kind: back.kind,
+    section: back.section,
+    onReturn: () => {
+      const target = connectionsReturnTarget(back);
+      void navigate(target.path, target.state ? { state: target.state } : undefined);
+    },
+  };
+  return (
+    <ConnectionsPage
+      lang={current.language}
+      modelStatus={modelStatus}
+      onRereadModel={reread}
+      focus={back?.section}
+      returnTo={returnTo ?? undefined}
+    />
+  );
+};
 
 /** Mount point: route `/office/schedules` (MyCowork P14 office schedules: list + turn off/on; separate from AionUi `/scheduled`). */
 export const OfficeSchedulesSlot: React.FC = () => {

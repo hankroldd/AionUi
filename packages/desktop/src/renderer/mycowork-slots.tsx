@@ -204,6 +204,7 @@ export {
   OfficeKnowledgeSlot,
   OfficeCapabilitiesSlot,
   OfficeSetupSlot,
+  OfficeConnectionsSlot,
   OfficeSchedulesSlot,
   OfficeMemorySlot,
 } from './mycowork-office-pages';

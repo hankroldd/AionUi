@@ -1,14 +1,12 @@
 /**
- * 文件：tests/unit/mycowork/persistentDraftAdapter.dom.test.tsx
- * 职责：真实草稿hook与原生适配联合验证恢复、交接、失败、续写及账号隔离。
- * 边界：只替换身份与HTTP边界，不替换持久化控制器或适配逻辑；所有材料虚构。
+ * [mycowork] adapted：持久草稿与原生适配（拆分b，原 persistentDraftAdapter.dom.test.tsx，用例原样）。
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DraftDocument, DraftState } from '@mycowork/contracts';
 import { collectChatFileRefs, splitChatFileRefs } from '@/renderer/utils/file/messageFiles';
-import { getScope, resetAccountScopedState, restoreScope } from '@mycowork/ui';
+import { resetAccountScopedState, restoreScope } from '@mycowork/ui';
 import {
   DraftStatus,
   handoffGuidDraft,
@@ -194,77 +192,6 @@ function ConversationHarness({ send, auto = true }: { send: (state: DraftState) 
 }
 
 describe('真实持久草稿与原生适配', () => {
-  it('恢复完整附件、工作项目、严格计划及能力ID，序列化不含provider密钥', async () => {
-    docs.set('guid', doc('guid'));
-    render(<GuidHarness />);
-    await waitFor(() => expect(screen.getByLabelText('首页输入')).toHaveValue(sourceState.content));
-    await waitFor(() => expect(screen.getByRole('button', { name: '发送门禁' })).toBeEnabled());
-    expect(screen.getByText(/虚构报告.txt/)).toHaveTextContent('model-a');
-    expect(getScope()).toMatchObject({
-      projectId: 'project-a',
-      carriedPlanId: 'plan-a',
-      items: [{ resource_ids: [] }],
-    });
-    fireEvent.change(screen.getByLabelText('首页输入'), { target: { value: '继续输入' } });
-    await waitFor(() => expect(writes.some((value) => value.state.content === '继续输入')).toBe(true));
-    expect(JSON.stringify(writes)).not.toContain('never-persist');
-  });
-  it('对话中刚严格收缩带来的新计划不被旧草稿的范围覆盖', async () => {
-    docs.set('guid', doc('guid'));
-    restoreScope({
-      items: [{ source_id: 'src-keep', name: '保留库' }],
-      views: [],
-      origin: 'turn',
-      carriedPlanId: 'plan-new',
-    });
-    render(<GuidHarness />);
-    await waitFor(() => expect(screen.getByLabelText('首页输入')).toHaveValue(sourceState.content));
-    expect(getScope()).toMatchObject({ carriedPlanId: 'plan-new', items: [{ source_id: 'src-keep' }] });
-    resetAccountScopedState(); // 换账号：上一个账号收缩带来的计划不能留给下一个账号
-    expect(getScope().carriedPlanId).toBeUndefined();
-  });
-  it('明确路由提问和目录优先，已保存范围不覆盖明确项目意图', async () => {
-    docs.set('guid', doc('guid'));
-    restoreScope({ items: [], views: [], origin: 'turn', projectId: 'explicit-project' });
-    render(
-      <GuidHarness
-        navigation={{ prefillPrompt: '新明确问题', workspace: '/explicit', mycoworkProjectId: 'explicit-project' }}
-      />
-    );
-    await waitFor(() => expect(screen.getByLabelText('首页输入')).toHaveValue('新明确问题'));
-    expect(screen.getByText(/"dir"/)).toHaveTextContent('/explicit');
-    expect(getScope().projectId).toBe('explicit-project');
-  });
-  it('失效模型保留原模型ID并禁发，不悄悄换默认模型', async () => {
-    docs.set('guid', doc('guid'));
-    render(<GuidHarness unavailable />);
-    await screen.findByText('草稿中的模型已不可用，请重新选择模型后发送。');
-    expect(screen.getByRole('button', { name: '发送门禁' })).toBeDisabled();
-    expect(docs.get('guid')?.state.choices?.model_id).toBe('model-a');
-  });
-  it('读取失败可见且可重试，失败时不写空草稿', async () => {
-    docs.set('guid', doc('guid'));
-    failRead = true;
-    render(<GuidHarness />);
-    await screen.findByText(/草稿尚未保存/);
-    expect(writes).toHaveLength(0);
-    expect(screen.getByRole('button', { name: '发送门禁' })).toBeDisabled();
-    failRead = false;
-    fireEvent.click(screen.getByRole('button', { name: /重试/ }));
-    await waitFor(() => expect(screen.getByLabelText('首页输入')).toHaveValue(sourceState.content));
-  });
-  it('交接先写目标，等待明确受理时首页源和sessionStorage均保留', async () => {
-    const source = doc('guid');
-    docs.set('guid', source);
-    await handoffGuidDraft('conversation-a', source, { ownerKey: 'owner-a', isCurrent: () => true });
-    expect(docs.get('conversation:conversation-a')?.state).toEqual(sourceState);
-    const send = vi.fn(() => new Promise<void>(() => {}));
-    render(<ConversationHarness send={send} />);
-    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
-    expect(docs.get('guid')?.state.content).toBe(sourceState.content);
-    expect(sessionStorage.getItem('aionrs_initial_message_conversation-a')).not.toBeNull();
-    expect(screen.getByLabelText('对话输入')).toHaveValue(sourceState.content);
-  });
   it('首条发送失败保留目标和源，重挂载不自动重发未知结果', async () => {
     const source = doc('guid');
     docs.set('guid', source);

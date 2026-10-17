@@ -59,6 +59,7 @@ import type { AionrsModelSelection } from './useAionrsModelSelection';
 import { captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft, officeTaskOwner, watchTurnEnd, watchTurnEnded } from '@/renderer/mycowork-slots';
 import type { DraftDocument, DraftState, TaskRun } from '@mycowork/contracts';
 import { withoutYolo } from '@/renderer/mycowork-approval-guard';
+import { useSendFailure } from '@/renderer/mycowork-send-failure';
 
 const configErrorMessageKey = (error: unknown) => {
   const errorKind = classifyConfigSetError(error);
@@ -165,6 +166,7 @@ const AionrsSendBox: React.FC<{
   const { atPath, uploadFile, setAtPath, setUploadFile, content, setContent } = useSendBoxDraft(conversation_id);
 
   const [selectedSessions, setSelectedSessions] = useState<SessionRef[]>([]);
+  const sendFailure = useSendFailure(i18n?.language); // [mycowork] S40：未受理原因常驻
   const [sessionNames, setSessionNames] = useState<Record<string, string>>({});
   const [draftContext, setDraftContext] = useState<Pick<DraftState, 'workspace' | 'scope' | 'choices'>>({});
   const onRestoreDraft = useCallback((state: DraftState) => {
@@ -359,6 +361,7 @@ const AionrsSendBox: React.FC<{
         }
 
         markSendFailed({ kind: 'ordinary', reason: errorMessage });
+        if (persistentDraft.enabled) sendFailure.fail(errorMessage);
         Message.error(errorMessage);
         throw error;
       }
@@ -409,7 +412,7 @@ const AionrsSendBox: React.FC<{
       !sessionStorage.getItem(`aionrs_initial_message_${conversation_id}`) || sessionStorage.getItem(`aionrs_initial_processed_${conversation_id}`)) return;
     sendingDraftRef.current = true;
     void persistentDraft.initial((state, saved) => executeCommand({ input: state.content, files: state.files, sessions: state.sessions.map(({ id }) => ({ id })) }, saved, state))
-      .catch((error: unknown) => Message.error(error instanceof Error ? error.message : '首条消息未确认受理，草稿已保留，请检查后重试。'))
+      .catch((error: unknown) => { sendFailure.fail(error); Message.error(error instanceof Error ? error.message : '首条消息未确认受理，草稿已保留，请检查后重试。'); })
       .finally(() => { sendingDraftRef.current = false; });
   }, [conversation_id, current_model?.use_model, executeCommand, isBusy, persistentDraft]);
 
@@ -446,6 +449,7 @@ const AionrsSendBox: React.FC<{
     try {
       const submitted = await persistentDraft.flush();
       if (!persistentDraft.isCurrent()) return false;
+      sendFailure.clear();
       const receipt = await executeCommand({ input: message, files: filesToSend, sessions }, submitted, sent);
       if (receipt) await persistentDraft.settleTaskSubmission(submitted, receipt.draft_revision, { ...sent, content: '', files: [], sessions: [] });
       else await persistentDraft.accept(sent, { ...sent, content: '', files: [], sessions: [] });
@@ -819,6 +823,7 @@ const AionrsSendBox: React.FC<{
   return (
     <div className={`${sendBoxWidthClass} flex flex-col mt-auto mb-16px`}>
       {persistentDraft.enabled && <DraftStatus draft={persistentDraft} lang={i18n?.language} />}
+      {sendFailure.notice}
       {persistentDraft.enabled && officeRun && (
         <TaskCompletion
           key={officeRun.run_id}

@@ -14,6 +14,7 @@
 import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import net, { type Socket } from 'node:net';
+import tls from 'node:tls';
 import serveHandler from 'serve-handler';
 import {
   UPGRADE_ALLOWED,
@@ -31,10 +32,14 @@ export type StaticServerOptions = {
   backendPort: number;
   port?: number;
   allowRemote?: boolean;
+  // [mycowork] LAN over built-in HTTPS (R061): when set, the plain listener binds loopback only
+  // (allowRemote is ignored) and this TLS listener serves the LAN. host defaults to 0.0.0.0.
+  tls?: { cert: string | Buffer; key: string | Buffer; port: number; host?: string };
 };
 
 export type StaticServerHandle = {
   port: number;
+  tlsPort?: number;
   url: string;
   localUrl: string;
   networkUrl?: string;
@@ -230,7 +235,7 @@ function peekWsRoute(buf: Buffer): boolean | null {
 export async function startStaticServer(opts: StaticServerOptions): Promise<StaticServerHandle> {
   const port = opts.port ?? DEFAULT_PORT;
   const allowRemote = opts.allowRemote === true;
-  const host = allowRemote ? '0.0.0.0' : '127.0.0.1';
+  const host = allowRemote && !opts.tls ? '0.0.0.0' : '127.0.0.1';
   const bridgeUrl = new URL(process.env.AIONUI_BRIDGE_URL ?? 'http://127.0.0.1:25900');
 
   // The HTTP server listens only on loopback — user traffic hits the outer
@@ -372,19 +377,44 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     });
   });
 
+  // [mycowork] Built-in TLS listener: every TLS connection (loopback or not) goes through the
+  // in-process http.Server, so the A67 guard sees the real remoteAddress of the TLSSocket.
+  let tls_server: tls.Server | undefined;
+  if (opts.tls) {
+    const { cert, key, port: tlsPort, host: tlsHost = '0.0.0.0' } = opts.tls;
+    const srv = tls.createServer({ cert, key, minVersion: 'TLSv1.2' }, (sock) => {
+      http_server.emit('connection', sock);
+    });
+    await new Promise<void>((resolve, reject) => {
+      srv.once('error', reject);
+      srv.listen(tlsPort, tlsHost, () => {
+        srv.off('error', reject);
+        resolve();
+      });
+    });
+    tls_server = srv;
+  }
+  const tlsPortActual = (tls_server?.address() as { port: number } | null)?.port;
+
   const actualPort = (tcp_server.address() as { port: number } | null)?.port ?? port;
-  const lanIP = allowRemote ? (getLanIP() ?? undefined) : undefined;
+  const lanIP = allowRemote || tls_server ? (opts.tls?.host && opts.tls.host !== '0.0.0.0' ? opts.tls.host : (getLanIP() ?? undefined)) : undefined;
   const localUrl = `http://127.0.0.1:${actualPort}`;
-  const networkUrl = lanIP ? `http://${lanIP}:${actualPort}` : undefined;
+  const networkUrl = lanIP
+    ? tlsPortActual
+      ? `https://${lanIP}:${tlsPortActual}`
+      : `http://${lanIP}:${actualPort}`
+    : undefined;
 
   return {
     port: actualPort,
+    tlsPort: tlsPortActual,
     url: networkUrl ?? localUrl,
     localUrl,
     networkUrl,
     lanIP,
     stop: () =>
       new Promise<void>((resolve) => {
+        tls_server?.close();
         tcp_server.close(() => {
           http_server.close(() => resolve());
         });

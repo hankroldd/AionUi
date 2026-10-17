@@ -35,6 +35,8 @@ export type WebHostOptions = {
   staticDir: string;
   port?: number;
   allowRemote?: boolean;
+  /** [mycowork] built-in HTTPS for LAN access (R061); plain listener then stays loopback-only */
+  tls?: { cert: string | Buffer; key: string | Buffer; port: number; host?: string };
   dataDir?: string;
   logDir?: string;
   dirs?: BackendSystemDirs;
@@ -46,6 +48,7 @@ export type WebHostOptions = {
  */
 export type WebHostHandle = {
   port: number;
+  tlsPort?: number;
   backendPort: number;
   url: string;
   localUrl: string;

@@ -4,6 +4,8 @@ import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import tls from 'node:tls';
+import { execFileSync } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
 import { isBlockedRemoteRequest, isSensitivePath, normalizeGuardPath } from './remote-guard.js';
 import { isBlockedWatchRequest, startStaticServer, type StaticServerHandle } from './static-server.js';
@@ -949,3 +951,92 @@ function collect(host: string, port: number, ...requests: string[]): Promise<{ s
     );
   });
 }
+
+// [mycowork] R061: built-in HTTPS for LAN. Plain listener loopback-only; TLS connections go through the
+// in-process http.Server so the A67 guard sees the real peer address (stubbed here, no NIC needed).
+describe('[mycowork] built-in TLS listener (R061)', () => {
+  let dir = '';
+  let handle: StaticServerHandle | null = null;
+  let backendClose: (() => Promise<void>) | null = null;
+  const seen: string[] = [];
+  type PeerProto = { _getpeername: () => { address?: string; family?: string; port?: number } };
+  const proto = net.Socket.prototype as unknown as PeerProto;
+  const origGetPeer = proto._getpeername;
+
+  const collectTls = (port: number, ...reqs: string[]): Promise<string[]> =>
+    new Promise((resolve, reject) => {
+      const sock = tls.connect({ host: '127.0.0.1', port, rejectUnauthorized: false }, () => reqs.forEach((r) => sock.write(r)));
+      let buf = '';
+      sock.on('data', (d) => (buf += d.toString('latin1')));
+      sock.on('error', reject);
+      setTimeout(() => {
+        sock.destroy();
+        resolve([...buf.matchAll(/HTTP\/1\.[01] (\d{3})/g)].map((m) => m[1]));
+      }, 700);
+    });
+  const get = (p: string): string => `GET ${p} HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n`;
+
+  beforeEach(async () => {
+    dir = await mkRendererFixture();
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', `${dir}/k.pem`, '-out', `${dir}/c.pem`, '-days', '2', '-subj', '/CN=t'], { stdio: 'ignore' });
+    seen.length = 0;
+    const backend = await startMockBackend((req, res) => {
+      seen.push(req.url!);
+      res.writeHead(200).end('{}');
+    });
+    backendClose = backend.close;
+    handle = await startStaticServer({
+      staticDir: dir,
+      backendPort: backend.port,
+      port: 0,
+      allowRemote: true, // must be ignored for the plain listener when tls is set
+      tls: { cert: await fs.readFile(`${dir}/c.pem`), key: await fs.readFile(`${dir}/k.pem`), port: 0, host: '127.0.0.1' },
+    });
+  });
+  afterEach(async () => {
+    proto._getpeername = origGetPeer;
+    await handle?.stop();
+    await backendClose?.();
+    handle = null;
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it('url is https and the plain listener stays on loopback even with allowRemote', async () => {
+    expect(handle!.tlsPort).toBeGreaterThan(0);
+    expect(handle!.networkUrl).toBe(`https://127.0.0.1:${handle!.tlsPort}`);
+    const addr = await new Promise<string>((resolve) => {
+      const s = net.connect(handle!.port, '127.0.0.1', () => resolve(s.remoteAddress!)).on('error', () => resolve('err'));
+      s.end();
+    });
+    expect(addr).toBe('127.0.0.1');
+  });
+
+  it('loopback control: TLS serves static, proxies /api, and does not block the sensitive family', async () => {
+    expect(await collectTls(handle!.tlsPort!, get('/'))).toEqual(['200']);
+    expect(await collectTls(handle!.tlsPort!, get('/api/auth/status'))).toEqual(['200']);
+    expect(await collectTls(handle!.tlsPort!, get('/bridge/v1/health'))).not.toEqual(['403']);
+  });
+
+  it('non-loopback peer over TLS: sensitive family and bridge health 403, never reaches backend; static 200', async () => {
+    const tlsPort = handle!.tlsPort!;
+    proto._getpeername = function (this: net.Socket) {
+      const real = origGetPeer.call(this);
+      return this.localPort === tlsPort ? { ...real, address: '192.168.77.9', family: 'IPv4' } : real;
+    };
+    expect(await collectTls(tlsPort, get('/api/webui/reset-password'))).toEqual(['403']);
+    expect(await collectTls(tlsPort, get('/api/auth/internal/users'))).toEqual(['403']);
+    expect(await collectTls(tlsPort, get('/bridge/v1/health'))).toEqual(['403']);
+    expect(await collectTls(tlsPort, get('/'))).toEqual(['200']);
+    expect(seen).toEqual([]);
+  });
+
+  it('plain HTTP to the TLS port gets no HTTP response', async () => {
+    const r = await collect('127.0.0.1', handle!.tlsPort!, get('/'));
+    expect(r.statuses).toEqual([]);
+  });
+
+  it('isSensitivePath covers the bridge health probe', () => {
+    expect(isSensitivePath('/bridge/v1/health')).toBe(true);
+    expect(isSensitivePath('/bridge/v1/scopes')).toBe(false);
+  });
+});

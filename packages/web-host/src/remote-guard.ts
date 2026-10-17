@@ -84,6 +84,8 @@ export function normalizeGuardPath(rawUrl: string | undefined): string | null {
 // 手机扫码登录用顶层 /qr-login（token 即凭据），不在此列，仍放行。
 export function isSensitivePath(normalizedPath: string): boolean {
   if (normalizedPath === '/api/auth/internal' || normalizedPath.startsWith('/api/auth/internal/')) return true;
+  // /bridge/v1/health needs no login and leaks the schema version; the UI never reads it remotely.
+  if (normalizedPath === '/bridge/v1/health') return true;
   if (normalizedPath === '/api/webui' || normalizedPath.startsWith('/api/webui/')) return true;
   return false;
 }

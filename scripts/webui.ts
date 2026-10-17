@@ -10,6 +10,8 @@
  * Env vars:
  *   AIONUI_PORT           : static server port (default 33000)
  *   AIONUI_HOST           : listen host; set to 0.0.0.0 to imply --remote
+ *   AIONUI_TLS_CERT/KEY   : [mycowork] PEM paths; with AIONUI_TLS_PORT enables built-in HTTPS for LAN
+ *                           (plain port then stays loopback-only); AIONUI_TLS_HOST optional bind host
  *   AIONUI_ALLOW_REMOTE   : "1"/"true" to expose to LAN
  *   AIONUI_DATA_DIR       : override userData path (default Electron-compatible)
  *   AIONUI_LOG_DIR        : override log dir (default <dataDir>/logs)
@@ -199,11 +201,22 @@ async function fetchAdminUsername(backendPort: number): Promise<string> {
   }
 }
 
+// [mycowork] Built-in HTTPS for LAN (R061): all of cert/key/port or none; anything partial is a startup error.
+function resolveTls(): { cert: Buffer; key: Buffer; port: number; host?: string } | undefined {
+  const { AIONUI_TLS_CERT: cert, AIONUI_TLS_KEY: key, AIONUI_TLS_PORT: port, AIONUI_TLS_HOST: host } = process.env;
+  if (!cert && !key && !port) return undefined;
+  if (!cert || !key || !port || !/^\d+$/.test(port)) {
+    throw new Error('AIONUI_TLS_CERT, AIONUI_TLS_KEY and a numeric AIONUI_TLS_PORT must be set together');
+  }
+  return { cert: fs.readFileSync(cert), key: fs.readFileSync(key), port: Number(port), host: host?.trim() || undefined };
+}
+
 async function main(): Promise<void> {
   augmentPathWithNvm();
   runPackageIfNeeded();
   const port = resolvePort();
   const allowRemote = resolveAllowRemote();
+  const tlsOpts = resolveTls();
   const autoOpenBrowser = shouldAutoOpenBrowser({
     allowRemote,
     env: process.env,
@@ -221,7 +234,7 @@ async function main(): Promise<void> {
   console.log('[webui] work dir   :', workDir);
   console.log('[webui] static dir :', staticDir);
   console.log('[webui] backend bin:', backendBin);
-  console.log(`[webui] launching  : port=${port} allowRemote=${allowRemote}`);
+  console.log(`[webui] launching  : port=${port} allowRemote=${allowRemote} tlsPort=${tlsOpts?.port ?? 'off'}`);
 
   const handle = await startWebHost({
     app: {
@@ -233,6 +246,7 @@ async function main(): Promise<void> {
     staticDir,
     port,
     allowRemote,
+    tls: tlsOpts,
     dataDir: workDir,
     logDir,
     // Surface the same work dir on /api/system/info so the browser UI shows

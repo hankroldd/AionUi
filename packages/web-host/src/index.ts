@@ -56,6 +56,7 @@ export async function startWebHost(opts: WebHostOptions): Promise<WebHostHandle>
       backendPort: backendHandle.port,
       port: opts.port,
       allowRemote: opts.allowRemote ?? false,
+      tls: opts.tls,
     });
   } catch (err) {
     // If static-server fails, clean up backend
@@ -66,6 +67,7 @@ export async function startWebHost(opts: WebHostOptions): Promise<WebHostHandle>
   // 3. Return combined handle
   return {
     port: staticHandle.port,
+    tlsPort: staticHandle.tlsPort,
     backendPort: backendHandle.port,
     url: staticHandle.url,
     localUrl: staticHandle.localUrl,

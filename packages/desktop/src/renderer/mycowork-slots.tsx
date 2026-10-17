@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { BookOpen } from '@icon-park/react';
 import { ipcBridge } from '@/common';
-import { useGuidResourceSelection, useOwnerKey } from '@/renderer/mycowork-resource-navigation';
+import { useGuidResourceSelection, useOwnerKey, useScopeChangeProposal } from '@/renderer/mycowork-resource-navigation';
 import type { ISessionMcpServer, TChatConversation } from '@/common/config/storage';
 import { useBranchAdapter } from '@/renderer/mycowork-branches';
 import {
@@ -98,6 +98,7 @@ export const ConversationScopeSlot: React.FC<{ conversation_id: string }> = ({ c
   const navigate = useNavigate();
   const ownerKey = useOwnerKey();
   const [turns, setTurns] = useState(0);
+  const { proposed, handled } = useScopeChangeProposal(ownerKey, conversation_id);
   useEffect(
     () =>
       ipcBridge.conversation.responseStream.on((message) => {
@@ -111,6 +112,8 @@ export const ConversationScopeSlot: React.FC<{ conversation_id: string }> = ({ c
       lang={current.language}
       conversationId={conversation_id}
       refreshKey={turns}
+      proposed={proposed}
+      onProposedHandled={handled}
       onStrictShrink={() => void navigate('/guid')}
       onBlocked={(error) => notifyCapabilityBlocked(error, ownerKey, current.language, (path, state) => void navigate(path, { state }), { origin: 'conversation', conversationId: conversation_id })}
     />

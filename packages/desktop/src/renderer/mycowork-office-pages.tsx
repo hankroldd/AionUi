@@ -12,7 +12,7 @@ import { getClientBusinessSetting } from '@/renderer/services/clientBusinessSett
 import { hasAvailableModels } from '@/renderer/pages/guid/utils/modelUtils';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { MYCOWORK_MEMORY_SIDER_ID, MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-sider-ids';
-import { useOwnerKey, useResourceQuestionNavigation } from '@/renderer/mycowork-resource-navigation';
+import { useOwnerKey, useResourceQuestionNavigation, useResourceScopeSwitch } from '@/renderer/mycowork-resource-navigation';
 import MarkdownView from '@/renderer/components/Markdown';
 import {
   ImportsPage,
@@ -71,6 +71,7 @@ export const OfficeResourcesSlot: React.FC = () => {
   const { user, status } = useAuth();
   const ownerKey = status === 'authenticated' ? (user?.id ?? 'local') : undefined;
   const onAskScope = useResourceQuestionNavigation(ownerKey);
+  const onSwitchScope = useResourceScopeSwitch(ownerKey);
   return (
     <ResourcesPage
       key={`${status}:${user?.id ?? ''}`}
@@ -83,6 +84,7 @@ export const OfficeResourcesSlot: React.FC = () => {
       ownerKey={ownerKey}
       resolveConversationName={resolveOutputConversationName}
       onAskScope={onAskScope}
+      onSwitchScope={onSwitchScope}
       renderMarkdown={(content, overrides) => <MarkdownView components={overrides}>{content}</MarkdownView>}
     />
   );

@@ -6,13 +6,18 @@
  */
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
-import { BridgeError, fetchConversationContext, getScope, type ScopeDraft } from '@mycowork/ui';
+import { BridgeError, CONVERSATION_ID, fetchConversationContext, getScope, type ScopeDraft } from '@mycowork/ui';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 
 export type ResourceWorkOrigin = { ownerKey: string; projectId?: string; originConversationId?: string };
 type ResourceScopeIntent = { ownerKey: string; selection: ScopeDraft };
-type ResourceNavigationState = { mycoworkResourceOrigin?: ResourceWorkOrigin; mycoworkScopeDraft?: ResourceScopeIntent };
+type ScopeChangeIntent = { ownerKey: string; conversationId: string; selection: ScopeDraft };
+type ResourceNavigationState = {
+  mycoworkResourceOrigin?: ResourceWorkOrigin;
+  mycoworkScopeDraft?: ResourceScopeIntent;
+  mycoworkScopeChange?: ScopeChangeIntent;
+};
 
 /** 在侧栏点击“空间”时读取来源工作上下文（对话页只记对话 id，新建任务页记当前项目），不保存“上次用过的项目”。 */
 export function useSpaceNavigationState(ownerKey: string | undefined) {
@@ -97,4 +102,60 @@ export function useResourceQuestionNavigation(ownerKey: string | undefined) {
     },
     [location.key, location.state, navigate, ownerKey],
   );
+}
+
+/** 空间页：仅当由某个对话进入（有已核对账号的来源对话）才给出“切换原对话资料范围”；校验同“用这些资料提问”，只导航回该对话并带预填，不写 Bridge。 */
+export function useResourceScopeSwitch(ownerKey: string | undefined) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const origin = (location.state as ResourceNavigationState | null)?.mycoworkResourceOrigin;
+  const id = origin?.originConversationId;
+  const run = useCallback(
+    async (draft: ScopeDraft, signal: AbortSignal): Promise<void> => {
+      if (!ownerKey || !id || origin?.ownerKey !== ownerKey || !CONVERSATION_ID.test(id)) throw new BridgeError('failed');
+      await verifiedProjectId(origin); // 只为核对会话归属；失败即不导航
+      if (signal.aborted) return;
+      const items = draft.items.map(({ source_id, name, resource_ids }) => ({
+        source_id,
+        name,
+        ...(resource_ids ? { resource_ids } : {}),
+      }));
+      await navigate(`/conversation/${encodeURIComponent(id)}`, {
+        state: { mycoworkScopeChange: { ownerKey, conversationId: id, selection: { items, views: [] } } },
+      });
+    },
+    [id, navigate, origin, ownerKey],
+  );
+  return id ? run : undefined;
+}
+
+function parseScopeChange(
+  state: unknown,
+  ownerKey: string | undefined,
+  conversationId: string,
+): ScopeDraft | undefined {
+  const v = (state as ResourceNavigationState | null)?.mycoworkScopeChange;
+  if (!ownerKey || !v || v.ownerKey !== ownerKey || v.conversationId !== conversationId) return undefined;
+  if (!CONVERSATION_ID.test(conversationId) || !Array.isArray(v.selection?.items)) return undefined;
+  const items: { source_id: string; name: string; resource_ids?: string[] }[] = [];
+  for (const i of v.selection.items.slice(0, 50)) {
+    if (typeof i?.source_id !== 'string' || typeof i.name !== 'string') return undefined;
+    const ids = Array.isArray(i.resource_ids) && i.resource_ids.every((r: unknown) => typeof r === 'string') ? i.resource_ids : undefined;
+    items.push({ source_id: i.source_id, name: i.name, ...(ids ? { resource_ids: ids } : {}) });
+  }
+  return items.length ? { items, views: [] } : undefined;
+}
+
+/** 对话页范围条：读空间带回的一次性预填（白名单字段；账号、对话 id 必须与当前一致），接手后清掉路由 state，刷新不再重开。 */
+export function useScopeChangeProposal(ownerKey: string | undefined, conversationId: string) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const proposed = useMemo(
+    () => parseScopeChange(location.state, ownerKey, conversationId),
+    [location.state, ownerKey, conversationId],
+  );
+  const handled = useCallback((): void => {
+    void navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, navigate]);
+  return { proposed, handled };
 }

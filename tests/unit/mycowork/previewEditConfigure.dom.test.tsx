@@ -114,8 +114,8 @@ afterEach(() => {
 });
 
 describe('preview Edit: online editing not configured (R036)', () => {
-  it('503 from session creation -> 去配置 goes to P15 office, returning to this conversation', async () => {
-    await openEdit(() => reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'online editor not configured' } }));
+  it.each(['online editor not configured', 'document server unavailable'])('503 "%s" -> 去配置 goes to P15 office, returning to this conversation', async (message) => {
+    await openEdit(() => reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message } }));
     fireEvent.click(await screen.findByRole('button', { name: '去配置' }));
     const at = screen.getByTestId('at').textContent ?? '';
     expect(at.startsWith('/office/connections|')).toBe(true);
@@ -132,6 +132,23 @@ describe('preview Edit: online editing not configured (R036)', () => {
         },
       },
     });
+  }, 30000);
+
+  it.each(['identity provider unavailable', 'knowledge provider unavailable', 'office tool failed'])(
+    'other 503 \"%s\" shows no 去配置',
+    async (message) => {
+      await openEdit(() => reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message } }));
+      await waitFor(() => expect(screen.getByRole('button', { name: '编辑' })).not.toBeDisabled());
+      expect(screen.queryByRole('button', { name: '去配置' })).toBeNull();
+    },
+    30000
+  );
+
+  it('502 (Web Host cannot reach Bridge) shows no 去配置', async () => {
+    await openEdit(() => reply(502, {}));
+    await waitFor(() => expect(screen.getByRole('button', { name: '编辑' })).not.toBeDisabled());
+    await new Promise((r) => setTimeout(r, 100));
+    expect(screen.queryByRole('button', { name: '去配置' })).toBeNull();
   }, 30000);
 
   it('other failures (not found, network down) show no 去配置', async () => {

@@ -182,6 +182,20 @@ describe('space: move to another knowledge base', () => {
     expect(posts('/knowledge-removals')).toHaveLength(1);
   });
 
+  it('an upstream-stuck move (A516) says retrying is pointless and disables retry', async () => {
+    polls = [removal('failed', 'upstream_transfer_stuck')];
+    render(<OfficeResourcesSlot />);
+    await openMove();
+    await pick('乙库');
+    fireEvent.click(screen.getByRole('button', { name: '移动' }));
+    const failed = await screen.findByTestId('mycowork-removal-failed', undefined, LONG);
+    expect(failed.textContent).toContain('重试不会成功');
+    expect(failed.textContent).toContain('仍在原库、可预览和检索');
+    expect(screen.getByRole('button', { name: '重试' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+    expect(posts('/knowledge-removals/krm_1/retry')).toHaveLength(0);
+  });
+
   it('a conflict at acceptance names the move-specific reasons', async () => {
     rejectStart = { status: 409, code: 'REMOVAL_STATE_CONFLICT' };
     render(<OfficeResourcesSlot />);

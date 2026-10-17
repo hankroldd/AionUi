@@ -217,6 +217,11 @@ async function main(): Promise<void> {
   const port = resolvePort();
   const allowRemote = resolveAllowRemote();
   const tlsOpts = resolveTls();
+  // [mycowork] R061: LAN exposure is HTTPS-only; a plain-HTTP remote listener is refused
+  if (allowRemote && !tlsOpts) {
+    console.error('[webui] remote access requires AIONUI_TLS_CERT, AIONUI_TLS_KEY and AIONUI_TLS_PORT');
+    process.exit(2);
+  }
   const autoOpenBrowser = shouldAutoOpenBrowser({
     allowRemote,
     env: process.env,

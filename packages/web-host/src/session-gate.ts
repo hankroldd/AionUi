@@ -40,7 +40,7 @@ export type SessionVerdict = 'ok' | 'denied' | 'unavailable';
 
 export function createSessionGate(backendPort: number, now: () => number = Date.now) {
   const positive = new Map<string, number>(); // sha256(cookie) -> expiry; ponytail: no negative cache, no per-user revocation hook (logout waits out the 10 s TTL)
-  return async function check(cookieHeader: string | undefined): Promise<SessionVerdict> {
+  return async function check(cookieHeader: string | undefined, xff?: string): Promise<SessionVerdict> {
     const session = sessionCookieOf(cookieHeader);
     if (!session) return 'denied';
     const key = createHash('sha256').update(session).digest('hex');
@@ -49,10 +49,10 @@ export function createSessionGate(backendPort: number, now: () => number = Date.
     positive.delete(key);
     try {
       const res = await fetch(`http://127.0.0.1:${backendPort}/api/auth/user`, {
-        headers: { cookie: session },
+        headers: xff ? { cookie: session, 'x-forwarded-for': xff } : { cookie: session },
         signal: AbortSignal.timeout(3000),
       });
-      await res.arrayBuffer().catch(() => undefined);
+      await res.arrayBuffer().catch((): undefined => undefined);
       if (res.status === 200) {
         if (positive.size >= MAX_ENTRIES) positive.clear();
         positive.set(key, now() + TTL_MS);
@@ -63,6 +63,19 @@ export function createSessionGate(backendPort: number, now: () => number = Date.
       return 'unavailable';
     }
   };
+}
+
+/** Headers for proxying a non-loopback request: client-supplied X-Forwarded-For / X-Real-IP never reach the backend. */
+export function peerHeaders<T extends Record<string, unknown>>(headers: T, remoteAddress: string | undefined, loopback: boolean): T {
+  if (loopback) return headers;
+  const { 'x-real-ip': _drop, ...rest } = headers;
+  return { ...rest, 'x-forwarded-for': remoteAddress ?? '' } as unknown as T;
+}
+
+/** Add `; Secure` to Set-Cookie values lacking it (used on TLS connections: aioncore does not set it, AIONUI_HTTPS has no effect). */
+export function secureCookies(value: string | string[] | undefined): string[] | undefined {
+  if (value === undefined) return undefined;
+  return (Array.isArray(value) ? value : [value]).map((c) => (/;\s*secure\s*(;|$)/i.test(c) ? c : `${c}; Secure`));
 }
 
 const body = (code: string): string => JSON.stringify({ success: false, error: code, code });

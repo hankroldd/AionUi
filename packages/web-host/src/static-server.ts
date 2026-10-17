@@ -26,7 +26,8 @@ import {
   reconstructRequest,
   writeRemoteForbidden,
 } from './remote-guard.js';
-import { createSessionGate, needsSession, sessionDeniedResponse } from './session-gate.js';
+import { createSessionGate, needsSession, peerHeaders, secureCookies, sessionDeniedResponse } from './session-gate.js';
+import { isWebSocketUpgrade, spliceUpgradeAfter101 } from './upgrade-splice.js';
 
 export type StaticServerOptions = {
   staticDir: string;
@@ -108,7 +109,10 @@ function forward(
     headers: { ...headers, host: target.host },
   };
   const proxy = http.request(options, (proxyRes) => {
-    res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+    const out = proxyRes.headers;
+    // [mycowork] R061: cookies set over TLS are Secure (aioncore leaves the flag off)
+    if ((req.socket as { encrypted?: boolean }).encrypted && out['set-cookie']) out['set-cookie'] = secureCookies(out['set-cookie']);
+    res.writeHead(proxyRes.statusCode ?? 502, out);
     proxyRes.pipe(res);
   });
   proxy.on('error', () => {
@@ -138,7 +142,8 @@ export function isBlockedWatchRequest(method: string, url: string): boolean {
 }
 
 function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort: number): void {
-  forward(req, res, new URL(`http://127.0.0.1:${backendPort}`), req.headers, { error: 'BACKEND_UNREACHABLE' });
+  const headers = peerHeaders(req.headers, req.socket.remoteAddress, isLoopbackAddr(req.socket.remoteAddress));
+  forward(req, res, new URL(`http://127.0.0.1:${backendPort}`), headers, { error: 'BACKEND_UNREACHABLE' });
 }
 
 // [mycowork] ADR-0011: same-origin reverse proxy /bridge/* to the MyCowork Bridge.
@@ -153,7 +158,7 @@ function sessionCookieOnly(cookie: string | undefined): string | undefined {
 }
 
 function bridgeHeaders(req: IncomingMessage): http.IncomingHttpHeaders {
-  const { cookie, ...rest } = req.headers;
+  const { cookie, ...rest } = peerHeaders(req.headers, req.socket.remoteAddress, isLoopbackAddr(req.socket.remoteAddress));
   const session = sessionCookieOnly(cookie);
   return session ? { ...rest, cookie: session } : rest;
 }
@@ -266,7 +271,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
 
       // [mycowork] R061: aioncore has no auth in local identity mode; LAN peers need a valid login session for /api/*.
       if (!isLoopbackAddr(req.socket.remoteAddress) && needsSession(req.url)) {
-        const verdict = await sessionGate(req.headers.cookie);
+        const verdict = await sessionGate(req.headers.cookie, req.socket.remoteAddress);
         if (verdict !== 'ok') {
           const d = sessionDeniedResponse(verdict);
           res.writeHead(d.status, { 'content-type': 'application/json' }).end(d.body);
@@ -330,16 +335,21 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       destroyRemoteForbidden(socket);
       return;
     }
-    const splice = (): void => spliceToTcpEndpoint(socket, opts.backendPort, reconstructRequest(req, head));
     if (isLoopbackAddr(socket.remoteAddress)) {
-      splice();
+      spliceToTcpEndpoint(socket, opts.backendPort, reconstructRequest(req, head));
       return;
     }
-    // [mycowork] R061: no session, no 101 (the backend would accept the upgrade unauthenticated).
-    void sessionGate(req.headers.cookie).then((verdict) => {
+    // [mycowork] R061: non-loopback upgrades must be a well-formed WebSocket upgrade with no pipelined bytes, hold a valid
+    // session, and are relayed only up to the backend's 101 (see upgrade-splice.ts) — no request smuggling behind a refused upgrade.
+    if (!isWebSocketUpgrade(req) || head.length > 0) {
+      socket.end('HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');
+      return;
+    }
+    const peer = socket.remoteAddress ?? '';
+    void sessionGate(req.headers.cookie, peer).then((verdict) => {
       if (socket.destroyed) return;
       if (verdict === 'ok') {
-        splice();
+        spliceUpgradeAfter101(socket, opts.backendPort, reconstructRequest(req, Buffer.alloc(0), peer));
         return;
       }
       const d = sessionDeniedResponse(verdict);

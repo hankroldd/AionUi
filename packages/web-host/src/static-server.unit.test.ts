@@ -7,7 +7,7 @@ import path from 'node:path';
 import tls from 'node:tls';
 import { execFileSync } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
-import { needsSession } from './session-gate.js';
+import { needsSession, secureCookies } from './session-gate.js';
 import { isBlockedRemoteRequest, isSensitivePath, normalizeGuardPath } from './remote-guard.js';
 import { isBlockedWatchRequest, startStaticServer, type StaticServerHandle } from './static-server.js';
 
@@ -983,7 +983,7 @@ describe('[mycowork] built-in TLS listener (R061)', () => {
     seen.length = 0;
     const backend = await startMockBackend((req, res) => {
       seen.push(req.url!);
-      res.writeHead(200).end('{}');
+      res.writeHead(200, { 'set-cookie': ['aionui-session=x; Path=/; HttpOnly', 'k=v; Secure'] }).end('{}');
     });
     backendClose = backend.close;
     handle = await startStaticServer({
@@ -1029,6 +1029,25 @@ describe('[mycowork] built-in TLS listener (R061)', () => {
     expect(await collectTls(tlsPort, get('/bridge/v1/health'))).toEqual(['403']);
     expect(await collectTls(tlsPort, get('/'))).toEqual(['200']);
     expect(seen).toEqual([]);
+  });
+
+  it('over TLS every proxied Set-Cookie gets Secure exactly once; plain loopback http is untouched', async () => {
+    const raw = await new Promise<string>((resolve, reject) => {
+      const sock = tls.connect({ host: '127.0.0.1', port: handle!.tlsPort!, rejectUnauthorized: false }, () => sock.write(get('/api/auth/status')));
+      let buf = '';
+      sock.on('data', (d) => (buf += d.toString('latin1')));
+      sock.on('error', reject);
+      setTimeout(() => (sock.destroy(), resolve(buf)), 600);
+    });
+    const cookies = [...raw.matchAll(/^set-cookie: (.*)$/gim)].map((m) => m[1].trim());
+    expect(cookies).toEqual(['aionui-session=x; Path=/; HttpOnly; Secure', 'k=v; Secure']);
+    const plain = await fetch(`${handle!.localUrl}/api/auth/status`);
+    expect(plain.headers.getSetCookie()).toEqual(['aionui-session=x; Path=/; HttpOnly', 'k=v; Secure']);
+  });
+
+  it('secureCookies is idempotent and case-insensitive', () => {
+    expect(secureCookies(['a=b', 'c=d; secure; Path=/', 'e=f; Securex'])).toEqual(['a=b; Secure', 'c=d; secure; Path=/', 'e=f; Securex; Secure']);
+    expect(secureCookies(undefined)).toBeUndefined();
   });
 
   it('plain HTTP to the TLS port gets no HTTP response', async () => {
@@ -1135,6 +1154,89 @@ describe('[mycowork] session gate for non-loopback peers (R061)', () => {
     expect(await status(req('/api/auth/internal/users', GOOD))).toEqual(['403']);
     expect(await status(req('/'))).toEqual(['200']);
     expect(await status(req('/login', undefined, 'POST'))).toEqual(['200']);
+  });
+
+  it('remote: client X-Forwarded-For / X-Real-IP never reach the backend, the real peer does; loopback is untouched', async () => {
+    const hdrs: Record<string, string | string[] | undefined>[] = [];
+    backend!.on('request', (rq) => hdrs.push({ ...rq.headers }));
+    const forged = (p: string): string =>
+      `GET ${p} HTTP/1.1\r\nHost: h\r\nCookie: ${GOOD}\r\nX-Forwarded-For: 6.6.6.6\r\nX-Real-IP: 7.7.7.7\r\nConnection: close\r\n\r\n`;
+    expect(await status(forged('/api/settings'))).toEqual(['200']); // loopback control
+    expect(hdrs.at(-1)!['x-forwarded-for']).toBe('6.6.6.6');
+    hdrs.length = 0;
+    asRemote();
+    expect(await status(forged('/api/settings'))).toEqual(['200']);
+    expect(hdrs.map((h) => [h['x-forwarded-for'], h['x-real-ip']])).toEqual([
+      ['192.168.77.9', undefined], // gate's own /api/auth/user call
+      ['192.168.77.9', undefined],
+    ]);
+  });
+
+  describe('upgrade request smuggling (R061 review)', () => {
+    let raw: net.Server | null = null;
+    const rawSeen: string[] = [];
+    afterEach(async () => {
+      await new Promise<void>((r) => (raw ? raw.close(() => r()) : r()));
+      raw = null;
+    });
+    // backend that answers the gate's /api/auth/user, but REFUSES the upgrade with a keep-alive 400 and records every byte after it
+    const startRawBackend = async (answer101 = false): Promise<void> => {
+      rawSeen.length = 0;
+      raw = net.createServer((sock) => {
+        sock.on('data', (d) => {
+          const t = d.toString('latin1');
+          if (t.startsWith('GET /api/auth/user')) {
+            sock.end('HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}');
+            return;
+          }
+          rawSeen.push(t);
+          if (t.startsWith('GET /ws') && rawSeen.length === 1)
+            sock.write(
+              answer101
+                ? 'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n'
+                : 'HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n'
+            );
+        });
+      });
+      await new Promise<void>((r) => raw!.listen(0, '127.0.0.1', () => r()));
+      await handle!.stop();
+      handle = await startStaticServer({ staticDir: dir, backendPort: (raw.address() as AddressInfo).port, port: 0 });
+      asRemote();
+    };
+    const smuggled = 'POST /api/webui/reset-password HTTP/1.1\r\nHost: h\r\nContent-Length: 0\r\n\r\n';
+
+    it('backend refuses the upgrade (400, keep-alive): pipelined request in the same write or later never reaches it', async () => {
+      await startRawBackend();
+      expect((await collect('127.0.0.1', handle!.port, up('/ws', GOOD) + smuggled)).statuses).toEqual(['400']); // head > 0
+      expect(rawSeen.filter((t) => t.includes('reset-password'))).toEqual([]);
+      const later = await collect('127.0.0.1', handle!.port, up('/ws', GOOD), smuggled);
+      expect(later.statuses).toEqual(['400']);
+      expect(rawSeen.join('')).not.toContain('reset-password');
+    });
+
+    it('backend answers 101: bytes then flow both ways', async () => {
+      await startRawBackend(true);
+      expect((await collect('127.0.0.1', handle!.port, up('/ws', GOOD))).statuses).toEqual(['101']);
+    });
+
+    it('not a well-formed websocket upgrade: 400, backend never sees it', async () => {
+      await startRawBackend(true);
+      const base = (extra: string): string => `GET /ws HTTP/1.1\r\nHost: h\r\nCookie: ${GOOD}\r\n${extra}\r\n`;
+      for (const r of [
+        base('Upgrade: h2c\r\nConnection: Upgrade\r\nSec-WebSocket-Key: k\r\n'),
+        base('Upgrade: websocket\r\nConnection: Upgrade\r\n'), // no key
+      ])
+        expect((await collect('127.0.0.1', handle!.port, r)).statuses).toEqual(['400']);
+      // without `Connection: upgrade` node does not treat it as an upgrade at all: plain request, SPA page, nothing spliced
+      expect((await collect('127.0.0.1', handle!.port, base('Upgrade: websocket\r\nConnection: close\r\nSec-WebSocket-Key: k\r\n'))).statuses).toEqual(['200']);
+      expect(rawSeen).toEqual([]);
+    });
+
+    it('loopback control: same upgrade without a cookie still raw-splices (unchanged path)', async () => {
+      await startRawBackend(true);
+      proto._getpeername = origGetPeer;
+      expect((await collect('127.0.0.1', handle!.port, up('/ws'))).statuses).toEqual(['101']);
+    });
   });
 
   it('needsSession: raw-path allowlist, fail-closed on odd input', () => {

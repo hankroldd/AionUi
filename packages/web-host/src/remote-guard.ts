@@ -121,9 +121,14 @@ export function destroyRemoteForbidden(socket: Socket): void {
 }
 
 // 把 http.Server 已解析的 upgrade 请求原样重建（保持首部大小写与顺序），供裸 TCP 转发给后端。
-export function reconstructRequest(req: IncomingMessage, head: Buffer): Buffer {
+export function reconstructRequest(req: IncomingMessage, head: Buffer, xff?: string): Buffer {
   const lines = [`${req.method} ${req.url} HTTP/${req.httpVersion}`];
   const rh = req.rawHeaders;
-  for (let i = 0; i < rh.length; i += 2) lines.push(`${rh[i]}: ${rh[i + 1]}`);
+  for (let i = 0; i < rh.length; i += 2) {
+    // [mycowork] R061: for non-loopback peers the client-supplied forwarding headers are replaced by the real peer address
+    if (xff !== undefined && /^(x-forwarded-for|x-real-ip)$/i.test(rh[i])) continue;
+    lines.push(`${rh[i]}: ${rh[i + 1]}`);
+  }
+  if (xff !== undefined) lines.push(`X-Forwarded-For: ${xff}`);
   return Buffer.concat([Buffer.from(lines.join('\r\n') + '\r\n\r\n', 'latin1'), head ?? Buffer.alloc(0)]);
 }

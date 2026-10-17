@@ -111,6 +111,17 @@ export const PreviewEditSlot: React.FC<{ relativePath?: string }> = (props) =>
 const PreviewEditEntry: React.FC<{ relativePath?: string }> = ({ relativePath }) => {
   const { i18n: current } = useTranslation();
   const id = useMatch('/conversation/:id')?.params.id;
+  const ownerKey = useOwnerKey();
+  const navigate = useNavigate();
   if (!id) return null;
-  return <PreviewEditButton lang={current.language} conversationId={id} relativePath={relativePath} />;
+  // [mycowork] R036: online editing not configured → "configure" goes to P15 `office` and returns to this conversation
+  return (
+    <PreviewEditButton
+      lang={current.language}
+      conversationId={id}
+      relativePath={relativePath}
+      ownerKey={ownerKey}
+      onConfigure={(state) => void navigate('/office/connections', { state })}
+    />
+  );
 };

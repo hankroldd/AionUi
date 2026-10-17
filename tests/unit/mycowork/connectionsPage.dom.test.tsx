@@ -177,3 +177,26 @@ describe('能力中心“去配置”', () => {
     expect(await screen.findByRole('button', { name: '返回能力中心' })).toBeInTheDocument();
   });
 });
+
+describe('P15 切片 B：如何更新 / 断开（只读指引，D294）', () => {
+  it('每节折叠；无输入框；命令只含变量名与占位符；JWT 与断开说明在；夹具值不进 DOM', async () => {
+    LIST[0] = cap('knowledge.retrieval', 'not_configured', { apiKey: 'sk-fixture-0000', keyLength: 15 });
+    render(at({ pathname: '/office/connections' }));
+    await screen.findByTestId('conn-guide-knowledge');
+    for (const k of ['knowledge', 'office', 'arxiv']) {
+      expect(screen.queryByTestId(`conn-guide-cmd-${k}`)).toBeNull();
+      fireEvent.click(within(screen.getByTestId(`conn-guide-${k}`)).getByRole('button'));
+    }
+    const root = screen.getByTestId('mycowork-connections');
+    expect(root.querySelectorAll('input,textarea').length).toBe(0);
+    const cmd = screen.getByTestId('conn-guide-cmd-knowledge').textContent ?? '';
+    expect(cmd).toContain('WEKNORA_API_KEY=<新密钥>');
+    expect(cmd).toContain('systemctl --user restart mycowork-bridge');
+    expect(cmd).not.toMatch(/sk-|\/home\//);
+    expect(root.textContent).toContain('Bridge 与 Document Server 两处一起改、一起重启');
+    expect(root.textContent).toContain('吊销密钥要到 WeKnora 自己的管理界面里做');
+    expect(root.textContent).toContain('ingest_not_configured');
+    expect(root.innerHTML).not.toContain('sk-fixture-0000');
+    LIST[0] = cap('knowledge.retrieval', 'not_configured');
+  });
+});

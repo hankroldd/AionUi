@@ -7,6 +7,7 @@ import path from 'node:path';
 import tls from 'node:tls';
 import { execFileSync } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
+import { needsSession } from './session-gate.js';
 import { isBlockedRemoteRequest, isSensitivePath, normalizeGuardPath } from './remote-guard.js';
 import { isBlockedWatchRequest, startStaticServer, type StaticServerHandle } from './static-server.js';
 
@@ -692,7 +693,7 @@ describe('static-server', () => {
     const r = await collect(
       LAN_IP!,
       handle.port,
-      'GET /api/auth/status HTTP/1.1\r\nHost: h\r\n\r\n',
+      'GET /api/auth/status HTTP/1.1\r\nHost: h\r\nCookie: aionui-session=t\r\n\r\n',
       'POST /api/webui/reset-password HTTP/1.1\r\nHost: h\r\nContent-Length: 0\r\n\r\n'
     );
     expect(r.statuses).toEqual(['200', '403']);
@@ -745,7 +746,7 @@ describe('static-server', () => {
   });
 
   itRemote('非回环 WebSocket upgrade：敏感路径拒绝、/ws 转发后端并回传 101', async () => {
-    const backend = http.createServer((_req, res) => res.writeHead(404).end());
+    const backend = http.createServer((rq, res) => res.writeHead(rq.url === "/api/auth/user" ? 200 : 404).end());
     let sawWsUpgrade = false;
     backend.on('upgrade', (req, socket) => {
       if (req.url === '/ws') {
@@ -759,7 +760,7 @@ describe('static-server', () => {
     const backendPort = (backend.address() as AddressInfo).port;
     handle = await startStaticServer({ staticDir, backendPort, port: 0, allowRemote: true });
     const up = (p: string): string =>
-      `GET ${p} HTTP/1.1\r\nHost: h\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n`;
+      `GET ${p} HTTP/1.1\r\nHost: h\r\nCookie: aionui-session=t\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n`;
     const bad = await collect(LAN_IP!, handle.port, up('/api/webui/reset-password'));
     expect(bad.statuses).toEqual(['403']);
     expect(sawWsUpgrade).toBe(false);
@@ -779,7 +780,7 @@ describe('static-server', () => {
     const st = await collect(
       LAN_IP!,
       handle.port,
-      'GET /api/auth/status HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n'
+      'GET /api/auth/status HTTP/1.1\r\nHost: h\r\nCookie: aionui-session=t\r\nConnection: close\r\n\r\n'
     );
     expect(st.statuses).toEqual(['200']);
     expect(seen).toContain('/api/auth/status');
@@ -863,11 +864,11 @@ describe('static-server', () => {
       const r = await collect(
         '127.0.0.1',
         h.port,
-        'GET /api/auth/status HTTP/1.1\r\nHost: h\r\n\r\n',
+        'GET /api/auth/status HTTP/1.1\r\nHost: h\r\nCookie: aionui-session=t\r\n\r\n',
         'POST /api/webui/change-password HTTP/1.1\r\nHost: h\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}'
       );
       expect(r.statuses).toEqual(['200', '403']);
-      expect(seen).toEqual(['/api/auth/status']);
+      expect(seen).toEqual(['/api/auth/user', '/api/auth/status']);
     });
 
     it('分片发送的超长首行 403（M2）', async () => {
@@ -889,7 +890,7 @@ describe('static-server', () => {
     });
 
     it('upgrade：敏感路径 403、/ws 转发后端 101', async () => {
-      const backend = http.createServer((_req, res) => res.writeHead(404).end());
+      const backend = http.createServer((rq, res) => res.writeHead(rq.url === "/api/auth/user" ? 200 : 404).end());
       const upgraded: string[] = [];
       backend.on('upgrade', (req, socket) => {
         upgraded.push(req.url!);
@@ -905,7 +906,7 @@ describe('static-server', () => {
       });
       fakeRemote(handle.port);
       const up = (p: string): string =>
-        `GET ${p} HTTP/1.1\r\nHost: h\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n`;
+        `GET ${p} HTTP/1.1\r\nHost: h\r\nCookie: aionui-session=t\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n`;
       expect((await collect('127.0.0.1', handle.port, up('/api/auth/internal/users'))).statuses).toEqual(['403']);
       expect((await collect('127.0.0.1', handle.port, up('/ws'))).statuses).toEqual(['101']);
       expect(upgraded).toEqual(['/ws']);
@@ -918,13 +919,13 @@ describe('static-server', () => {
         res.writeHead(200).end('{}');
       });
       expect(
-        (await collect('127.0.0.1', h.port, 'GET /api/auth/status HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n'))
+        (await collect('127.0.0.1', h.port, 'GET /api/auth/status HTTP/1.1\r\nHost: h\r\nCookie: aionui-session=t\r\nConnection: close\r\n\r\n'))
           .statuses
       ).toEqual(['200']);
       expect(
         (await collect('127.0.0.1', h.port, 'GET / HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n')).statuses
       ).toEqual(['200']);
-      expect(seen).toEqual(['/api/auth/status']);
+      expect(seen).toEqual(['/api/auth/user', '/api/auth/status']);
     });
   });
 });
@@ -1038,5 +1039,112 @@ describe('[mycowork] built-in TLS listener (R061)', () => {
   it('isSensitivePath covers the bridge health probe', () => {
     expect(isSensitivePath('/bridge/v1/health')).toBe(true);
     expect(isSensitivePath('/bridge/v1/scopes')).toBe(false);
+  });
+});
+
+// [mycowork] R061: aioncore (local identity mode) authenticates nothing; non-loopback peers must hold a valid session
+// for /api/* and /ws. Peer address is stubbed (no NIC needed); every negative has a loopback control.
+describe('[mycowork] session gate for non-loopback peers (R061)', () => {
+  let dir = '';
+  let handle: StaticServerHandle | null = null;
+  let backend: http.Server | null = null;
+  const seen: string[] = [];
+  type PeerProto = { _getpeername: () => { address?: string; family?: string; port?: number } };
+  const proto = net.Socket.prototype as unknown as PeerProto;
+  const origGetPeer = proto._getpeername;
+  const GOOD = 'aionui-session=good';
+
+  const req = (p: string, cookie?: string, method = 'GET'): string =>
+    `${method} ${p} HTTP/1.1\r\nHost: h\r\n${cookie ? `Cookie: ${cookie}\r\n` : ''}Connection: close\r\nContent-Length: 0\r\n\r\n`;
+  const up = (p: string, cookie?: string): string =>
+    `GET ${p} HTTP/1.1\r\nHost: h\r\n${cookie ? `Cookie: ${cookie}\r\n` : ''}Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n`;
+
+  beforeEach(async () => {
+    dir = await mkRendererFixture();
+    seen.length = 0;
+    backend = http.createServer((rq, rs) => {
+      seen.push(`${rq.url} ${rq.headers.cookie ?? ''}`.trim());
+      if (rq.url === '/api/auth/user') {
+        const ok = rq.headers.cookie === GOOD;
+        rs.writeHead(ok ? 200 : 401).end(ok ? '{"success":true}' : '{"success":false}');
+        return;
+      }
+      rs.writeHead(200).end('{"success":true,"data":[]}');
+    });
+    backend.on('upgrade', (_rq, socket) => socket.end('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n'));
+    await new Promise<void>((r) => backend!.listen(0, '127.0.0.1', () => r()));
+    handle = await startStaticServer({ staticDir: dir, backendPort: (backend.address() as AddressInfo).port, port: 0 });
+  });
+  afterEach(async () => {
+    proto._getpeername = origGetPeer;
+    await handle?.stop();
+    await new Promise<void>((r) => backend!.close(() => r()));
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+  const asRemote = (): void => {
+    const port = handle!.port;
+    proto._getpeername = function (this: net.Socket) {
+      const real = origGetPeer.call(this);
+      return this.localPort === port ? { ...real, address: '192.168.77.9', family: 'IPv4' } : real;
+    };
+  };
+  const status = async (raw: string): Promise<string[]> => (await collect('127.0.0.1', handle!.port, raw)).statuses;
+  const PROTECTED = ['/api/conversations', '/api/system/info', '/api/settings', '/api/assistants', '/api/cron/jobs', '/api/mcp/servers'];
+
+  it('loopback control: no cookie reaches /api and /ws untouched, backend never asked about a session', async () => {
+    for (const p of PROTECTED) expect(await status(req(p))).toEqual(['200']);
+    expect(await status(up('/ws'))).toEqual(['101']);
+    expect(seen.some((s) => s.startsWith('/api/auth/user'))).toBe(false);
+  });
+
+  it('remote without cookie: protected /api/* are 401 and never reach the backend; /ws is not 101', async () => {
+    asRemote();
+    for (const p of PROTECTED) expect(await status(req(p))).toEqual(['401']);
+    expect(await status(up('/ws'))).toEqual(['401']);
+    expect(await status(up('/api/stt/stream'))).toEqual(['401']);
+    expect(seen).toEqual([]);
+  });
+
+  it('remote with forged/expired/other-name cookie: 401 (backend said no), /ws not 101', async () => {
+    asRemote();
+    expect(await status(req('/api/conversations', 'aionui-session=forged'))).toEqual(['401']);
+    expect(await status(req('/api/conversations', 'aionui-refresh=good'))).toEqual(['401']);
+    expect(await status(req('/api/conversations', 'aionui-session='))).toEqual(['401']);
+    expect(await status(up('/ws', 'aionui-session=expired'))).toEqual(['401']);
+  });
+
+  it('remote with a valid session: /api 200 (cookie checked once, then cached), /ws 101', async () => {
+    asRemote();
+    for (const p of PROTECTED) expect(await status(req(p, GOOD))).toEqual(['200']);
+    expect(await status(up('/ws', GOOD))).toEqual(['101']);
+    expect(seen.filter((s) => s.startsWith('/api/auth/user'))).toHaveLength(1);
+  });
+
+  it('remote login allowlist: /api/auth/user and /api/auth/refresh pass without a cookie; lookalikes do not', async () => {
+    asRemote();
+    expect(await status(req('/api/auth/user'))).toEqual(['401']); // from the backend itself, not the gate
+    expect(seen).toEqual(['/api/auth/user']);
+    expect(await status(req('/api/auth/refresh', undefined, 'POST'))).toEqual(['200']);
+    for (const p of ['/api/auth/user/', '/api/auth/user/../conversations', '/API/auth/user', '/api/auth/status', '/api/auth/users'])
+      expect(await status(req(p))).toEqual(['401']);
+  });
+
+  it('remote: sensitive families stay 403 even with a valid session; /login and static need no session', async () => {
+    asRemote();
+    expect(await status(req('/api/webui/reset-password', GOOD, 'POST'))).toEqual(['403']);
+    expect(await status(req('/api/auth/internal/users', GOOD))).toEqual(['403']);
+    expect(await status(req('/'))).toEqual(['200']);
+    expect(await status(req('/login', undefined, 'POST'))).toEqual(['200']);
+  });
+
+  it('needsSession: raw-path allowlist, fail-closed on odd input', () => {
+    expect(needsSession('/api/auth/user?x=1')).toBe(false);
+    expect(needsSession('/api/auth/refresh')).toBe(false);
+    expect(needsSession('/api/auth/user/../settings')).toBe(true);
+    expect(needsSession('/api/settings')).toBe(true);
+    expect(needsSession('/api')).toBe(true);
+    expect(needsSession('http://x/api/settings')).toBe(true);
+    expect(needsSession('/assets/main.js')).toBe(false);
+    expect(needsSession('/login')).toBe(false);
   });
 });

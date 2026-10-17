@@ -26,6 +26,7 @@ import {
   reconstructRequest,
   writeRemoteForbidden,
 } from './remote-guard.js';
+import { createSessionGate, needsSession, sessionDeniedResponse } from './session-gate.js';
 
 export type StaticServerOptions = {
   staticDir: string;
@@ -236,6 +237,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   const port = opts.port ?? DEFAULT_PORT;
   const allowRemote = opts.allowRemote === true;
   const host = allowRemote && !opts.tls ? '0.0.0.0' : '127.0.0.1';
+  const sessionGate = createSessionGate(opts.backendPort);
   const bridgeUrl = new URL(process.env.AIONUI_BRIDGE_URL ?? 'http://127.0.0.1:25900');
 
   // The HTTP server listens only on loopback — user traffic hits the outer
@@ -260,6 +262,16 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       if (isBlockedRemoteRequest(req.url, req.socket.remoteAddress)) {
         writeRemoteForbidden(res);
         return;
+      }
+
+      // [mycowork] R061: aioncore has no auth in local identity mode; LAN peers need a valid login session for /api/*.
+      if (!isLoopbackAddr(req.socket.remoteAddress) && needsSession(req.url)) {
+        const verdict = await sessionGate(req.headers.cookie);
+        if (verdict !== 'ok') {
+          const d = sessionDeniedResponse(verdict);
+          res.writeHead(d.status, { 'content-type': 'application/json' }).end(d.body);
+          return;
+        }
       }
 
       // /api/* — reverse proxy to backend (includes /api/auth/*).
@@ -318,7 +330,23 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       destroyRemoteForbidden(socket);
       return;
     }
-    spliceToTcpEndpoint(socket, opts.backendPort, reconstructRequest(req, head));
+    const splice = (): void => spliceToTcpEndpoint(socket, opts.backendPort, reconstructRequest(req, head));
+    if (isLoopbackAddr(socket.remoteAddress)) {
+      splice();
+      return;
+    }
+    // [mycowork] R061: no session, no 101 (the backend would accept the upgrade unauthenticated).
+    void sessionGate(req.headers.cookie).then((verdict) => {
+      if (socket.destroyed) return;
+      if (verdict === 'ok') {
+        splice();
+        return;
+      }
+      const d = sessionDeniedResponse(verdict);
+      socket.end(
+        `HTTP/1.1 ${d.status} ${d.status === 401 ? 'Unauthorized' : 'Service Unavailable'}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(d.body)}\r\nConnection: close\r\n\r\n${d.body}`
+      );
+    });
   });
 
   // Loopback: peek the first line and raw-TCP splice to backend (/ws, /api/stt/stream)

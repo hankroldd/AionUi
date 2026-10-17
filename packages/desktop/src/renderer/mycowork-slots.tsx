@@ -207,6 +207,7 @@ export {
   OfficeConnectionsSlot,
   OfficeMaintenanceSlot,
   OfficeSchedulesSlot,
+  OfficeResearchSlot,
   OfficeMemorySlot,
 } from './mycowork-office-pages';
 export {

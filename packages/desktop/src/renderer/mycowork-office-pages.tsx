@@ -27,6 +27,7 @@ import {
   connectionsReturnTarget,
   useConnectionsReturn,
   SchedulesPage,
+  ResearchPage,
   MemoryPage,
   ResourcesPage,
 } from '@mycowork/ui';
@@ -194,6 +195,12 @@ export const OfficeMaintenanceSlot: React.FC = () => {
 export const OfficeSchedulesSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   return <SchedulesPage lang={current.language} />;
+};
+
+/** Mount point: route `/office/research` (MyCowork P13 research log: read-only list of lookups, R050). */
+export const OfficeResearchSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  return <ResearchPage lang={current.language} />;
 };
 
 /** Mount point: route `/office/memory` (MyCowork P11 memory: review, accept/reject/disable, pause precipitation). */

@@ -127,4 +127,39 @@ describe('OfficeSetupSlot', () => {
     expect(within(model).queryByText('已配置')).toBeNull();
     expect(within(screen.getByTestId('setup-image')).getByText('稍后再说')).toBeInTheDocument();
   });
+
+  it('R001: host step reads /instance (已读取), backup is always 未检测; both optional, link to P16, never block', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes('/api/providers')) return reply(200, { data: [] });
+      if (url.includes('/api/settings/client')) return noImage;
+      if (url.includes('/instance'))
+        return reply(200, { host: 'h1', data_dir_label: 'data', build: { commit: 'abcdef12' } });
+      return reply(200, { capabilities: [] });
+    });
+    render(<OfficeSetupSlot />);
+    const host = await screen.findByTestId('setup-host');
+    expect(await within(host).findByText('已读取')).toBeInTheDocument();
+    expect(within(host).getByText('可选')).toBeInTheDocument();
+    expect(within(host).getByRole('link', { name: '去查看' })).toHaveAttribute('href', '#/office/maintenance');
+    const backup = screen.getByTestId('setup-backup');
+    expect(within(backup).getByText('未检测')).toBeInTheDocument();
+    expect(within(backup).getByText('可选')).toBeInTheDocument();
+    expect(within(backup).getByText(/备份脚本/)).toBeInTheDocument();
+    expect(within(backup).getByRole('link', { name: '去查看' })).toHaveAttribute('href', '#/office/maintenance');
+    expect(screen.getByRole('link', { name: '开始聊天' })).toBeInTheDocument();
+  });
+
+  it('R001: unreadable /instance → host step 未检测 and the rest of the page still works', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes('/instance')) return reply(500, { error: { code: 'INTERNAL', message: 'x' } });
+      if (url.includes('/api/providers')) return reply(200, { data: [] });
+      if (url.includes('/api/settings/client')) return noImage;
+      return reply(200, { capabilities: [cap('knowledge.retrieval', 'ready')] });
+    });
+    render(<OfficeSetupSlot />);
+    const host = await screen.findByTestId('setup-host');
+    expect(within(host).getByText('未检测')).toBeInTheDocument();
+    expect(within(host).queryByText('已读取')).toBeNull();
+    expect(within(screen.getByTestId('setup-knowledge')).getByText('已就绪')).toBeInTheDocument();
+  });
 });

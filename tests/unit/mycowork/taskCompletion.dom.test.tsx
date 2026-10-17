@@ -133,3 +133,22 @@ it('TURN_ERROR 显示出错，其他失败不冒充', () => {
   const { container } = render(<TaskCompletion run={mk({ status: 'failed', delivery_error: 'X' })} lang="zh-CN" onAccept={async () => {}} />);
   expect(container).toBeEmptyDOMElement();
 });
+
+it('取消订阅后，在途的重读返回也不回调（新一轮或卸载不被旧结果覆盖）', async () => {
+  const onEnded = vi.fn();
+  let cb: (raw: { conversation_id?: string; turn_id?: string; status?: string }) => void = () => {};
+  let release: () => void = () => {};
+  vi.stubGlobal(
+    'fetch',
+    () =>
+      new Promise<Response>((r) => {
+        release = () => r(new Response(JSON.stringify(mk({})), { status: 200, headers: { 'content-type': 'application/json' } }));
+      })
+  );
+  const stop = watchTurnEnded(owner, base, onEnded, (c) => ((cb = c), () => {}));
+  cb({ conversation_id: 'c1', turn_id: 't1', status: 'finished' });
+  stop();
+  release();
+  await new Promise((r) => setTimeout(r, 20));
+  expect(onEnded).not.toHaveBeenCalled();
+});

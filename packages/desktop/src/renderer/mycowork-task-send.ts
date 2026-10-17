@@ -206,11 +206,19 @@ export function watchTurnEnded(
   subscribe: (cb: (raw: RawTurnCompleted) => void) => () => void = (cb) => rawTurnCompleted.on(cb)
 ): () => void {
   let sent = false;
-  return subscribe((raw) => {
+  let cancelled = false; // unsubscribed (new turn / unmount): an in-flight re-read must not write back
+  const unsubscribe = subscribe((raw) => {
     const conv = raw.conversation_id ?? raw.session_id ?? raw.sessionId;
     const turn = raw.turn_id ?? raw.turnId;
     if (sent || conv !== run.conversation_id || turn !== run.turn_id) return;
     sent = true;
-    readOfficeTask(owner, run.run_id).then(onEnded, () => onEnded(null)); // 重读失败也先显示待确认，接受时由Bridge复核
+    readOfficeTask(owner, run.run_id).then(
+      (latest) => !cancelled && onEnded(latest),
+      () => !cancelled && onEnded(null) // 重读失败也先显示待确认，接受时由Bridge复核
+    );
   });
+  return () => {
+    cancelled = true;
+    unsubscribe();
+  };
 }

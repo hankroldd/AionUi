@@ -761,7 +761,7 @@ const AionrsSendBox: React.FC<{
   useEffect(() => {
     if (!officeRun || !persistentDraft.enabled || officeRun.status !== 'running') return;
     try {
-      return watchTurnEnded(officeTaskOwner(persistentDraft), officeRun, (latest) => { if (latest) setOfficeRun(latest); setTurnEnded(true); });
+      return watchTurnEnded(officeTaskOwner(persistentDraft), officeRun, (latest) => { if (latest) setOfficeRun((prev) => (prev?.run_id === latest.run_id && prev.status !== 'running' ? prev : latest)); setTurnEnded(true); }); // a late re-read never downgrades a terminal run
     } catch {
       return undefined;
     }

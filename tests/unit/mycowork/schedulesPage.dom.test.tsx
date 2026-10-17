@@ -69,7 +69,10 @@ describe('OfficeSchedulesSlot', () => {
     const row = await screen.findByTestId('schedule-sched_1');
     expect(within(row).getByText('启用中')).toBeInTheDocument();
     expect(within(row).getByText(/^下次：/)).toBeInTheDocument();
-    expect(within(row).getByText('时区 Asia/Shanghai · 错过时补跑一次 · 本月已用 1/4 次')).toBeInTheDocument();
+    expect(within(row).getByText('本月已用 1/4 次')).toBeInTheDocument();
+    expect(within(row).queryByText(/Asia\/Shanghai/)).toBeNull(); // R069：时区/错过策略收进“详细信息”
+    fireEvent.click(within(row).getByRole('button', { name: /详细信息/ }));
+    expect(within(row).getByText('时区 Asia/Shanghai · 错过时补跑一次')).toBeInTheDocument();
     expect(within(row).getByText(/最近一次：.*已排队，等待执行/)).toBeInTheDocument();
     const off = screen.getByTestId('schedule-sched_2');
     expect(within(off).getByText('已停用')).toBeInTheDocument();
@@ -86,8 +89,8 @@ describe('OfficeSchedulesSlot', () => {
       Promise.resolve(
         init?.method === 'PATCH'
           ? reply(200, sched({ enabled: false, revision: 4, next_run_at: null }))
-          : reply(200, { items: LIST }),
-      ),
+          : reply(200, { items: LIST })
+      )
     );
     render(<OfficeSchedulesSlot />, { wrapper: MemoryRouter });
     const row = await screen.findByTestId('schedule-sched_1');
@@ -106,8 +109,8 @@ describe('OfficeSchedulesSlot', () => {
       Promise.resolve(
         init?.method === 'PATCH'
           ? reply(409, { error: { code: 'REVISION_CONFLICT', message: 'x' } })
-          : reply(200, { items: LIST }),
-      ),
+          : reply(200, { items: LIST })
+      )
     );
     render(<OfficeSchedulesSlot />, { wrapper: MemoryRouter });
     const row = await screen.findByTestId('schedule-sched_1');

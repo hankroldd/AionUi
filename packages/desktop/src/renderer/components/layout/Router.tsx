@@ -13,6 +13,7 @@ import {
   OfficeCapabilitiesSlot,
   OfficeSetupSlot,
   OfficeConnectionsSlot,
+  OfficeMaintenanceSlot,
   OfficeSchedulesSlot,
   OfficeMemorySlot,
   OfficeResourcesSlot,
@@ -133,6 +134,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/office/capabilities' element={<OfficeCapabilitiesSlot />} />
           <Route path='/office/setup' element={<OfficeSetupSlot />} />
           <Route path='/office/connections' element={<OfficeConnectionsSlot />} />
+          <Route path='/office/maintenance' element={<OfficeMaintenanceSlot />} />
           <Route path='/office/schedules' element={<OfficeSchedulesSlot />} />
           <Route path='/office/memory' element={<OfficeMemorySlot />} />
           <Route path='/office/compositions/:decisionId' element={<OfficeCompositionSlot />} />

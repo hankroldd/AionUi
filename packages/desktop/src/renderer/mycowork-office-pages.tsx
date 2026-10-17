@@ -22,6 +22,7 @@ import {
   useCapabilityReturn,
   SetupPage,
   ConnectionsPage,
+  MaintenancePage,
   connectionsEntryState,
   connectionsReturnTarget,
   useConnectionsReturn,
@@ -181,6 +182,12 @@ export const OfficeConnectionsSlot: React.FC = () => {
       returnTo={returnTo ?? undefined}
     />
   );
+};
+
+/** Mount point: route `/office/maintenance` (MyCowork P16 operations & maintenance, slice A: read-only status, no actions). */
+export const OfficeMaintenanceSlot: React.FC = () => {
+  const { i18n: current } = useTranslation();
+  return <MaintenancePage lang={current.language} />;
 };
 
 /** Mount point: route `/office/schedules` (MyCowork P14 office schedules: list + turn off/on; separate from AionUi `/scheduled`). */

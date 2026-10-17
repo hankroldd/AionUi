@@ -69,11 +69,14 @@ afterEach(() => {
 });
 
 describe('P16 运行与维护（只读）', () => {
-  it('五节齐全：版本取自能力检查，无会话时说可以升级；存储未检测；没有任何操作按钮', async () => {
+  it('五节齐全：版本取自能力检查，本人无会话时不说可以升级、提示先确认；存储未检测；没有任何操作按钮', async () => {
     render(page('/office/maintenance'));
     const comps = await screen.findByTestId('maint-components');
     await waitFor(() => expect(within(comps).getByText('9.9.9')).toBeTruthy());
-    expect(within(screen.getByTestId('maint-sessions')).getByText(/没有编辑中的会话/)).toBeTruthy();
+    const none = screen.getByTestId('maint-sessions');
+    expect(within(none).getByText(/你自己没有编辑中的会话/)).toBeTruthy();
+    expect(none.textContent).toContain('请先确认');
+    expect(none.textContent).not.toMatch(/可以升级|可以重启/);
     expect(within(screen.getByTestId('maint-storage')).getByText('未检测')).toBeTruthy();
     expect(screen.getByTestId('maint-backup').textContent).toContain('docs/runbooks/backup-restore.md');
     expect(screen.getByTestId('mycowork-maintenance-ops').textContent).toContain('docs/runbooks/upgrade-bridge.md');
@@ -96,7 +99,7 @@ describe('P16 运行与维护（只读）', () => {
     instance = () => reply(503, { error: { code: 'UNAVAILABLE' } });
     render(page('/office/maintenance'));
     await waitFor(() => expect(within(screen.getByTestId('maint-sessions')).getByText('未检测')).toBeTruthy());
-    expect(within(screen.getByTestId('maint-instance')).getByText('未检测')).toBeTruthy();
+    await waitFor(() => expect(within(screen.getByTestId('maint-instance')).getByText('未检测')).toBeTruthy());
     expect(screen.getByTestId('maint-sessions').textContent).not.toContain('可以升级');
   });
 });

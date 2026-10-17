@@ -2,12 +2,16 @@
  * [mycowork] adapted：办公资源页 OfficeResourcesSlot 回归（拆分c，原 officeResources.dom.test.tsx，用例原样）。
  */
 
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
 import { fetchMock, item, calls, bodyOf, bridge } from './officeResources.fixture';
+
+// A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
+vi.setConfig({ testTimeout: 30_000 });
+configure({ asyncUtilTimeout: 15_000 });
 
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1', username: 'fixture-account' }, status: 'authenticated' }),

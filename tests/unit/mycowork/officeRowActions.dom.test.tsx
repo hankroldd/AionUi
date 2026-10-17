@@ -4,12 +4,16 @@
  * 边界：真实资源页与 Arco，只替换 Bridge HTTP 与 Host 导航回调；不 mock 选择与菜单逻辑。
  */
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import type { ResourceList } from '@mycowork/contracts';
 import { ResourcesPage } from '@mycowork/ui';
 import type { ScopeDraft } from '@mycowork/ui/scope-picker/index.ts';
+
+// A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
+vi.setConfig({ testTimeout: 30_000 });
+configure({ asyncUtilTimeout: 15_000 });
 
 type Item = ResourceList['items'][number];
 const file = (id: string, over: Partial<Item> = {}): Item => ({

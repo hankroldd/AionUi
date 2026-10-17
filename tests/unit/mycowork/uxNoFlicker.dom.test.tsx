@@ -4,7 +4,7 @@
  * 没有就停、页面不可见不读；集合 / 标签 / 分组读失败合成一条提示并给“重试”；记忆页接受后列表不退回骨架屏、连点接受只发一次。
  */
 
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
@@ -12,6 +12,10 @@ import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 import { OfficeMemorySlot } from '@/renderer/mycowork-slots';
 import { deferred, fetchMock, fixture, item, list, reads, reply, reset } from './globalResourceFixture';
+
+// A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
+vi.setConfig({ testTimeout: 30_000 });
+configure({ asyncUtilTimeout: 15_000 });
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({ useLocation: () => ({ state: null, pathname: '/' }) }));

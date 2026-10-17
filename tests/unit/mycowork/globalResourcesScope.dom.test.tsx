@@ -4,11 +4,15 @@
  * 边界：真实页面、Scope与Arco，只用虚构Bridge边界；不把UI门禁当成后端AI排除集成。
  */
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, configure } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 import { choose, fixture, input, lastQuery, list, nav, reads, reset, writes, FIRST } from './globalResourceFixture';
+
+// A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
+vi.setConfig({ testTimeout: 30_000 });
+configure({ asyncUtilTimeout: 15_000 });
 
 const askScope = vi.fn(async () => undefined);
 beforeEach(() => {

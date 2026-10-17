@@ -12,7 +12,10 @@ import { armSpaceRestore } from '@mycowork/ui/pages/resources/space-snapshot.ts'
 import { goEditReturn } from '@mycowork/ui/pages/office-editor/edit-return.ts';
 import { installBridge } from './versionsFixture';
 
-configure({ asyncUtilTimeout: 4000 });
+// A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
+vi.setConfig({ testTimeout: 30_000 });
+
+configure({ asyncUtilTimeout: 15_000 });
 const response = (status: number, body: unknown) => ({
   status,
   ok: status < 300,

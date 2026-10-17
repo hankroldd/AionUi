@@ -4,7 +4,7 @@
  * 边界：真实ResourcesPage/Arco；Bridge响应为虚构边界替身，600后端真实性另由HTTP集成证明。
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, configure } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
@@ -22,6 +22,10 @@ import {
   standard,
   writes,
 } from './globalResourceFixture';
+
+// A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
+vi.setConfig({ testTimeout: 30_000 });
+configure({ asyncUtilTimeout: 15_000 });
 
 beforeEach(() => {
   reset();

@@ -5,9 +5,13 @@
  */
 import React from 'react';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ResourcesPage, type ScopeDraft } from '@mycowork/ui';
+
+// A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
+vi.setConfig({ testTimeout: 30_000 });
+configure({ asyncUtilTimeout: 15_000 });
 
 const fetchMock = vi.fn();
 const ask = vi.fn<(draft: ScopeDraft, signal: AbortSignal, question?: string) => Promise<void>>();

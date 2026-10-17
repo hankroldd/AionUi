@@ -11,6 +11,9 @@ import { Message } from '@arco-design/web-react';
 import type { ResourceList } from '@mycowork/contracts';
 import { ResourcesPage } from '@mycowork/ui';
 
+// A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
+vi.setConfig({ testTimeout: 30_000 });
+
 type Item = ResourceList['items'][number];
 const file = (id: string): Item => ({
   resource_id: id,
@@ -26,7 +29,7 @@ const file = (id: string): Item => ({
 });
 const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-configure({ asyncUtilTimeout: 4000 }); // 整机高负载时默认 1 秒的 findBy 会误报
+configure({ asyncUtilTimeout: 15_000 }); // 整机高负载时默认 1 秒的 findBy 会误报
 const fetchMock = vi.fn();
 let items: Item[];
 let gates: Map<string, () => void>; // 卡住 POST …/trash，直到用例放行

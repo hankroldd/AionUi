@@ -6,12 +6,16 @@
  * 边界：真实 ResourcesPage、UploadFlow 与 Arco，只用虚构 Bridge 边界（fetch）。
  */
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 import { fetchMock, fixture, list, FIRST, nav, reads, reply, reset, standard } from './globalResourceFixture';
+
+// A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
+vi.setConfig({ testTimeout: 30_000 });
+configure({ asyncUtilTimeout: 15_000 });
 
 const steps = (parse: string, index = parse) => ({ received: 'done', stored: 'done', parse, index });
 const row = (over: object) => ({

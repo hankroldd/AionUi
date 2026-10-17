@@ -3,10 +3,14 @@
  * 只替换同源HTTP边界；真实ScopeChip、Modal、Checkbox与预览读取。
  */
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ScopeChip, getScope, setScopeSelection } from '@mycowork/ui';
+
+// A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
+vi.setConfig({ testTimeout: 30_000 });
+configure({ asyncUtilTimeout: 15_000 });
 
 const request = vi.fn();
 const name = (id: number) => `虚构资料${id}.md`;

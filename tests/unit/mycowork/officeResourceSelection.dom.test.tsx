@@ -4,10 +4,14 @@
  * 边界：只替换Bridge HTTP；Arco、选择状态与原生Slot均实用，不调用上游或模型。
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
+
+// A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
+vi.setConfig({ testTimeout: 30_000 });
+configure({ asyncUtilTimeout: 15_000 });
 
 // 空间页按登录账号取“来源对话”名称：这里只替掉 AionUi 的登录上下文，账号固定为已登录
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({

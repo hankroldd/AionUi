@@ -2,11 +2,15 @@
  * [mycowork] adapted：空间行“存为模板候选”提名 UI（拆分a，原 officeTemplateNominate.dom.test.tsx，用例原样；a=菜单与对话框，b=结果，c=owner 审批）。
  */
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import type { AssetDetail, AssetNomination, ResourceList } from '@mycowork/contracts';
 import { ResourcesPage } from '@mycowork/ui';
+
+// A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
+vi.setConfig({ testTimeout: 30_000 });
+configure({ asyncUtilTimeout: 15_000 });
 
 type Item = ResourceList['items'][number];
 type Finding = AssetNomination['findings'][number];

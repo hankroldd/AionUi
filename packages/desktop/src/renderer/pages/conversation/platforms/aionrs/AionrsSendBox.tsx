@@ -762,7 +762,7 @@ const AionrsSendBox: React.FC<{
         if (stopped) {
           const runtime = officeTaskRuntime(stopped);
           if (runtime) runtimeView.markStopAcknowledged(turnId, runtime);
-          if (stopped.saved_results?.length) Message.info({ content: <SavedResults run={stopped} lang={i18n?.language} />, duration: 8000 }); // A513：已登记的结果（推定），无则不出
+          if (stopped.saved_results?.length) Message.info({ content: <SavedResults run={stopped} lang={i18n?.language} />, duration: 0, closable: true }); // A513：已登记的结果（推定），无则不出；不自动消失，用户关
           if (!stopped.stop_confirmed) { Message.warning('此步骤未确认完成，请检查任务状态；不会停止后来的轮次。'); return; }
           resetState(); resetActiveExecution('stop'); return;
         }

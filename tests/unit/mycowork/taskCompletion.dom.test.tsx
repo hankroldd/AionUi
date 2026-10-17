@@ -152,3 +152,30 @@ it('取消订阅后，在途的重读返回也不回调（新一轮或卸载不�
   await new Promise((r) => setTimeout(r, 20));
   expect(onEnded).not.toHaveBeenCalled();
 });
+
+it('watchTurnEnd：取消订阅后，在途的转发返回也不回调', async () => {
+  const onRun = vi.fn();
+  let cb: (raw: Record<string, unknown>) => void = () => {};
+  let release: () => void = () => {};
+  vi.stubGlobal(
+    'fetch',
+    () =>
+      new Promise<Response>((r) => {
+        release = () => r(new Response(JSON.stringify(mk({})), { status: 200, headers: { 'content-type': 'application/json' } }));
+      })
+  );
+  const stop = watchTurnEnd(owner, base, onRun, (c) => ((cb = c), () => {}));
+  cb({ conversation_id: 'c1', turn_id: 't1', state: 'ai_waiting_input' });
+  stop();
+  release();
+  await new Promise((r) => setTimeout(r, 20));
+  expect(onRun).not.toHaveBeenCalled();
+});
+
+it('run 缺 turn_id 时不订阅，无 id 事件不触发转发', () => {
+  const subscribe = vi.fn(() => () => {});
+  const noTurn = { run_id: 'r1', conversation_id: 'c1' };
+  watchTurnEnd(owner, noTurn, vi.fn(), subscribe);
+  watchTurnEnded(owner, noTurn, vi.fn(), subscribe);
+  expect(subscribe).not.toHaveBeenCalled();
+});

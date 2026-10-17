@@ -4,7 +4,7 @@
  */
 import http, { type IncomingMessage } from 'node:http';
 import { isLoopbackAddr } from './remote-guard.js';
-import { peerHeaders } from './session-gate.js';
+import { peerHeaders, sessionCookieOf } from './session-gate.js';
 
 // [mycowork] D35/A35: the officecli watch preview (proxied by aioncore) is read-only here. Its server also
 // rewrites the live document (/api/send, /api/batch), retargets the preview to any local file (/api/switch)
@@ -25,23 +25,16 @@ export function isBlockedWatchRequest(method: string, url: string): boolean {
 // Only the aionui-session cookie may leave for the Bridge (cf. Grafana CVE-2022-39201).
 export const BRIDGE_UNAVAILABLE = { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'bridge unavailable' } };
 
-function sessionCookieOnly(cookie: string | undefined): string | undefined {
-  return cookie
-    ?.split(';')
-    .map((c) => c.trim())
-    .find((c) => c.startsWith('aionui-session='));
-}
-
 export function bridgeHeaders(req: IncomingMessage): http.IncomingHttpHeaders {
   const { cookie, ...rest } = peerHeaders(req.headers, req.socket.remoteAddress, isLoopbackAddr(req.socket.remoteAddress));
-  const session = sessionCookieOnly(cookie);
+  const session = sessionCookieOf(cookie);
   return session ? { ...rest, cookie: session } : rest;
 }
 
 // Fire-and-forget: tell the Bridge to drop its identity cache for this session (ADR-0011 D21).
 // Never awaited, errors ignored — logout itself must not depend on the Bridge.
 export function notifyBridgeLogout(bridge: URL, req: IncomingMessage): void {
-  const session = sessionCookieOnly(req.headers.cookie);
+  const session = sessionCookieOf(req.headers.cookie);
   if (!session) return;
   const notify = http.request(new URL('/bridge/v1/session/end', bridge), {
     method: 'POST',

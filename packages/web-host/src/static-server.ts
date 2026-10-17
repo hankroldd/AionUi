@@ -285,6 +285,8 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   // 或 /ws、/api/stt/stream 放行（裸 TCP 转发给后端，自己重写请求并搬字节，不经 http.Server 写回
   // 101 —— 规避 bun #2824）；非回环的敏感族或其它路径一律拒绝。
   http_server.on('upgrade', (req: IncomingMessage, socket: Socket, head: Buffer) => {
+    // Node detaches the default socket error handler before 'upgrade': without this a peer RST is an uncaught ECONNRESET.
+    socket.on('error', () => socket.destroy());
     const p = normalizeGuardPath(req.url);
     if (!isLoopbackAddr(socket.remoteAddress) && (p === null || isSensitivePath(p) || !UPGRADE_ALLOWED.has(p))) {
       destroyRemoteForbidden(socket);
@@ -354,7 +356,15 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   });
 
   // [mycowork] Built-in TLS listener (see lan-tls.ts)
-  const tls_server = opts.tls ? await startTlsListener(http_server, opts.tls) : undefined;
+  let tls_server: Awaited<ReturnType<typeof startTlsListener>> | undefined;
+  try {
+    tls_server = opts.tls ? await startTlsListener(http_server, opts.tls) : undefined;
+  } catch (e) {
+    // don't leak the already-listening plain/internal servers (a retry in the same process would hit EADDRINUSE)
+    tcp_server.close();
+    http_server.close();
+    throw e;
+  }
   const tlsPortActual = (tls_server?.address() as { port: number } | null)?.port;
 
   const actualPort = (tcp_server.address() as { port: number } | null)?.port ?? port;

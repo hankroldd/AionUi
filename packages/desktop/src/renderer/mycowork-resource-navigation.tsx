@@ -110,11 +110,19 @@ export function useResourceScopeSwitch(ownerKey: string | undefined) {
   const navigate = useNavigate();
   const origin = (location.state as ResourceNavigationState | null)?.mycoworkResourceOrigin;
   const id = origin?.originConversationId;
+  const current = useRef<{ key: string; ownerKey: string | undefined } | undefined>(undefined);
+  current.current = { key: location.key, ownerKey };
+  useEffect(
+    () => () => {
+      current.current = undefined;
+    },
+    [],
+  );
   const run = useCallback(
     async (draft: ScopeDraft, signal: AbortSignal): Promise<void> => {
       if (!ownerKey || !id || origin?.ownerKey !== ownerKey || !CONVERSATION_ID.test(id)) throw new BridgeError('failed');
       await verifiedProjectId(origin); // 只为核对会话归属；失败即不导航
-      if (signal.aborted) return;
+      if (signal.aborted || current.current?.ownerKey !== ownerKey || current.current?.key !== location.key) return;
       const items = draft.items.map(({ source_id, name, resource_ids }) => ({
         source_id,
         name,
@@ -124,9 +132,9 @@ export function useResourceScopeSwitch(ownerKey: string | undefined) {
         state: { mycoworkScopeChange: { ownerKey, conversationId: id, selection: { items, views: [] } } },
       });
     },
-    [id, navigate, origin, ownerKey],
+    [id, location.key, navigate, origin, ownerKey],
   );
-  return id ? run : undefined;
+  return id && origin?.ownerKey === ownerKey ? run : undefined;
 }
 
 function parseScopeChange(

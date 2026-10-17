@@ -1063,6 +1063,31 @@ describe('[mycowork] built-in TLS listener (R061)', () => {
 
 // [mycowork] R061: aioncore (local identity mode) authenticates nothing; non-loopback peers must hold a valid session
 // for /api/* and /ws. Peer address is stubbed (no NIC needed); every negative has a loopback control.
+describe('[mycowork] TLS listen failure releases the plain listener', () => {
+  it('TLS port taken: startStaticServer rejects and the plain port is free again', async () => {
+    const listen = (port: number): Promise<net.Server> =>
+      new Promise((res) => {
+        const s = net.createServer().listen(port, '127.0.0.1', () => res(s));
+      });
+    const taken = await listen(0);
+    const probe = await listen(0);
+    const plain = (probe.address() as AddressInfo).port;
+    await new Promise((r) => probe.close(r));
+    await expect(
+      startStaticServer({
+        staticDir: await mkRendererFixture(),
+        backendPort: 1,
+        port: plain,
+        host: '127.0.0.1',
+        tls: { cert: 'x', key: 'x', port: (taken.address() as AddressInfo).port, host: '127.0.0.1' },
+      })
+    ).rejects.toThrow();
+    const again = await listen(plain); // EADDRINUSE here = the leak
+    again.close();
+    taken.close();
+  });
+});
+
 describe('[mycowork] session gate for non-loopback peers (R061)', () => {
   let dir = '';
   let handle: StaticServerHandle | null = null;
@@ -1230,6 +1255,37 @@ describe('[mycowork] session gate for non-loopback peers (R061)', () => {
       // without `Connection: upgrade` node does not treat it as an upgrade at all: plain request, SPA page, nothing spliced
       expect((await collect('127.0.0.1', handle!.port, base('Upgrade: websocket\r\nConnection: close\r\nSec-WebSocket-Key: k\r\n'))).statuses).toEqual(['200']);
       expect(rawSeen).toEqual([]);
+    });
+
+    it('peer RST while the session gate is pending (and after a 400): process survives, server keeps serving', async () => {
+      raw = net.createServer((sock) => {
+        sock.on('error', () => {});
+        sock.on('data', () => setTimeout(() => sock.end('HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}'), 300));
+      });
+      await new Promise<void>((r) => raw!.listen(0, '127.0.0.1', () => r()));
+      await handle!.stop();
+      handle = await startStaticServer({ staticDir: dir, backendPort: (raw.address() as AddressInfo).port, port: 0 });
+      asRemote();
+      const reset = (payload: string): Promise<void> =>
+        new Promise((resolve) => {
+          const c = net.connect(handle!.port, '127.0.0.1', () => c.write(payload));
+          c.on('error', () => {});
+          c.on('close', () => resolve());
+          setTimeout(() => c.resetAndDestroy(), 50);
+        });
+      const uncaught: Error[] = [];
+      const onUncaught = (e: Error): void => void uncaught.push(e);
+      process.on('uncaughtException', onUncaught);
+      try {
+        await reset(up('/ws', GOOD)); // reset while the gate is still waiting
+        await reset('GET /ws HTTP/1.1\r\nHost: h\r\nUpgrade: h2c\r\nConnection: Upgrade\r\n\r\n'); // 400 branch
+        await reset(up('/api/webui/reset-password', GOOD)); // remote-guard 403 branch
+        await new Promise((r) => setTimeout(r, 450));
+      } finally {
+        process.off('uncaughtException', onUncaught);
+      }
+      expect(uncaught).toEqual([]);
+      expect((await collect('127.0.0.1', handle!.port, req('/login'))).statuses).toEqual(['200']);
     });
 
     it('loopback control: same upgrade without a cookie still raw-splices (unchanged path)', async () => {

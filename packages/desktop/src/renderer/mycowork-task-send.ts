@@ -181,18 +181,25 @@ export function watchTurnEnd(
   onRun: (next: TaskRun) => void,
   subscribe: (cb: (raw: RawTurnCompleted) => void) => () => void = (cb) => rawTurnCompleted.on(cb)
 ): () => void {
+  const { conversation_id, turn_id } = run;
+  if (!conversation_id || !turn_id) return () => {}; // no turn to match: never fire on id-less events
   let sent = false;
-  return subscribe((raw) => {
+  let cancelled = false; // unsubscribed (new turn / unmount): an in-flight forward must not write back
+  const unsubscribe = subscribe((raw) => {
     const conv = raw.conversation_id ?? raw.session_id ?? raw.sessionId;
     const turn = raw.turn_id ?? raw.turnId;
     const state = raw.state;
     if (sent || conv !== run.conversation_id || turn !== run.turn_id) return;
     if (state !== 'error' && state !== 'ai_waiting_input') return;
     sent = true;
-    forwardTurnEnd(owner, run.run_id, { turn_id: run.turn_id as string, state })
-      .then(onRun)
+    forwardTurnEnd(owner, run.run_id, { turn_id, state })
+      .then((next) => !cancelled && onRun(next))
       .catch(() => {}); // 409/网络：不改界面，run保持非终态
   });
+  return () => {
+    cancelled = true;
+    unsubscribe();
+  };
 }
 
 /**
@@ -205,6 +212,7 @@ export function watchTurnEnded(
   onEnded: (latest: TaskRun | null) => void,
   subscribe: (cb: (raw: RawTurnCompleted) => void) => () => void = (cb) => rawTurnCompleted.on(cb)
 ): () => void {
+  if (!run.conversation_id || !run.turn_id) return () => {};
   let sent = false;
   let cancelled = false; // unsubscribed (new turn / unmount): an in-flight re-read must not write back
   const unsubscribe = subscribe((raw) => {

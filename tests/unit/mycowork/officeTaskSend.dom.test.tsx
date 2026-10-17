@@ -334,8 +334,8 @@ it('刷新后停止按活动turn查任务，不确认的200不冒充已停止', 
 const results = (n: number): NonNullable<TaskRun['saved_results']> =>
   Array.from({ length: n }, (_, i) => ({
     kind: 'output' as const,
-    resource_id: `res/${i}`,
-    revision_id: `rev-${i}`,
+    resource_id: `res_${i}`,
+    revision_id: `rev_${i}`,
     file_name: `结果${i}.docx`,
     content_sha256: 'a'.repeat(64),
     created_at: `2026-10-17T00:00:0${i}Z`,
@@ -352,8 +352,8 @@ it('失败的任务带 2 个已登记结果：一行汇总 + 2 条指向对应�
   expect(screen.getByText('已登记 2 个结果')).toBeInTheDocument();
   const links = screen.getAllByRole('link');
   expect(links.map((a) => a.getAttribute('href'))).toEqual([
-    '#/office/resources/res%2F0/versions?revision=rev-0',
-    '#/office/resources/res%2F1/versions?revision=rev-1',
+    '#/office/resources/res_0/versions?revision=rev_0',
+    '#/office/resources/res_1/versions?revision=rev_1',
   ]);
   expect(links[0]).toHaveTextContent('结果0.docx');
   links[0].focus();

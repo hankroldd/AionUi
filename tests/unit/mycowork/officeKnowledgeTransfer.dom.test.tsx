@@ -38,6 +38,7 @@ const removal = (status: string, error: string | null = null) => ({
 });
 let polls: ReturnType<typeof removal>[];
 let moved: boolean;
+let onlyOneSource = false;
 let rejectStart: { status: number; code: string } | undefined;
 function bridge() {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -47,7 +48,7 @@ function bridge() {
       return reply(200, {
         sources: [
           { source_id: 'src_a', name: '甲库', provider: 'weknora', counts },
-          { source_id: 'src_b', name: '乙库', provider: 'weknora', counts },
+          ...(onlyOneSource ? [] : [{ source_id: 'src_b', name: '乙库', provider: 'weknora', counts }]),
         ],
         projects: [],
       });
@@ -109,6 +110,7 @@ beforeEach(() => {
   polls = [];
   moved = false;
   rejectStart = undefined;
+  onlyOneSource = false;
   vi.stubGlobal('fetch', fetchMock);
   bridge();
 });
@@ -132,6 +134,22 @@ describe('space: move to another knowledge base', () => {
     fireEvent.click(screen.getByRole('button', { name: '移动' }));
     await new Promise((ok) => setTimeout(ok, 50));
     expect(posts('/knowledge-removals')).toHaveLength(0);
+  });
+
+  it('confirm is disabled until a target is chosen', async () => {
+    render(<OfficeResourcesSlot />);
+    await openMove();
+    expect(screen.getByRole('button', { name: '移动' })).toBeDisabled();
+    await pick('乙库');
+    await waitFor(() => expect(screen.getByRole('button', { name: '移动' })).toBeEnabled(), LONG);
+  });
+
+  it('with no other knowledge base, shows the hint and keeps confirm disabled', async () => {
+    onlyOneSource = true;
+    render(<OfficeResourcesSlot />);
+    const confirm = await openMove();
+    expect(within(confirm).getByTestId('mycowork-move-no-target')).toHaveTextContent('没有其他可选的知识库');
+    expect(screen.getByRole('button', { name: '移动' })).toBeDisabled();
   });
 
   it('sends target_source_id, shows "移动中", then reloads the list when the task ends', async () => {

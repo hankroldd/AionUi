@@ -233,4 +233,6 @@ export {
   officeTaskRuntime,
   sendOfficeDraft,
   stopOfficeTurn,
+  officeTaskOwner,
+  watchTurnEnd,
 } from './mycowork-task-send';

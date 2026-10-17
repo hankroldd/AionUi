@@ -49,14 +49,14 @@ import { localSelectionItems, mergeFileSelectionItems } from '@/renderer/utils/f
 import { collectChatFileRefs, splitChatFileRefs } from '@/renderer/utils/file/messageFiles';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import { Button, Message, Tag } from '@arco-design/web-react';
-import { SavedResults } from '@mycowork/ui';
+import { acceptOfficeTask, SavedResults, TaskCompletion, type CompletionRun } from '@mycowork/ui';
 import { Brain, Lightning, MagicHat, Shield } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
 import { useAionrsMessage } from './useAionrsMessage';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
-import { captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft } from '@/renderer/mycowork-slots';
+import { captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft, officeTaskOwner, watchTurnEnd } from '@/renderer/mycowork-slots';
 import type { DraftDocument, DraftState } from '@mycowork/contracts';
 import { withoutYolo } from '@/renderer/mycowork-approval-guard';
 
@@ -320,6 +320,7 @@ const AionrsSendBox: React.FC<{
               } else hydrateOfficeTaskRuntime(conversation_id, office);
               emitter.emit('chat.history.refresh');
               if (files.length > 0) emitter.emit('aionrs.workspace.refresh');
+              setOfficeRun(office);
               return office;
             }
           }
@@ -745,6 +746,17 @@ const AionrsSendBox: React.FC<{
     [conversation_id, setAtPath]
   );
 
+  // R068：本会话最近一次办公任务；本轮结束由页面看到的turn.completed转给Bridge，确认可选
+  const [officeRun, setOfficeRun] = useState<CompletionRun | null>(null);
+  useEffect(() => {
+    if (!officeRun || !persistentDraft.enabled || officeRun.status !== 'running' || officeRun.turn_end) return;
+    try {
+      return watchTurnEnd(officeTaskOwner(persistentDraft), officeRun, setOfficeRun);
+    } catch {
+      return undefined;
+    }
+  }, [officeRun?.run_id, officeRun?.turn_id, officeRun?.status, officeRun?.turn_end, persistentDraft.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Stop conversation handler
   const handleStop = async (): Promise<void> => {
     // Best-effort cancel: swallow rejections so they don't bubble up as
@@ -797,6 +809,14 @@ const AionrsSendBox: React.FC<{
   return (
     <div className={`${sendBoxWidthClass} flex flex-col mt-auto mb-16px`}>
       {persistentDraft.enabled && <DraftStatus draft={persistentDraft} lang={i18n?.language} />}
+      {persistentDraft.enabled && officeRun && (
+        <TaskCompletion
+          key={officeRun.run_id}
+          run={officeRun}
+          lang={i18n?.language}
+          onAccept={async (runId) => setOfficeRun(await acceptOfficeTask(officeTaskOwner(persistentDraft), runId))}
+        />
+      )}
       <div inert={persistentDraft.status === 'loading'}>
       <CommandQueuePanel
         items={queuedCommands}

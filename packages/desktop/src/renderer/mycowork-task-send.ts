@@ -6,6 +6,7 @@
  */
 import type { DraftDocument, DraftState, TaskRun } from '@mycowork/contracts';
 import {
+  forwardTurnEnd,
   fetchConversationContext,
   draftStateEquals,
   acceptStoredDraft,
@@ -19,10 +20,12 @@ import {
   stopOfficeTask,
   submitOfficeTask,
   type AcceptedOfficeTask,
+  type CompletionRun,
   type OfficeTaskOwner,
 } from '@mycowork/ui';
 import type { TConversationRuntimeSummary } from '@/common/config/storage';
 import { hydrateSucceeded } from '@/renderer/pages/conversation/runtime/conversationRuntimeViewStore';
+import { wsEmitter } from '@/common/adapter/httpBridge';
 import type { PersistentDraft } from './mycowork-drafts';
 
 type CapturedDraft = PersistentDraft & { ownerKey?: string; isCurrent: () => boolean };
@@ -163,4 +166,32 @@ export async function settleInitialSource(
   };
   if (taskAccepted) await settleTaskSubmission(owner.ownerKey, source, pointer.revision, cleared);
   else if (source.revision === pointer.revision) await acceptStoredDraft(owner.ownerKey, source, cleared);
+}
+
+type RawTurnCompleted = Record<string, unknown>;
+const rawTurnCompleted = wsEmitter<RawTurnCompleted>('turn.completed');
+
+/**
+ * R068 切片2：只转发本run的本会话+本轮、且原始事件带显式state的轮次结束，每轮至多一次。
+ * 不用ipcBridge.turnCompleted：它把缺失state补成ai_waiting_input，会把“不知道”当成正常结束。
+ * 返回取消函数。
+ */
+export function watchTurnEnd(
+  owner: OfficeTaskOwner,
+  run: Pick<TaskRun, 'run_id' | 'conversation_id' | 'turn_id'>,
+  onRun: (next: CompletionRun) => void,
+  subscribe: (cb: (raw: RawTurnCompleted) => void) => () => void = (cb) => rawTurnCompleted.on(cb)
+): () => void {
+  let sent = false;
+  return subscribe((raw) => {
+    const conv = raw.conversation_id ?? raw.session_id ?? raw.sessionId;
+    const turn = raw.turn_id ?? raw.turnId;
+    const state = raw.state;
+    if (sent || conv !== run.conversation_id || turn !== run.turn_id) return;
+    if (state !== 'error' && state !== 'ai_waiting_input') return;
+    sent = true;
+    forwardTurnEnd(owner, run.run_id, { turn_id: run.turn_id as string, state })
+      .then(onRun)
+      .catch(() => {}); // 409/网络：不改界面，run保持非终态
+  });
 }

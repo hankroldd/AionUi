@@ -107,4 +107,33 @@ describe('OfficeResearchSlot', () => {
     render(<OfficeResearchSlot />, { wrapper: MemoryRouter });
     expect(await screen.findByText('研究记录读取失败')).toBeInTheDocument();
   });
+
+  it('shows authors (first 3 + "等 N 人"), arXiv link built from the id, idea note; old items still render; ideas-only filter', async () => {
+    const withIdea = {
+      source: 'arxiv',
+      title: '带想法的论文',
+      authors: ['甲', '乙', '丙', '丁'],
+      arxiv_id: '2610.00001v2',
+      idea: '可借鉴其采样思路',
+      first_published_at: null,
+      discovered_at: '2026-10-17T08:00:00Z',
+      fulltext_status: 'abstract_only',
+    };
+    const badId = { ...withIdea, title: '坏编号', authors: ['戊'], arxiv_id: 'javascript:alert(1)', idea: undefined };
+    route(() => reply(200, { items: [log({ items: [withIdea, badId] }), log({ log_id: 'rlog_2', query: '旧记录' })] }));
+    render(<OfficeResearchSlot />, { wrapper: MemoryRouter });
+    const row = await screen.findByTestId('research-rlog_1');
+    expect(within(row).getByText(/甲、乙、丙 等 4 人/)).toBeInTheDocument();
+    expect(within(row).getByRole('link', { name: 'arXiv:2610.00001v2' })).toHaveAttribute(
+      'href',
+      'https://arxiv.org/abs/2610.00001v2'
+    );
+    expect(within(row).queryByRole('link', { name: /javascript/ })).toBeNull();
+    expect(within(row).getByTestId('research-idea')).toHaveTextContent('想法：可借鉴其采样思路');
+    expect(screen.getByTestId('research-rlog_2')).toHaveTextContent('虚构论文：一种示例方法');
+    fireEvent.click(screen.getByRole('checkbox', { name: '只看有想法的条目' }));
+    expect(screen.queryByTestId('research-rlog_2')).toBeNull();
+    expect(within(screen.getByTestId('research-rlog_1')).queryByText('坏编号')).toBeNull();
+    expect(within(screen.getByTestId('research-rlog_1')).getByText('带想法的论文')).toBeInTheDocument();
+  });
 });

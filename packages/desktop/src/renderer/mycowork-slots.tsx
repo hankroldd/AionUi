@@ -235,4 +235,5 @@ export {
   stopOfficeTurn,
   officeTaskOwner,
   watchTurnEnd,
+  watchTurnEnded,
 } from './mycowork-task-send';

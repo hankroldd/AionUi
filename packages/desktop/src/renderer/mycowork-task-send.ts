@@ -20,7 +20,6 @@ import {
   stopOfficeTask,
   submitOfficeTask,
   type AcceptedOfficeTask,
-  type CompletionRun,
   type OfficeTaskOwner,
 } from '@mycowork/ui';
 import type { TConversationRuntimeSummary } from '@/common/config/storage';
@@ -179,7 +178,7 @@ const rawTurnCompleted = wsEmitter<RawTurnCompleted>('turn.completed');
 export function watchTurnEnd(
   owner: OfficeTaskOwner,
   run: Pick<TaskRun, 'run_id' | 'conversation_id' | 'turn_id'>,
-  onRun: (next: CompletionRun) => void,
+  onRun: (next: TaskRun) => void,
   subscribe: (cb: (raw: RawTurnCompleted) => void) => () => void = (cb) => rawTurnCompleted.on(cb)
 ): () => void {
   let sent = false;
@@ -193,5 +192,25 @@ export function watchTurnEnd(
     forwardTurnEnd(owner, run.run_id, { turn_id: run.turn_id as string, state })
       .then(onRun)
       .catch(() => {}); // 409/网络：不改界面，run保持非终态
+  });
+}
+
+/**
+ * 本run的本会话+本轮出现 turn.completed（任意state，含缺失）时：通知“已结束”并重读run；每轮至多一次。
+ * 是否真结束由Bridge在接受时复核（未结束返回409）。
+ */
+export function watchTurnEnded(
+  owner: OfficeTaskOwner,
+  run: Pick<TaskRun, 'run_id' | 'conversation_id' | 'turn_id'>,
+  onEnded: (latest: TaskRun | null) => void,
+  subscribe: (cb: (raw: RawTurnCompleted) => void) => () => void = (cb) => rawTurnCompleted.on(cb)
+): () => void {
+  let sent = false;
+  return subscribe((raw) => {
+    const conv = raw.conversation_id ?? raw.session_id ?? raw.sessionId;
+    const turn = raw.turn_id ?? raw.turnId;
+    if (sent || conv !== run.conversation_id || turn !== run.turn_id) return;
+    sent = true;
+    readOfficeTask(owner, run.run_id).then(onEnded, () => onEnded(null)); // 重读失败也先显示待确认，接受时由Bridge复核
   });
 }

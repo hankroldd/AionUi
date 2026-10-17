@@ -8,10 +8,11 @@ import '@testing-library/jest-dom/vitest';
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { TaskCompletion, type CompletionRun } from '@mycowork/ui';
+import type { TaskRun as CompletionRun } from '@mycowork/contracts';
+import { TaskCompletion } from '@mycowork/ui';
 
 vi.mock('@/common/adapter/httpBridge', () => ({ wsEmitter: () => ({ on: () => () => {} }) }));
-const { watchTurnEnd } = await import('@/renderer/mycowork-task-send');
+const { watchTurnEnd, watchTurnEnded } = await import('@/renderer/mycowork-task-send');
 
 const owner = { ownerKey: 'u1', isCurrent: () => true };
 const base = { run_id: 'r1', submission_id: 's1', created_at: '2026-10-17T00:00:00Z', conversation_id: 'c1', turn_id: 't1' };
@@ -79,6 +80,36 @@ it('只有turn_end=ok且running才显示接受', () => {
   expect(screen.getByRole('button', { name: '接受' })).toBeInTheDocument();
   cleanup();
   t(mk({ turn_end: 'ok', status: 'failed' }));
+  expect(screen.queryByRole('button')).toBeNull();
+});
+
+it('turn.completed 无state时只重读run并显示待确认，不转发turn-end', async () => {
+  const onEnded = vi.fn();
+  let cb: (raw: Record<string, unknown>) => void = () => {};
+  watchTurnEnded(owner, base, onEnded, (c) => ((cb = c), () => {}));
+  const calls0: string[] = [];
+  vi.stubGlobal('fetch', async (url: string) => {
+    calls0.push(url);
+    return new Response(JSON.stringify(mk({})), { status: 200, headers: { 'content-type': 'application/json' } });
+  });
+  cb({ conversation_id: 'c2', turn_id: 't1', status: 'finished' });
+  cb({ conversation_id: 'c1', turn_id: 't1', status: 'finished' });
+  cb({ conversation_id: 'c1', turn_id: 't1', status: 'finished' });
+  await waitFor(() => expect(onEnded).toHaveBeenCalledTimes(1));
+  expect(calls0).toEqual(['/bridge/v1/tasks/r1']);
+  expect(calls).toHaveLength(0);
+  render(<TaskCompletion run={mk({})} turnEnded lang="zh-CN" onAccept={async () => {}} />);
+  expect(screen.getByText('本轮已结束，待确认')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '接受' })).toBeInTheDocument();
+});
+
+it('接受遇到409：隐藏按钮，显示本轮尚未结束', async () => {
+  const onAccept = vi.fn(async () => {
+    throw new Error('REVISION_CONFLICT');
+  });
+  render(<TaskCompletion run={mk({})} turnEnded lang="zh-CN" onAccept={onAccept} />);
+  fireEvent.click(screen.getByRole('button', { name: '接受' }));
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('本轮尚未结束'));
   expect(screen.queryByRole('button')).toBeNull();
 });
 

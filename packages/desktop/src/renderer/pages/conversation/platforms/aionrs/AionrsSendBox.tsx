@@ -49,15 +49,15 @@ import { localSelectionItems, mergeFileSelectionItems } from '@/renderer/utils/f
 import { collectChatFileRefs, splitChatFileRefs } from '@/renderer/utils/file/messageFiles';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import { Button, Message, Tag } from '@arco-design/web-react';
-import { acceptOfficeTask, SavedResults, TaskCompletion, type CompletionRun } from '@mycowork/ui';
+import { acceptOfficeTask, SavedResults, TaskCompletion } from '@mycowork/ui';
 import { Brain, Lightning, MagicHat, Shield } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
 import { useAionrsMessage } from './useAionrsMessage';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
-import { captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft, officeTaskOwner, watchTurnEnd } from '@/renderer/mycowork-slots';
-import type { DraftDocument, DraftState } from '@mycowork/contracts';
+import { captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft, officeTaskOwner, watchTurnEnd, watchTurnEnded } from '@/renderer/mycowork-slots';
+import type { DraftDocument, DraftState, TaskRun } from '@mycowork/contracts';
 import { withoutYolo } from '@/renderer/mycowork-approval-guard';
 
 const configErrorMessageKey = (error: unknown) => {
@@ -320,7 +320,7 @@ const AionrsSendBox: React.FC<{
               } else hydrateOfficeTaskRuntime(conversation_id, office);
               emitter.emit('chat.history.refresh');
               if (files.length > 0) emitter.emit('aionrs.workspace.refresh');
-              setOfficeRun(office);
+              setOfficeRun(office); setTurnEnded(false);
               return office;
             }
           }
@@ -747,7 +747,8 @@ const AionrsSendBox: React.FC<{
   );
 
   // R068：本会话最近一次办公任务；本轮结束由页面看到的turn.completed转给Bridge，确认可选
-  const [officeRun, setOfficeRun] = useState<CompletionRun | null>(null);
+  const [officeRun, setOfficeRun] = useState<TaskRun | null>(null);
+  const [turnEnded, setTurnEnded] = useState(false);
   useEffect(() => {
     if (!officeRun || !persistentDraft.enabled || officeRun.status !== 'running' || officeRun.turn_end) return;
     try {
@@ -756,6 +757,15 @@ const AionrsSendBox: React.FC<{
       return undefined;
     }
   }, [officeRun?.run_id, officeRun?.turn_id, officeRun?.status, officeRun?.turn_end, persistentDraft.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!officeRun || !persistentDraft.enabled || officeRun.status !== 'running') return;
+    try {
+      return watchTurnEnded(officeTaskOwner(persistentDraft), officeRun, (latest) => { if (latest) setOfficeRun(latest); setTurnEnded(true); });
+    } catch {
+      return undefined;
+    }
+  }, [officeRun?.run_id, officeRun?.turn_id, officeRun?.status, persistentDraft.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stop conversation handler
   const handleStop = async (): Promise<void> => {
@@ -813,6 +823,7 @@ const AionrsSendBox: React.FC<{
         <TaskCompletion
           key={officeRun.run_id}
           run={officeRun}
+          turnEnded={turnEnded}
           lang={i18n?.language}
           onAccept={async (runId) => setOfficeRun(await acceptOfficeTask(officeTaskOwner(persistentDraft), runId))}
         />

@@ -1,8 +1,9 @@
 /**
- * [mycowork] ADR-0011: `/office/maintenance` (MyCowork P16 operations & maintenance, PR12 slice A, R003). Only fetch is mocked.
+ * [mycowork] ADR-0011: `/office/maintenance` (MyCowork P16 operations & maintenance, PR12 slice A/B, R003, R064). Only fetch is mocked.
  * Covers: five read-only sections from existing data (instance, component versions from capability checks, own edit-session
- * count), missing data honestly "未检测" (storage always; sessions/instance when the call fails), no operation buttons,
- * and the runbook pointer; entries from the setup page and P15 paths link to the route.
+ * count), missing data honestly "未检测" (sessions/instance/backup/storage when the call fails), no operation buttons,
+ * the runbook pointer, slice B backup record (relative+absolute time, encryption, size, text warnings for plain/older than 7 days,
+ * "no record" when null) and storage sizes (partial note); entries from the setup page and P15 paths link to the route.
  */
 
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
@@ -35,6 +36,12 @@ const CAP = {
 };
 const INSTANCE = { host: 'box-1', data_dir_label: 'bridge-data', started_at: 'x', build: { commit: 'abc1234' } };
 let sessions: () => ReturnType<typeof reply> = () => reply(200, { items: [], next_page: null });
+const DAY = 86_400_000;
+const MAINT = (last_backup: unknown, partial = false) => ({
+  last_backup,
+  storage: { db_bytes: 2048, blobs_bytes: 5 * 1024 * 1024, workspaces_bytes: 100, total_bytes: 5 * 1024 * 1024 + 2148, partial, computed_at: 'x' },
+});
+let maint: () => ReturnType<typeof reply> = () => reply(200, MAINT(null));
 let instance: () => ReturnType<typeof reply> = () => reply(200, INSTANCE);
 
 const page = (path: string) => (
@@ -50,6 +57,7 @@ const page = (path: string) => (
 beforeEach(() => {
   sessions = () => reply(200, { items: [], next_page: null });
   instance = () => reply(200, INSTANCE);
+  maint = () => reply(200, MAINT(null));
   // jsdom 没有 matchMedia，Arco Descriptions 订阅断点时需要
   vi.stubGlobal('matchMedia', () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} }));
   fetchMock.mockReset();
@@ -58,6 +66,7 @@ beforeEach(() => {
     if (u.includes('/api/providers') || u.includes('/api/settings/client')) return reply(200, { data: {} });
     if (u.endsWith('/bridge/v1/capabilities')) return reply(200, { capabilities: [CAP] });
     if (u.endsWith('/bridge/v1/instance')) return instance();
+    if (u.endsWith('/bridge/v1/maintenance')) return maint();
     if (u.includes('/bridge/v1/edit-sessions')) return sessions();
     return reply(404, { error: { code: 'NOT_FOUND' } });
   });
@@ -69,7 +78,7 @@ afterEach(() => {
 });
 
 describe('P16 运行与维护（只读）', () => {
-  it('五节齐全：版本取自能力检查，本人无会话时不说可以升级、提示先确认；存储未检测；没有任何操作按钮', async () => {
+  it('五节齐全：版本取自能力检查，本人无会话时不说可以升级、提示先确认；没有备份记录与存储用量；没有任何操作按钮', async () => {
     render(page('/office/maintenance'));
     const comps = await screen.findByTestId('maint-components');
     await waitFor(() => expect(within(comps).getByText('9.9.9')).toBeTruthy());
@@ -77,7 +86,9 @@ describe('P16 运行与维护（只读）', () => {
     expect(within(none).getByText(/你自己没有编辑中的会话/)).toBeTruthy();
     expect(none.textContent).toContain('请先确认');
     expect(none.textContent).not.toMatch(/可以升级|可以重启/);
-    expect(within(screen.getByTestId('maint-storage')).getByText('未检测')).toBeTruthy();
+    expect(within(screen.getByTestId('maint-backup')).getByText('还没有备份记录')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('maint-storage').textContent).toContain('5.0 MB'));
+    expect(screen.getByTestId('maint-storage').textContent).not.toContain('部分统计');
     expect(screen.getByTestId('maint-backup').textContent).toContain('docs/runbooks/backup-restore.md');
     expect(screen.getByTestId('mycowork-maintenance-ops').textContent).toContain('docs/runbooks/upgrade-bridge.md');
     await waitFor(() => expect(screen.getByTestId('maint-instance').textContent).toContain('数据目录'));
@@ -101,6 +112,38 @@ describe('P16 运行与维护（只读）', () => {
     await waitFor(() => expect(within(screen.getByTestId('maint-sessions')).getByText('未检测')).toBeTruthy());
     await waitFor(() => expect(within(screen.getByTestId('maint-instance')).getByText('未检测')).toBeTruthy());
     expect(screen.getByTestId('maint-sessions').textContent).not.toContain('可以升级');
+  });
+});
+
+describe('P16 切片 B：备份与存储', () => {
+  it('新近的加密备份：相对与绝对时间、已加密、大小，无警告', async () => {
+    maint = () => reply(200, MAINT({ finished_at: new Date(Date.now() - 3 * 3600_000).toISOString(), encrypted: true, size_bytes: 3 * 1024 * 1024 }));
+    render(page('/office/maintenance'));
+    const box = await screen.findByTestId('maint-backup');
+    await waitFor(() => expect(box.textContent).toContain('3 小时前'));
+    expect(box.textContent).toContain('已加密');
+    expect(box.textContent).toContain('3.0 MB');
+    expect(box.textContent).not.toContain('警告');
+  });
+
+  it('未加密且超过 7 天：两条文字警告', async () => {
+    maint = () => reply(200, MAINT({ finished_at: new Date(Date.now() - 9 * DAY).toISOString(), encrypted: false, size_bytes: 10 }));
+    render(page('/office/maintenance'));
+    const box = await screen.findByTestId('maint-backup');
+    await waitFor(() => expect(box.textContent).toContain('9 天前'));
+    expect(box.textContent).toContain('没有加密');
+    expect(box.textContent).toContain('超过 7 天');
+  });
+
+  it('用量部分统计时写明；备份/用量接口读不到显示未检测', async () => {
+    maint = () => reply(200, MAINT(null, true));
+    const { unmount } = render(page('/office/maintenance'));
+    await waitFor(() => expect(screen.getByTestId('maint-storage').textContent).toContain('部分统计'));
+    unmount();
+    maint = () => reply(503, { error: { code: 'UNAVAILABLE' } });
+    render(page('/office/maintenance'));
+    await waitFor(() => expect(within(screen.getByTestId('maint-storage')).getByText('未检测')).toBeTruthy());
+    expect(within(screen.getByTestId('maint-backup')).getByText('未检测')).toBeTruthy();
   });
 });
 

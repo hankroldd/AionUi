@@ -13,9 +13,9 @@ import { createInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
 import { SWRConfig } from 'swr';
-import type { DraftState } from '@mycowork/contracts';
+import type { DraftState, TaskRun } from '@mycowork/contracts';
 import { count, fixture, fixtureFetch, idle, ipcCount, resetFixture } from './officeTaskSend.fixture';
-import { resetAccountScopedState, restoreScope, usePersistentDraft } from '@mycowork/ui';
+import { resetAccountScopedState, restoreScope, SavedResults, usePersistentDraft } from '@mycowork/ui';
 import { AuthProvider, useAuth } from '@/renderer/hooks/context/AuthContext';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
 import { ThemeProvider } from '@/renderer/hooks/context/ThemeContext';
@@ -329,4 +329,72 @@ it('刷新后停止按活动turn查任务，不确认的200不冒充已停止', 
   ).toBe(true);
   expect(ipcCount('conversation.stop')).toBe(0);
   await waitFor(() => expect(document.body).toHaveTextContent('此步骤未确认完成'));
+});
+
+const results = (n: number): NonNullable<TaskRun['saved_results']> =>
+  Array.from({ length: n }, (_, i) => ({
+    kind: 'output' as const,
+    resource_id: `res/${i}`,
+    revision_id: `rev-${i}`,
+    file_name: `结果${i}.docx`,
+    content_sha256: 'a'.repeat(64),
+    created_at: `2026-10-17T00:00:0${i}Z`,
+  }));
+const runOf = (status: TaskRun['status'], saved?: TaskRun['saved_results']): TaskRun => ({
+  run_id: 'r',
+  submission_id: '00000000-0000-4000-8000-000000000000',
+  status,
+  created_at: '2026-10-17T00:00:00Z',
+  ...(saved ? { saved_results: saved } : {}),
+});
+it('失败的任务带 2 个已登记结果：一行汇总 + 2 条指向对应版本的链接，链接可聚焦', () => {
+  render(<SavedResults run={runOf('failed', results(2))} lang="zh-CN" />);
+  expect(screen.getByText('已登记 2 个结果')).toBeInTheDocument();
+  const links = screen.getAllByRole('link');
+  expect(links.map((a) => a.getAttribute('href'))).toEqual([
+    '#/office/resources/res%2F0/versions?revision=rev-0',
+    '#/office/resources/res%2F1/versions?revision=rev-1',
+  ]);
+  expect(links[0]).toHaveTextContent('结果0.docx');
+  links[0].focus();
+  expect(links[0]).toHaveFocus();
+  expect(document.body).not.toHaveTextContent('全部');
+});
+it('已停止的任务显示；空或缺省、进行中都不出任何文字', () => {
+  const { unmount } = render(<SavedResults run={runOf('cancelled', results(1))} lang="en-US" />);
+  expect(screen.getByText('1 saved result registered')).toBeInTheDocument();
+  unmount();
+  for (const run of [runOf('failed', []), runOf('failed'), runOf('running', results(2))]) {
+    const { container, unmount: u } = render(<SavedResults run={run} lang="zh-CN" />);
+    expect(container).toBeEmptyDOMElement();
+    u();
+  }
+});
+it('7 个结果只列 5 条，其余写“还有 2 个”', () => {
+  render(<SavedResults run={runOf('failed', results(7))} lang="zh-CN" />);
+  expect(screen.getAllByRole('link')).toHaveLength(5);
+  expect(screen.getByText('已登记 7 个结果')).toBeInTheDocument();
+  expect(screen.getByText('还有 2 个')).toBeInTheDocument();
+});
+it('停止确认后在发送框提示已登记的结果', async () => {
+  const input = await mountConversation();
+  fireEvent.change(input, { target: { value: '停止后列结果的虚构输入' } });
+  sendCurrent();
+  await waitFor(() => expect(fixture.task?.turn_id).toBe('host-task-turn'));
+  await waitFor(() => expect(fixture.docs.get(`conversation:${fixture.conversation}`)?.state.content).toBe(''));
+  cleanup();
+  resetConversationRuntimeViewStoreForTest();
+  sessionStorage.clear();
+  await mountConversation();
+  fixture.stopConfirmed = true;
+  fixture.savedResults = results(2);
+  const stop = await waitFor(() => {
+    const button = document.querySelector('.sendbox-stop-button');
+    expect(button).not.toBeNull();
+    return button!;
+  });
+  fireEvent.click(stop);
+  await waitFor(() => expect(count('/bridge/v1/tasks/run-native/stop')).toBe(1));
+  await waitFor(() => expect(document.body).toHaveTextContent('2 saved results registered'));
+  expect(screen.getByRole('link', { name: '结果1.docx' })).toBeInTheDocument();
 });

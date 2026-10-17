@@ -24,6 +24,7 @@ export const fixture = {
   task: null as TaskRun | null,
   rejectTask: false,
   stopConfirmed: false,
+  savedResults: undefined as TaskRun['saved_results'],
   delayPut: undefined as (() => Promise<void>) | undefined,
   docs: new Map<string, DraftDocument>(),
 };
@@ -40,6 +41,7 @@ export function resetFixture(): void {
   fixture.task = null;
   fixture.rejectTask = false;
   fixture.stopConfirmed = false;
+  fixture.savedResults = undefined;
   fixture.delayPut = undefined;
   fixture.calls.length = 0;
   fixture.requests.length = 0;
@@ -181,6 +183,7 @@ export async function fixtureFetch(raw: string, init?: RequestInit): Promise<Res
       ...fixture.task!,
       status: 'cancelled',
       stop_confirmed: fixture.stopConfirmed,
+      ...(fixture.savedResults ? { saved_results: fixture.savedResults } : {}),
       runtime: fixture.stopConfirmed ? idle() : fixture.runtime,
     });
   if (path === '/bridge/v1/tasks/run-native') return reply(200, fixture.task);

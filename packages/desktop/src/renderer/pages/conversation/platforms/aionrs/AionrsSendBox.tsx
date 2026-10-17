@@ -49,6 +49,7 @@ import { localSelectionItems, mergeFileSelectionItems } from '@/renderer/utils/f
 import { collectChatFileRefs, splitChatFileRefs } from '@/renderer/utils/file/messageFiles';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import { Button, Message, Tag } from '@arco-design/web-react';
+import { SavedResults } from '@mycowork/ui';
 import { Brain, Lightning, MagicHat, Shield } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -761,6 +762,7 @@ const AionrsSendBox: React.FC<{
         if (stopped) {
           const runtime = officeTaskRuntime(stopped);
           if (runtime) runtimeView.markStopAcknowledged(turnId, runtime);
+          if (stopped.saved_results?.length) Message.info({ content: <SavedResults run={stopped} lang={i18n?.language} />, duration: 8000 }); // A513：已登记的结果（推定），无则不出
           if (!stopped.stop_confirmed) { Message.warning('此步骤未确认完成，请检查任务状态；不会停止后来的轮次。'); return; }
           resetState(); resetActiveExecution('stop'); return;
         }

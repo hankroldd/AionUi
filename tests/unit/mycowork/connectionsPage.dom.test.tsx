@@ -192,8 +192,10 @@ describe('P15 切片 B：如何更新 / 断开（只读指引，D294）', () => 
     const cmd = screen.getByTestId('conn-guide-cmd-knowledge').textContent ?? '';
     expect(cmd).toContain('WEKNORA_API_KEY=<新密钥>');
     expect(cmd).toContain('systemctl --user restart mycowork-bridge');
+    expect(cmd).toContain('BRIDGE_DATA_DIR=<安装目录>/data/bridge node <安装目录>/app/services/bridge/src/backup.ts status'); // 照抄能跑：要数据目录与安装路径
     expect(cmd).not.toMatch(/sk-|\/home\//);
-    expect(root.textContent).toContain('Bridge 与 Document Server 两处一起改、一起重启');
+    expect(root.textContent).toContain('两处一起改、一起重启');
+    expect(root.textContent).toContain('JWT_SECRET'); // Document Server 一侧改哪里
     expect(root.textContent).toContain('吊销密钥要到 WeKnora 自己的管理界面里做');
     expect(root.textContent).toContain('ingest_not_configured');
     expect(root.innerHTML).not.toContain('sk-fixture-0000');

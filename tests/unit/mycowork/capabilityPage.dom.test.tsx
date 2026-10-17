@@ -54,7 +54,7 @@ describe('OfficeCapabilitiesSlot', () => {
     fetchMock.mockImplementation((url: string, init?: RequestInit) =>
       init?.method === 'POST'
         ? new Promise((resolve) => (finish = resolve))
-        : Promise.resolve(reply(200, { capabilities: LIST })),
+        : Promise.resolve(reply(200, { capabilities: LIST }))
     );
     render(<OfficeCapabilitiesSlot />, { wrapper: MemoryRouter });
     const row = await screen.findByTestId('capability-knowledge');
@@ -70,8 +70,15 @@ describe('OfficeCapabilitiesSlot', () => {
   });
 
   it('shows Result with retry when the list cannot be read, then recovers', async () => {
-    fetchMock.mockResolvedValueOnce(reply(500, { error: { code: 'INTERNAL', message: 'x' } }));
-    fetchMock.mockResolvedValue(reply(200, { capabilities: LIST }));
+    let failed = false; // 页面下方的“技能版本”也会读 /skills，按 URL 区分，只让能力列表第一次失败
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url).endsWith('/skills')) return Promise.resolve(reply(200, { skills: [] }));
+      if (!failed) {
+        failed = true;
+        return Promise.resolve(reply(500, { error: { code: 'INTERNAL', message: 'x' } }));
+      }
+      return Promise.resolve(reply(200, { capabilities: LIST }));
+    });
     render(<OfficeCapabilitiesSlot />, { wrapper: MemoryRouter });
     expect(await screen.findByText('没有读到能力状态')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /重试/ }));

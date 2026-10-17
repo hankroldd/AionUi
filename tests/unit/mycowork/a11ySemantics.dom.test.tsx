@@ -75,7 +75,7 @@ describe('R049 语义标签', () => {
     fetchMock.mockResolvedValue(reply(500, { error: { code: 'INTERNAL', message: 'x' } }));
     render(<OfficeCapabilitiesSlot />, { wrapper: MemoryRouter });
     expect(await screen.findByText('没有读到能力状态')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /重试/ })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /重试/ })[0]).toBeInTheDocument(); // 下方技能版本读失败也有自己的重试
   });
 
   it('首次使用清单：步骤用列表语义，每步状态是文字', async () => {

@@ -411,6 +411,7 @@ const AionrsSendBox: React.FC<{
     if (!persistentDraft.enabled || !current_model?.use_model || !persistentDraft.ready || isBusy || sendingDraftRef.current ||
       !sessionStorage.getItem(`aionrs_initial_message_${conversation_id}`) || sessionStorage.getItem(`aionrs_initial_processed_${conversation_id}`)) return;
     sendingDraftRef.current = true;
+    sendFailure.clear(); // [mycowork] S40：首条重发前清掉上次的未受理原因
     void persistentDraft.initial((state, saved) => executeCommand({ input: state.content, files: state.files, sessions: state.sessions.map(({ id }) => ({ id })) }, saved, state))
       .catch((error: unknown) => { sendFailure.fail(error); Message.error(error instanceof Error ? error.message : '首条消息未确认受理，草稿已保留，请检查后重试。'); })
       .finally(() => { sendingDraftRef.current = false; });

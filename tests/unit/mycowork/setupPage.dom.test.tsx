@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 /office/setup 首次运行清单：步骤状态来自真实能力检查，图像模型可选可跳过，读取失败可重试。
  * [mycowork] ADR-0011: `/office/setup` (MyCowork P00 first-run checklist, PR12 T05d slice 1, R001). Only fetch is mocked.
  * Covers: step states come from real capability checks (nothing stored); the image-model step is optional and never
  * "required"; a failed capability read still shows every step with a retry that recovers. R001/D285: the chat/image

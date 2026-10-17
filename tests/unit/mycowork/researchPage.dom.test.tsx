@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 /office/research 研究记录页（只读）：查询/来源状态/条目，外链安全打开，失败来源与空状态。
  * [mycowork] ADR-0011: `/office/research` (MyCowork P13 research log, read-only, R050). Only fetch is mocked.
  * Covers: entry shows query/time/source status/items; external links open in a new window with noopener noreferrer;
  * a failed source is shown as text with its reason; empty state; "load older" follows next_cursor; arXiv-off hint links to connections.

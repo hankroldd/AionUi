@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 /office/resources 的 Secret 锁标记与标记/取消标记：仅所有者可操作，403 提示。
  * [mycowork] D116: `/office/resources` Secret lock and mark/unmark (MyCowork P05 resource center, PR04 T05h).
  * Only the Bridge boundary is mocked (fetch). Covers: a Secret item shows a lock tag to everyone who can see it; only
  * the owner (can_mark_secret) gets the mark/unmark action (in the item's "More" menu); the action asks for confirmation explaining the consequence,

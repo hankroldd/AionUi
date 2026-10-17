@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 jsdom 拆除后无残留定时器：刚关闭的 Arco 弹层与自动关闭的提示不再触碰 React。
  * [mycowork] PR11 (A125): after a test file ends, jsdom is torn down. An Arco popup that was just closed leaves a
  * react-transition-group exit timer and a deferred root unmount behind; under load they fired after teardown and React
  * threw `ReferenceError: window is not defined` (all tests pass, vitest reports `Errors 1`).

@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试版本页当前版本的只读预览：沙箱 iframe、上下分栏可拖动、预览失败原因与重试。
  * [mycowork] D138: the versions page (MyCowork P12) shows a read-only preview of the current version under the comparison.
  * Only the Bridge boundary is mocked (fetch). Covers: the preview is there as soon as the page opens (Office → Bridge-rendered
  * HTML in an iframe that may run scripts but is not same-origin); the right side is an Arco vertical split (comparison on top,

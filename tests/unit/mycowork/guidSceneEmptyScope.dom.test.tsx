@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试场景助手（报告/PPT）无范围时发送显式空计划并挂 Bridge MCP；其他助手保持原样。
  * [mycowork] A197: the scene assistant ("Report / PPT", id `mycowork-scene-*`) gets the Bridge tools with an explicit EMPTY
  * scope plan when nothing is selected; any other assistant keeps the plain no-scope send. A scope picked by hand or a project
  * default behaves exactly as before. The scope strip says "no sources selected" for the explicit empty plan (never a library).

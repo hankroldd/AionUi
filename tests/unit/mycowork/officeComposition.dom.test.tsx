@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 /office/compositions/:decisionId 页面方案：意图、候选与规则原因、选择结构幂等提交、409 重读。
  * [mycowork] ADR-0011: `/office/compositions/:decisionId` (MyCowork P09 page plan, PR05 slice e).
  * Only the Bridge boundary is mocked (fetch). Covers: pages with intent, candidates (rule reasons/limits; the cover renders the
  * real template page, see officeTemplatePreview), read-only excluded templates and fallbacks, no scores; choosing a structure posts an idempotent

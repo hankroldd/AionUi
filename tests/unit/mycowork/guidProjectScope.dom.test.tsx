@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试从项目进入 Guid 页的范围 chip：显示项目默认来源，发送带 working_project_id，本轮改范围不写绑定。
  * [mycowork] ADR-0011: Guid page opened from a project ("ask about this project", router state mycoworkProjectId).
  * The chip starts from the project's default sources (GET /bridge/v1/scopes projects[]); sending freezes a plan with
  * working_project_id + the `project` selector; changing the scope applies to this turn only and never PUTs the binding

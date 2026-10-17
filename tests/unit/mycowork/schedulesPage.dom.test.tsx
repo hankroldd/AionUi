@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 /office/schedules 办公计划页：状态、下次时间、策略、预算与上次判断，确认后关闭，409 重读。
  * [mycowork] ADR-0011: `/office/schedules` (MyCowork P14 office schedules, PR10 slice I, R060/D282). Only fetch is mocked.
  * Covers: rows show status, next time, time zone, missed policy, monthly budget and the last judgement (incl. voided);
  * the honest notice; turning off confirms first and PATCHes with expected_revision; 409 re-reads the list; empty state.

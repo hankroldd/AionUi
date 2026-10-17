@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试默认界面语言：无已存设置时为 zh-CN，已存设置优先，语言码归一化，不再读 navigator.language。
  * [mycowork] D130 / PR11 audit B1: the interface starts in zh-CN unless the user saved another language. Upstream's renderer
  * `initLanguage` fell back to `navigator.language`, so a headless or English-locale browser got an English UI; the saved
  * setting still wins and unknown codes normalize as before.

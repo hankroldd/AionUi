@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 P09 候选卡的真实模板页预览：隔离 iframe、无文件时提示、加载/失败重试。
  * [mycowork] ADR-0011: P09 candidate cards show the real template page (MyCowork PR05 slice i, A166, D210).
  * Only the Bridge boundary is mocked (fetch). Covers: the cover is an isolated iframe (sandbox exactly "allow-scripts",
  * no same-origin) holding the hardened HTML Bridge returned, labelled "not PowerPoint rendering"; loading, "no file to

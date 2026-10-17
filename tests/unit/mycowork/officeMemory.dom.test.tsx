@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 /office/memory 记忆页：候选按范围分组并带来源链接，接受/拒绝/修改/停用，409 重读。
  * [mycowork] ADR-0011: `/office/memory` (MyCowork P11 memory page, PR09 slice b).
  * Only the Bridge boundary is mocked (fetch). Covers: candidates grouped by scope with source links; accept/reject carry
  * the read revision; editing sends `modify` with the new text; switching to "active" lists active items with "disable";

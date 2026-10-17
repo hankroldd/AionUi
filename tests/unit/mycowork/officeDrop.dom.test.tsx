@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试文件拖入拦截 mycoworkDropIntercept：附加到本轮与导入为资源两条路径及键盘行为。
  * [mycowork] ADR-0011: file drop intercept (useDragUpload → mycoworkDropIntercept, MyCowork PR04 slice f).
  * Only the Bridge boundary is mocked (fetch). "Import as resources" hands the files (in memory) to the import page,
  * which uploads them; "attach to this turn" (also on cancel) keeps AionUi's behaviour and hands nothing over.

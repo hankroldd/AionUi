@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试迟到的修订结果不能写入新会话或新草稿生命周期；主动扩展只通知并刷新一次。
  * [mycowork] PR03 A481: a late revision cannot write into a new conversation or draft lifecycle.
  * Only Bridge HTTP and notification outputs are substituted; real strip, dialog and store run together.
  */

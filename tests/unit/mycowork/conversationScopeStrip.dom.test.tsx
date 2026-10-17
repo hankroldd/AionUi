@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试会话顶部“本轮范围”条：来源、联网策略、可检索/处理中/不可用计数，无计划时提示纯聊天。
  * [mycowork] ADR-0011: "scope this turn" strip above the conversation body (MyCowork PR03 spec §6 item 8, 01 §6.4).
  * Only external boundaries are mocked: Bridge = fetch, aioncore stream = ipcBridge.conversation.responseStream.
  * Covers the summary line, 404 = plain chat, used-sources list, refresh on turn finish, and error states;

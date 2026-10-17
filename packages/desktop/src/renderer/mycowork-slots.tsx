@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：MyCowork 挂载点的唯一注册文件：上游各插入点只调用这里，组件与 Bridge 调用都在 @mycowork/ui。
  * [mycowork] ADR-0011: the single registration file for MyCowork mount points.
  * Each AionUi insertion point is a 1–2 line call into this file; components and Bridge calls
  * live in MyCowork packages/ui (resolved via the `@mycowork/ui` build alias). Ledger: MyCowork upstream/PATCHES.md.

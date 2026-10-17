@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 /office/capabilities 能力中心：行状态用合同措辞、“版本未验证”标记、单项重检、读取失败可重试。
  * [mycowork] ADR-0011: `/office/capabilities` (MyCowork P10 capability center, PR11 T12e1). Only fetch is mocked.
  * Covers: rows show the contract wording + "version not verified" badge + fixed reason; re-check POSTs `{}` and replaces
  * only that row (button busy meanwhile); a failed list read shows Result + retry that reads again.

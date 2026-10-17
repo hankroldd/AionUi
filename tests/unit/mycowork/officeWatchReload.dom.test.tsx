@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试预览面板刷新到达 Office 标签：watch 断开显示断开态并可重开，刷新重启 watch。
  * [mycowork] S10: the preview panel's refresh reaches an Office tab. The Office viewer registers a tab reloader that
  * restarts the officecli watch (stop the old process, start a new one that reads the file afresh), so a file changed
  * outside (e.g. saved from the online editor) can be seen without closing the tab. Only the backend boundary is mocked.

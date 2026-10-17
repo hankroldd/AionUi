@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试侧栏项目行入口 ProjectScopeSlot：无 project_id 不渲染，预勾选已存默认并以 PUT 保存，失败保持抽屉。
  * [mycowork] ADR-0011: sidebar project-row entry (MyCowork 02 P03 "ask about this project / link knowledge bases").
  * Shown only when a conversation of the group carries an AionUi project_id. "Set as project default" is a separate,
  * explicit PUT /bridge/v1/projects/{id}/binding (only affects future tasks, R009); failures are surfaced and the

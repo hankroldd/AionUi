@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 @mycowork/ui 的范围 chip 与居中选择对话框：计数文案、应用、取消保留选择、部分处理计数。
  * [mycowork] ADR-0011: scope chip + centered picker dialog from @mycowork/ui (MyCowork packages/ui; D144 dialog since 2026-09-29).
  * Only the Bridge boundary (fetch) is mocked. Covers counts copy, apply, cancel-keeps-selection,
  * the unauthenticated / unavailable / no-source states (MyCowork PR03 spec §6 items 3, 11), and D144 narrowing:

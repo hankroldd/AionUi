@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试预览标签工具栏的“编辑”按钮：把工作区文件解析为 Bridge 资源后进入编辑，预览本身保持只读。
  * [mycowork] D125: the preview tab toolbar carries an "Edit" button (mount point in PreviewPanel's toolbar rightExtra).
  * The preview itself stays read-only; the button resolves the workspace file to a Bridge resource (registering it on the
  * user's behalf when needed) and opens a separate editor: md/txt → text editor page, docx/pptx/xlsx → ONLYOFFICE.

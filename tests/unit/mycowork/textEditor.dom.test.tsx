@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 /office/edit-text/:resourceId 文本在线编辑：按基线修订保存，冲突保留输入，页头仅一个主按钮。
  * [mycowork] D124: `/office/edit-text/:resourceId` (MyCowork md/txt online editing with a write lease).
  * Mocked boundaries: fetch (Bridge) and AionUi's CodeMirror editors / MarkdownView (replaced by a textarea / div so
  * typing is possible in jsdom; the slot must still pick MarkdownEditor for markdown and CodeEditor for text).

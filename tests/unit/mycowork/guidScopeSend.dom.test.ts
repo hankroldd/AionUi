@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 Guid 发送挂载点 withGuidScope：有范围则冻结计划并换令牌，无范围不变，Bridge 失败不建会话。
  * [mycowork] ADR-0011/0012: Guid send mount point. Scope selected → plan + token → conversation carries the
  * Bridge MCP server and workspace; no scope → unchanged; Bridge failure → no conversation is created.
  * After create, the conversation is bound to the plan (PUT .../plan); a failed bind only warns (T05c-2).

@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 P09 浏览抽屉的审查修复项：候选外选择行、拒绝留在抽屉、焦点返回与对话框语义。
  * [mycowork] ADR-0011: review / real-UI fixes for the P09 browse drawer and adopt-all (MyCowork PR05 slices j, k; A167, A169, A189).
  * Pins: selected-outside-candidates line (F1), rejection stays in the drawer (F2), focus return + dialog semantics (F3),
  * stale reads, search box, Arco filters, list retry, exact version / encoded ids, adopt-all busy / notes, reread failures.

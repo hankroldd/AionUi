@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：P09 浏览/采用 DOM 测试共用的夹具。
  * [mycowork] ADR-0011: shared fixtures for the P09 browse / adopt DOM tests (MyCowork PR05 slices j, k): a stateful fake Bridge (fetch only).
  */
 

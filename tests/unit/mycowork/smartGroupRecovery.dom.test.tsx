@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试智能分组条件编辑遇修订冲突时保留草稿，首次保存用打开时版本，失败后用重读版本。
  * [mycowork] PR11: smart-group edit keeps the draft after a revision conflict; the first save uses the revision read
  * when the dialog opened, a save after a failure uses the re-read one (and overwrites the other edit, single owner).
  * Only Bridge HTTP is substituted; React state and Arco controls are real. Server contract: Bridge catalog-api tests.

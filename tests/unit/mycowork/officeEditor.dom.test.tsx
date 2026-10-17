@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 /office/edit/:sessionId 在线编辑（ONLYOFFICE）：签名配置建编辑器、保存并返回、恢复页、重复保存提示。
  * [mycowork] ADR-0011: `/office/edit/:sessionId` (MyCowork PR07 slice 4, online editing with ONLYOFFICE).
  * Only the boundaries are mocked: fetch (Bridge) and window.DocsAPI (the Document Server's api.js).
  * Covers: the editor is created from the Bridge-signed config; "finish" closes the session first, then destroys the editor,

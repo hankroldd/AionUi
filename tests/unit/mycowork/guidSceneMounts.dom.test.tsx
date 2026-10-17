@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 useGuidSend 把所选助手 id 传给 withGuidScope（aionrs 与另一分支），及首页场景助手的范围 chip。
  * [mycowork] A197/A220/A221: the mount lines pass the selected assistant id. useGuidSend (both the aionrs and the other
  * branch) creates a scene-assistant conversation with the Bridge MCP server of an explicit empty plan and no scope picked;
  * a plain assistant is created without any Bridge call. The home chip tells a scene assistant "no sources selected".

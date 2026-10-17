@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试 P09“浏览全部/查看原模板”抽屉与“全部采用首选”：列表请求、真实预览、排除项置灰、幂等提交。
  * [mycowork] ADR-0011: P09 "browse all" / "view original template" drawer and "adopt all first choices" (MyCowork PR05 slices j, k; A167, A169).
  * Only the Bridge boundary is mocked (fetch). Covers: list request shape and real previews, closing the drawer leaves the plan untouched,
  * choosing a non-candidate asset (new decision id in the address bar), excluded items are greyed with the reason and cannot be chosen,

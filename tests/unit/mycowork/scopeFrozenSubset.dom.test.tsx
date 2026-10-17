@@ -1,4 +1,5 @@
 /**
+ * 文件/职责：测试未改动的分组在重选与发送中保持冻结成员、排除项与策略，不重新列举或退回整库。
  * [mycowork] PR03 A68: unchanged groups keep frozen members, exclusions and policy through reselect/send.
  * Bridge HTTP is the only mocked boundary; actual dialogs, store and session preparation run together.
  */

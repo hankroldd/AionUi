@@ -63,8 +63,10 @@ async function ready(name = 'A.md') {
   await screen.findByRole('button', { name, exact: true });
 }
 function fixtures() {
-  fetchMock.mockImplementation(async (url: string) => {
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     const parsed = new URL(String(url), 'http://fixture.invalid');
+    if (parsed.pathname === '/bridge/v1/edit-sessions' && (init?.method ?? 'GET') === 'GET')
+      return response(200, { items: [], next_page: null });
     if (parsed.pathname === '/bridge/v1/scopes')
       return catalogStatus === 200
         ? response(200, { sources, projects: [{ project_id: 'must-not-guess', source_ids: ['src_b'] }] })

@@ -25,7 +25,11 @@ vi.mock('react-router-dom', () => ({
 }));
 
 const fetchMock = vi.fn();
-const reply = (status: number, body: unknown) => ({ status, ok: status < 300, json: async () => structuredClone(body) });
+const reply = (status: number, body: unknown) => ({
+  status,
+  ok: status < 300,
+  json: async () => structuredClone(body),
+});
 const counts = { total: 1, ready: 1, indexing: 0, failed: 0, unavailable: 0 };
 const removal = (status: string, error: string | null = null) => ({
   removal_id: 'krm_1',
@@ -48,6 +52,7 @@ function bridge() {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     const path = String(url).split('?')[0];
+    if (path === '/bridge/v1/edit-sessions' && method === 'GET') return reply(200, { items: [], next_page: null });
     if (path === '/bridge/v1/scopes')
       return reply(200, {
         sources: [

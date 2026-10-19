@@ -68,6 +68,7 @@ function bridge() {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     const path = String(url).split('?')[0];
+    if (path === '/bridge/v1/edit-sessions' && method === 'GET') return reply(200, { items: [], next_page: null });
     if (path === '/bridge/v1/scopes')
       return reply(200, {
         sources: [

@@ -11,7 +11,17 @@ import { readRetry } from '@mycowork/ui/scope-picker/bridge-client';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 import { OfficeMemorySlot } from '@/renderer/mycowork-slots';
-import { deferred, fetchMock, fixture, item, list, reads, reply, reset } from './globalResourceFixture';
+import {
+  deferred,
+  fetchMock,
+  fixture as resourceFixture,
+  item,
+  list,
+  reads,
+  reply,
+  reset,
+  type Responder,
+} from './globalResourceFixture';
 
 // A518：整页渲染用例在并发负载下会超过默认 10 s，只对本文件放宽。
 vi.setConfig({ testTimeout: 30_000 });
@@ -23,6 +33,16 @@ vi.mock('react-router-dom', () => ({ useLocation: () => ({ state: null, pathname
 readRetry.delays = [0, 0];
 const proxy503 = () => ({ status: 503, ok: false, json: async () => Promise.reject(new Error('html')) });
 const skeleton = () => document.querySelector('.arco-skeleton');
+
+function fixture(resources?: Responder) {
+  resourceFixture(resources);
+  const serve = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+    url === '/bridge/v1/edit-sessions' && (init?.method ?? 'GET') === 'GET'
+      ? reply(200, { items: [], next_page: null })
+      : serve(url, init)
+  );
+}
 
 // 截下页面登记的轮询定时器（>= 5 秒的 setTimeout），用例手动触发 / 检查是否被清掉 / 看退避间隔
 const timers = new Map<number, { fn: () => void; ms: number }>();

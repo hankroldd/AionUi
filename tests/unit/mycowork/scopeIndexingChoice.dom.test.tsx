@@ -241,7 +241,7 @@ describe('范围条：发送时有资料还在处理中', () => {
 
   it('全部就绪：不写这句', async () => {
     const el = await strip(context([5, 0]));
-    await waitFor(() => expect(el).toHaveTextContent('AI 可引用 5'));
+    await waitFor(() => expect(el).toHaveTextContent('来源库状态（发送时）：就绪 5'));
     expect(el).not.toHaveTextContent('发送时有');
   });
 });

@@ -37,13 +37,18 @@ import {
   resolveTransferOp,
   serializePeRef,
 } from './explorerModel';
-import { openProject, select, setExpandedKeys } from './explorerStore';
+import { openProject, reveal, select, setExpandedKeys } from './explorerStore';
 import { initExplorerRuntime } from './monitorTransport';
 import { useExplorerView } from './useExplorerView';
+import { filterVisibleTree } from './search/visibleTree';
+import type { DirRef } from './explorerModel';
 
 export type ExplorerPanelProps = {
   projectId: string;
   roots: RootRef[];
+  /** Optional display-only subtree filter; does not change the store or file permissions. */
+  visibleRoots?: DirRef[];
+  emptyContent?: React.ReactNode;
   /** pe_id of the workspace root — its remove action is disabled (immutable). */
   workspacePeId?: string;
   /** Remove an attached root from the project. Omit to disable the action. */
@@ -92,6 +97,8 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   projectId,
   roots,
   workspacePeId,
+  visibleRoots,
+  emptyContent,
   onRemoveRoot,
   onOpenFile,
   onRename,
@@ -106,6 +113,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   onTransfer,
 }) => {
   const view = useExplorerView();
+  const treeData = filterVisibleTree(view.treeData, visibleRoots);
   const { t } = useTranslation();
   // Key of the node currently under a drag (for the drop highlight).
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
@@ -150,6 +158,10 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   useEffect(() => {
     openProject(projectId, roots);
   }, [projectId, roots]);
+
+  useEffect(() => {
+    for (const root of visibleRoots ?? []) reveal(root);
+  }, [projectId, visibleRoots]);
 
   const handleExpand: TreeProps['onExpand'] = (expandedKeys) => {
     setExpandedKeys(expandedKeys.map(String));
@@ -515,9 +527,10 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       {/* `workspace-tree` opts into the full-row VSCode-style hover + selected
           backgrounds in arco-override.css (selected = --color-fill-3), so a
           revealed/selected node has a clearly visible highlight. */}
+      {visibleRoots && !treeData.length && emptyContent}
       <Tree
         className='workspace-tree'
-        treeData={view.treeData as TreeProps['treeData']}
+        treeData={treeData as TreeProps['treeData']}
         expandedKeys={view.expanded}
         selectedKeys={view.selected ? [view.selected] : []}
         /* 让节点标题块（arco 的点击目标 .arco-tree-node-title）铺满整行剩余宽度：

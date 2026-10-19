@@ -43,6 +43,12 @@ import { resolvePreviewPayload } from '@/renderer/utils/file/previewPayload';
 
 import { ExplorerPanel } from './ExplorerPanel';
 import {
+  ConversationFilesEmpty,
+  ConversationFilesToggle,
+  useMyCoworkConversationFiles,
+} from '@/renderer/mycowork-slots';
+import { matchesVisibleRoots } from './search/visibleTree';
+import {
   buildCreateFileRequest,
   buildMkdirRequest,
   buildRemoveRequest,
@@ -174,9 +180,10 @@ export const buildExplorerPreviewPayload = async (
 };
 
 export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { openPreview } = usePreviewContext();
   const activeConversationId = useCurrentConversation();
+  const conversationFiles = useMyCoworkConversationFiles(projectId, activeConversationId);
   const { data, isLoading, mutate } = useSWR(projectId ? `explorer-project/${projectId}` : null, (key: string) => {
     // Derive the project id from the SWR key, not the captured `projectId`
     // closure, so a fetch's result can never be filed under a different key.
@@ -467,7 +474,13 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   const roots = detail ? toRootRefs(detail) : [];
   // Search roots = the project's pe roots (each folder root, rel=''). fs/search
   // spans all bound folders; the front-end ranks the merged hit stream.
-  const searchRoots = roots.map((root) => ({ pe_id: root.pe_id, relative_path: '' }));
+  const visibleRoots = conversationFiles.showAll
+    ? undefined
+    : conversationFiles.directories.map((relative_path) => ({
+        pe_id: detail?.explorer.workspace_pe_id ?? '',
+        relative_path,
+      }));
+  const searchRoots = visibleRoots ?? roots.map((root) => ({ pe_id: root.pe_id, relative_path: '' }));
   // pe_id → folder name for the search result's `PE · REL` secondary label.
   const searchPeNames = Object.fromEntries(roots.map((root) => [root.pe_id, root.title]));
   const workspacePeId = detail?.explorer.workspace_pe_id;
@@ -545,6 +558,13 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
           {tabButton('changes', t('conversation.explorer.tabs.changes'))}
         </div>
         <div className='flex items-center gap-2px flex-shrink-0'>
+          {activeTab === 'files' && (
+            <ConversationFilesToggle
+              lang={i18n?.language}
+              showAll={conversationFiles.showAll}
+              onToggle={conversationFiles.toggle}
+            />
+          )}
           {/* Right cluster order (VS Code parity): project-scope actions first (add
               folder, open workspace), then view actions grouped at the far right
               (refresh, collapse-all). Refresh shows on both tabs (tab-scoped
@@ -619,6 +639,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
       <div className='flex-1 min-h-0' style={activeTab === 'files' ? undefined : { display: 'none' }}>
         <SearchPanel
           roots={searchRoots}
+          visibleHit={visibleRoots ? (hit) => matchesVisibleRoots(hit, visibleRoots) : undefined}
           peNames={searchPeNames}
           onRevealHit={handleRevealHit}
           onAddHit={activeConversationId ? handleAddHit : undefined}
@@ -627,6 +648,8 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
             projectId={projectId}
             roots={roots}
             workspacePeId={workspacePeId}
+            visibleRoots={visibleRoots}
+            emptyContent={<ConversationFilesEmpty lang={i18n?.language} />}
             onRemoveRoot={handleRemoveFolder}
             onOpenFile={handleOpenFile}
             onRename={handleRename}

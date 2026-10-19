@@ -77,6 +77,7 @@ describe('ExplorerContainer data integration', () => {
   it('fetches GET /projects/{id} and projects the returned roots into the tree', async () => {
     projectGet.mockResolvedValue(detail([entry({ pe_id: 'peA', display_name: 'Root Alpha' })]));
     renderContainer('p1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Show all' }));
 
     expect(await screen.findByText('Root Alpha')).toBeInTheDocument();
     expect(projectGet).toHaveBeenCalledWith({ project_id: 'p1' });
@@ -90,6 +91,7 @@ describe('ExplorerContainer data integration', () => {
       ])
     );
     renderContainer('p1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Show all' }));
 
     expect(await screen.findByText('Root Alpha')).toBeInTheDocument();
     expect(screen.getByText('Root Beta')).toBeInTheDocument();
@@ -98,6 +100,7 @@ describe('ExplorerContainer data integration', () => {
   it('renders an empty tree (no crash) when the fetch rejects', async () => {
     projectGet.mockRejectedValue(new Error('boom'));
     renderContainer('p1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Show all' }));
 
     // Nothing to assert positively; ensure the fetch was attempted and no root shows.
     await waitFor(() => expect(projectGet).toHaveBeenCalled());
@@ -115,6 +118,7 @@ describe('ExplorerContainer data integration', () => {
       detail([entry({ pe_id: 'peA', display_name: 'Broken Root', runtime_status: 'missing' })])
     );
     renderContainer('p1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Show all' }));
 
     const title = await screen.findByText('Broken Root');
     const row = title.closest('[data-runtime-status]');
@@ -128,6 +132,7 @@ describe('ExplorerContainer data integration', () => {
       detail([entry({ pe_id: 'peA', display_name: 'Healthy Root', runtime_status: 'available' })])
     );
     renderContainer('p1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Show all' }));
 
     const title = await screen.findByText('Healthy Root');
     const row = title.closest('[data-runtime-status]');
@@ -138,6 +143,7 @@ describe('ExplorerContainer data integration', () => {
   it('switches to the Changes tab without unmounting the explorer (kept mounted)', async () => {
     projectGet.mockResolvedValue(detail([entry({ pe_id: 'peA', display_name: 'Root Alpha' })]));
     renderContainer('p1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Show all' }));
     expect(await screen.findByText('Root Alpha')).toBeInTheDocument();
 
     // Component-switcher tabs present (t returns the raw key here).
@@ -169,6 +175,7 @@ describe('ExplorerContainer data integration', () => {
     });
 
     const { rerender } = renderContainer('p1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Show all' }));
     expect(await screen.findByText('Root Alpha')).toBeInTheDocument();
 
     rerender(
@@ -176,6 +183,7 @@ describe('ExplorerContainer data integration', () => {
         <ExplorerContainer projectId='p2' />
       </SWRConfig>
     );
+    fireEvent.click(await screen.findByRole('button', { name: 'Show all' }));
     expect(await screen.findByText('Root Beta')).toBeInTheDocument();
     expect(screen.queryByText('Root Alpha')).not.toBeInTheDocument();
   });
@@ -188,6 +196,7 @@ describe('ExplorerContainer data integration', () => {
   it('never paints roots from a detail belonging to a different project (anti-poison guard)', async () => {
     projectGet.mockResolvedValue(detail([entry({ pe_id: 'peX', display_name: 'Ghost Root' })], 'other-project'));
     renderContainer('p1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Show all' }));
 
     await waitFor(() => expect(projectGet).toHaveBeenCalled());
     // The fetched detail belongs to 'other-project', not 'p1' → dropped, no roots.

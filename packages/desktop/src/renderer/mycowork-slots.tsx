@@ -4,7 +4,15 @@
  * Each AionUi insertion point is a 1–2 line call into this file; components and Bridge calls
  * live in MyCowork packages/ui (resolved via the `@mycowork/ui` build alias). Ledger: MyCowork upstream/PATCHES.md.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Message } from '@arco-design/web-react';
+import { getCurrentProject, useCurrentProject } from '@/renderer/pages/conversation/explorer/currentProjectStore';
+import {
+  getCurrentConversation,
+  useCurrentConversation,
+} from '@/renderer/pages/conversation/explorer/currentConversationStore';
+import { useOptionalPreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
+import { classifyPreviewError, previewErrorToI18nKey } from '@/renderer/utils/previewError';
 import i18n from 'i18next';
 import useSWR from 'swr';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +33,8 @@ import {
   prepareScopedSession,
   BranchMessageButton,
   fetchConversationContext,
+  ConversationFileLink,
+  useConversationWorkspace,
 } from '@mycowork/ui';
 
 /** PR10消息动作注册；普通聊天保留原按钮，办公状态未读到时不绕过分支登记。 */
@@ -116,7 +126,12 @@ export const ConversationScopeSlot: React.FC<{ conversation_id: string }> = ({ c
       proposed={proposed}
       onProposedHandled={handled}
       onStrictShrink={() => void navigate('/guid')}
-      onBlocked={(error) => notifyCapabilityBlocked(error, ownerKey, current.language, (path, state) => void navigate(path, { state }), { origin: 'conversation', conversationId: conversation_id })}
+      onBlocked={(error) =>
+        notifyCapabilityBlocked(error, ownerKey, current.language, (path, state) => void navigate(path, { state }), {
+          origin: 'conversation',
+          conversationId: conversation_id,
+        })
+      }
     />
   );
 };
@@ -242,3 +257,61 @@ export {
   watchTurnEnd,
   watchTurnEnded,
 } from './mycowork-task-send';
+
+// [mycowork] Business labels/path recognition stay in the owned UI package.
+export { ConversationFilesToggle, ConversationFilesEmpty, conversationFilePath } from '@mycowork/ui';
+
+/** Display-only scope for the existing Explorer; refresh legacy registered dirs after each completed turn. */
+export function useMyCoworkConversationFiles(projectId: string, conversationId: string | null) {
+  const ownerKey = useOwnerKey();
+  const [turns, setTurns] = useState(0);
+  useEffect(() => {
+    if (!ownerKey || !conversationId) return;
+    return ipcBridge.conversation.responseStream.on((message) => {
+      if (message.conversation_id === conversationId && message.type === 'finish') setTurns((n) => n + 1);
+    });
+  }, [ownerKey, conversationId]);
+  return useConversationWorkspace(ownerKey, projectId, conversationId, turns);
+}
+
+/** Open an explicit workspace-relative link with the exact same payload gate as the Explorer. */
+export const MyCoworkWorkspaceFileLinkSlot: React.FC<{ relativePath: string; children?: React.ReactNode }> = ({
+  relativePath,
+  children,
+}) => {
+  const projectId = useCurrentProject();
+  const conversationId = useCurrentConversation();
+  const preview = useOptionalPreviewContext();
+  const ownerKey = useOwnerKey();
+  const generation = useRef(0);
+  useEffect(() => {
+    generation.current += 1;
+    return () => {
+      generation.current += 1;
+    };
+  }, [projectId, conversationId, ownerKey]);
+  const { t } = useTranslation();
+  const open = async (): Promise<void> => {
+    if (!projectId || !conversationId || !preview) return;
+    const openedAt = generation.current;
+    const current = () =>
+      generation.current === openedAt &&
+      getCurrentProject() === projectId &&
+      getCurrentConversation() === conversationId;
+    try {
+      const detail = await ipcBridge.project.get.invoke({ project_id: projectId });
+      if (!current() || detail.project_id !== projectId || !detail.explorer.workspace_pe_id) return;
+      const { buildExplorerPreviewPayload } = await import('./pages/conversation/explorer/ExplorerContainer');
+      if (!current()) return;
+      const payload = await buildExplorerPreviewPayload(detail.explorer.workspace_pe_id, relativePath);
+      if (current()) preview.openPreview(payload.content, payload.contentType, payload.metadata);
+    } catch (error) {
+      if (current()) Message.error(t(previewErrorToI18nKey(classifyPreviewError(error))));
+    }
+  };
+  return (
+    <ConversationFileLink disabled={!projectId || !conversationId || !preview} onOpen={() => void open()}>
+      {children}
+    </ConversationFileLink>
+  );
+};

@@ -95,6 +95,43 @@ describe('空间页未结束的在线编辑', () => {
     expect(within(alert).getAllByRole('button', { name: '放弃' })).toHaveLength(1); // 只有需要恢复的给“放弃”（Bridge 不允许放弃 editing）
   });
 
+  it('状态读取失败时给重试，重试后能找到文件', async () => {
+    bridge([summary('eds_b', 'res_b', 'editing')]);
+    const original = fetchMock.getMockImplementation()!;
+    let failed = true;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/bridge/v1/edit-sessions' && failed) return Promise.reject(new Error('network'));
+      return original(url, init);
+    });
+    render(<OfficeResourcesSlot />);
+    const retry = await screen.findByRole('button', { name: '重试' });
+    failed = false;
+    fireEvent.click(retry);
+    await screen.findByText('方案.pptx');
+  });
+
+  it('保存通知后重新读取，已经结束的编辑从提示里消失', async () => {
+    bridge([summary('eds_b', 'res_b', 'editing')]);
+    render(<OfficeResourcesSlot />);
+    await screen.findByText('方案.pptx');
+    bridge([]);
+    fireEvent(window, new CustomEvent('mycowork:resource-changed', { detail: { resourceId: 'res_b' } }));
+    await waitFor(() => expect(screen.queryByTestId(ALERT)).toBeNull());
+  });
+
+  it('刷新失败保留已知文件，并能打开版本记录', async () => {
+    bridge([summary('eds_b', 'res_b', 'editing')]);
+    render(<OfficeResourcesSlot />);
+    await screen.findByText('方案.pptx');
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => url === '/bridge/v1/edit-sessions'
+      ? Promise.reject(new Error('network')) : original(url, init));
+    fireEvent(window, new Event('focus'));
+    await screen.findByText('暂时无法更新在线编辑状态');
+    expect(screen.getByText('方案.pptx')).toBeTruthy();
+    expect(screen.getByRole('link', { name: '查看版本' }).getAttribute('href')).toBe('#/office/resources/res_b/versions');
+  });
+
   it('“回到编辑”进入该会话的编辑页', async () => {
     bridge([summary('eds_b', 'res_b', 'editing')]);
     render(<OfficeResourcesSlot />);

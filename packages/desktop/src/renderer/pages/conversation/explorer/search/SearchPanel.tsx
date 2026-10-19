@@ -23,7 +23,7 @@
 
 import { Button, Input } from '@arco-design/web-react';
 import { Plus, Search } from '@icon-park/react';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DirRef } from '../explorerModel';
@@ -35,6 +35,8 @@ import { PANEL_SEARCH_OWNER } from './searchStore';
 export type SearchPanelProps = {
   /** Search roots = the project's bound folders (each a pe root, rel=''). */
   roots: DirRef[];
+  /** Keep stale/shared results outside the currently displayed subtrees hidden. */
+  visibleHit?: (hit: SearchHit) => boolean;
   /** pe_id → folder name for the `PE · REL` secondary label (multi-folder). */
   peNames: PeNameMap;
   /** Locate a hit in the tree (expand ancestors + select). Default click action. */
@@ -45,10 +47,26 @@ export type SearchPanelProps = {
   children: React.ReactNode;
 };
 
-export const SearchPanel: React.FC<SearchPanelProps> = ({ roots, peNames, onRevealHit, onAddHit, children }) => {
+export const SearchPanel: React.FC<SearchPanelProps> = ({
+  roots,
+  visibleHit,
+  peNames,
+  onRevealHit,
+  onAddHit,
+  children,
+}) => {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const { view, runSearch, cancel } = useFileSearch(PANEL_SEARCH_OWNER, roots);
+
+  const scopeKey = JSON.stringify(roots);
+  const searchedScope = useRef(scopeKey);
+  useEffect(() => {
+    if (searchedScope.current === scopeKey) return;
+    searchedScope.current = scopeKey;
+    if (query.trim() && roots.length) runSearch(query);
+    else cancel();
+  }, [scopeKey, query, roots.length, runSearch, cancel]);
 
   const active = query.trim().length > 0;
   // Render results only while this panel owns the shared stream. If the `@`
@@ -59,13 +77,13 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({ roots, peNames, onReve
   const onQueryChange = useCallback(
     (value: string): void => {
       setQuery(value);
-      if (value.trim().length > 0) {
+      if (value.trim().length > 0 && roots.length > 0) {
         runSearch(value);
       } else {
         cancel();
       }
     },
-    [runSearch, cancel]
+    [runSearch, cancel, roots.length]
   );
 
   // Reveal + EXIT search: locate the hit in the tree, then clear the query so the
@@ -80,7 +98,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({ roots, peNames, onReve
     [onRevealHit, cancel]
   );
 
-  const rows = owned ? view.hits : []; // non-owner: show nothing (the other skin owns the stream)
+  const rows = owned ? view.hits.filter((hit) => !visibleHit || visibleHit(hit)) : []; // non-owner: show nothing (the other skin owns the stream)
   const showSearching = owned && view.status === 'searching' && rows.length === 0;
   const showEmpty = owned && view.status === 'done' && rows.length === 0;
 

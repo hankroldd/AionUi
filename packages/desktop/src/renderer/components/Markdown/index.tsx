@@ -26,6 +26,7 @@ import ShadowView from './ShadowView';
 import { MARKDOWN_REMARK_PLUGINS, MarkdownTable, MarkdownTd } from './markdownComponents';
 import { resolveLocalFileLinkPath, resolveLocalFileLinkReference } from './markdownUtils';
 import type { LocalFileLinkReference } from './markdownUtils';
+import { conversationFilePath, MyCoworkWorkspaceFileLinkSlot } from '@/renderer/mycowork-slots';
 
 const isLocalFilePath = (src: string): boolean => {
   if (src.startsWith('http://') || src.startsWith('https://')) return false;
@@ -62,7 +63,7 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
 
     const normalizedChildren = useMemo(() => {
       if (typeof childrenProp === 'string') {
-        let text = childrenProp.replace(/file:\/\//g, '');
+        let text = childrenProp;
         text = convertLatexDelimiters(text);
         return text;
       }
@@ -73,8 +74,8 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
       (e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault();
         e.stopPropagation();
-        const href = (e.currentTarget as HTMLAnchorElement).href;
-        if (!href) return;
+        const href = e.currentTarget.getAttribute('href');
+        if (!href || !/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(href)) return;
         // Prefer the built-in browser tab for http(s) links; fall back to the
         // system browser for other schemes or when no Preview panel is available.
         const httpUrl = parseHttpUrl(href);
@@ -110,6 +111,13 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
         a: ({ node: _node, ...rest }: Record<string, unknown>) => {
           const anchorProps = rest as React.AnchorHTMLAttributes<HTMLAnchorElement>;
           const rawHref = typeof anchorProps.href === 'string' ? anchorProps.href : '';
+          const workspacePath = conversationFilePath(rawHref);
+          if (workspacePath)
+            return (
+              <MyCoworkWorkspaceFileLinkSlot relativePath={workspacePath}>
+                {anchorProps.children}
+              </MyCoworkWorkspaceFileLinkSlot>
+            );
           const localFileReference = resolveLocalFileLinkReference(rawHref);
           if (localFileReference) {
             return (

@@ -18,7 +18,7 @@
 
 import { Button, Input, Message, Modal, Spin, Tooltip } from '@arco-design/web-react';
 import { FoldUpOne, FolderPlus, Refresh } from '@icon-park/react';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
@@ -183,7 +183,6 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   const { t, i18n } = useTranslation();
   const { openPreview } = usePreviewContext();
   const activeConversationId = useCurrentConversation();
-  const conversationFiles = useMyCoworkConversationFiles(projectId, activeConversationId);
   const { data, isLoading, mutate } = useSWR(projectId ? `explorer-project/${projectId}` : null, (key: string) => {
     // Derive the project id from the SWR key, not the captured `projectId`
     // closure, so a fetch's result can never be filed under a different key.
@@ -196,6 +195,15 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   // never reach the tree — a mismatch yields no roots rather than another
   // project's (宁空勿画错).
   const detail = data && data.project_id === projectId ? data : undefined;
+  const workspacePeId = detail?.explorer.workspace_pe_id;
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshConversationFiles = useCallback(() => {
+    if (!workspacePeId) return;
+    // 同人工刷新重新读取根状态并重声明目录，恢复首次目录尚未创建时失败的订阅。
+    setRefreshing(true);
+    void Promise.allSettled([mutate(), refreshRoot(workspacePeId)]).finally(() => setRefreshing(false));
+  }, [workspacePeId, mutate]);
+  const conversationFiles = useMyCoworkConversationFiles(projectId, activeConversationId, refreshConversationFiles);
 
   // Let the workspace-collapse hook (keyed per-project via workspacePreferenceKey)
   // read + restore this project's panel open/closed preference. The hook starts
@@ -260,9 +268,6 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   // subscription is owned by its store per project, not by the component's mount
   // (see ScmPanel's lifecycle note) — a tab switch never drops the backend watch.
   const [activeTab, setActiveTab] = useState<'files' | 'changes'>('files');
-  // Busy flag for the top-bar refresh: spins the icon and disables re-click while a
-  // refresh is in flight (so rapid clicks don't fan out redundant backend round-trips).
-  const [refreshing, setRefreshing] = useState(false);
   // One dialog for rename / new-file / new-folder (see NameDialogState); the
   // `mode` discriminant drives the title, ok label, request builder, and the
   // post-create reveal below.
@@ -483,7 +488,6 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   const searchRoots = visibleRoots ?? roots.map((root) => ({ pe_id: root.pe_id, relative_path: '' }));
   // pe_id → folder name for the search result's `PE · REL` secondary label.
   const searchPeNames = Object.fromEntries(roots.map((root) => [root.pe_id, root.title]));
-  const workspacePeId = detail?.explorer.workspace_pe_id;
   // Absolute path of the workspace root (derived display_path) for the
   // open-externally button.
   const workspacePath = detail?.explorer.entries.find((e) => e.pe_id === workspacePeId)?.display_path;

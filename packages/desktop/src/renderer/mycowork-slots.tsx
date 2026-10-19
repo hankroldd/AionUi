@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { BookOpen } from '@icon-park/react';
 import { ipcBridge } from '@/common';
+import type { IMessageToolCall } from '@/common/chat/chatLib';
 import { useGuidResourceSelection, useOwnerKey, useScopeChangeProposal } from '@/renderer/mycowork-resource-navigation';
 import type { ISessionMcpServer, TChatConversation } from '@/common/config/storage';
 import { useBranchAdapter } from '@/renderer/mycowork-branches';
@@ -261,16 +262,29 @@ export {
 // [mycowork] Business labels/path recognition stay in the owned UI package.
 export { ConversationFilesToggle, ConversationFilesEmpty, conversationFilePath } from '@mycowork/ui';
 
-/** Display-only scope for the existing Explorer; refresh legacy registered dirs after each completed turn. */
-export function useMyCoworkConversationFiles(projectId: string, conversationId: string | null) {
+/** Display-only scope; successful workspace tools refresh the existing Explorer without waiting for turn end. */
+export function useMyCoworkConversationFiles(
+  projectId: string,
+  conversationId: string | null,
+  onFilesWritten?: () => void
+) {
   const ownerKey = useOwnerKey();
   const [turns, setTurns] = useState(0);
   useEffect(() => {
     if (!ownerKey || !conversationId) return;
     return ipcBridge.conversation.responseStream.on((message) => {
-      if (message.conversation_id === conversationId && message.type === 'finish') setTurns((n) => n + 1);
+      if (message.conversation_id !== conversationId) return;
+      if (message.type === 'finish') setTurns((n) => n + 1);
+      if (message.type !== 'tool_call') return;
+      const tool = message.data as IMessageToolCall['content'];
+      if (
+        tool?.status === 'completed' &&
+        ['office_copy_to_workspace', 'office_fetch_original', 'office_register_output', 'office_edit'].includes(tool.name)
+      ) {
+        onFilesWritten?.();
+      }
     });
-  }, [ownerKey, conversationId]);
+  }, [ownerKey, conversationId, onFilesWritten]);
   return useConversationWorkspace(ownerKey, projectId, conversationId, turns);
 }
 

@@ -3,8 +3,8 @@
  * [mycowork] S10: the preview panel's refresh reaches an Office tab. The Office viewer registers a tab reloader that
  * restarts the officecli watch (stop the old process, start a new one that reads the file afresh), so a file changed
  * outside (e.g. saved from the online editor) can be seen without closing the tab. Only the backend boundary is mocked.
- * [mycowork] B4: the viewer probes the watch's /events stream; when the proxy no longer answers with text/event-stream
- * (the officecli process is gone) twice in a row, the stale iframe is replaced by a visible "disconnected" state whose action restarts the watch.
+ * [mycowork] B4: the viewer probes the finite OfficeCLI page; after two misses it offers to reopen.
+ * Idle SSE is not a liveness check: the native proxy can time it out while the page is healthy.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -12,6 +12,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { reloadViaViewer } from '@/renderer/pages/conversation/Preview/context/tabReloaderRegistry';
 import PptViewer from '@/renderer/pages/conversation/Preview/components/viewers/PptViewer';
+import { isWatchAlive } from '@mycowork/ui';
 
 const { start, stop, preview, i18n, platform } = vi.hoisted(() => {
   const start = vi.fn(async () => ({ url: 'http://127.0.0.1:51234/' }));
@@ -37,18 +38,23 @@ vi.mock('@/renderer/components/media/WebviewHost', () => ({
 
 const fetchMock = vi.fn();
 const stream = (type: string) => new Response('', { status: 200, headers: { 'content-type': type } });
+const watchPage = () =>
+  new Response('<html><script>window._watchEs = new EventSource("/events");</script></html>', {
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  });
 
 describe('Office preview refresh (S10)', () => {
   beforeEach(() => {
+    platform.electron = true;
     start.mockClear();
     stop.mockClear();
     fetchMock.mockReset();
-    fetchMock.mockImplementation(async () => stream('text/event-stream'));
+    fetchMock.mockImplementation(async () => watchPage());
     vi.stubGlobal('fetch', fetchMock);
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('web: a watch whose event stream is gone shows a disconnected state; "reopen" restarts the watch', async () => {
+  it('web: an unavailable watch shows a disconnected state; "reopen" restarts the watch', async () => {
     platform.electron = false;
     vi.useFakeTimers({ shouldAdvanceTime: true });
     fetchMock.mockImplementation(async () => stream('text/html'));
@@ -61,13 +67,42 @@ describe('Office preview refresh (S10)', () => {
     const gone = await screen.findByTestId('office-watch-error');
     vi.useRealTimers();
     expect(gone.textContent).toContain('Preview disconnected');
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/ppt-proxy/51234/events');
-    fetchMock.mockImplementation(async () => stream('text/event-stream'));
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/ppt-proxy/51234');
+    fetchMock.mockImplementation(async () => watchPage());
     fireEvent.click(screen.getByRole('button', { name: 'Reopen preview' }));
     await waitFor(() => expect(start).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(document.querySelector('iframe[title="PPT Preview"]')).not.toBeNull());
     expect(screen.queryByTestId('office-watch-error')).toBeNull();
     platform.electron = true;
+  });
+
+  it('probes the finite page when idle SSE times out, preserving the session and bypassing cache', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url.endsWith('/events') ? new Response('', { status: 502 }) : watchPage()
+    );
+    expect(await isWatchAlive('/api/ppt-proxy/51234/')).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/ppt-proxy/51234',
+      expect.objectContaining({
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { accept: 'text/html' },
+      })
+    );
+  });
+
+  it('does not mistake the SPA, HTTP failures, a different content type or a network error for a watch', async () => {
+    const realHtml = await watchPage().text();
+    for (const response of [
+      new Response('<html><div id="root"></div></html>', { headers: { 'content-type': 'text/html' } }),
+      new Response(realHtml, { status: 403, headers: { 'content-type': 'text/html' } }),
+      new Response(realHtml, { headers: { 'content-type': 'text/plain' } }),
+    ]) {
+      fetchMock.mockResolvedValueOnce(response);
+      expect(await isWatchAlive('/api/ppt-proxy/51234')).toBe(false);
+    }
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+    expect(await isWatchAlive('/api/ppt-proxy/51234')).toBe(false);
   });
 
   it('refresh restarts the watch for the tab; a tab without a viewer still reports "not registered"', async () => {

@@ -1,3 +1,7 @@
+/**
+ * 文件：packages/desktop/src/renderer/pages/settings/components/SettingsSider.tsx
+ * 职责：按原生设置顺序展示可通过键盘操作的侧栏导航；扩展锚点与路由回调保持原口径。
+ */
 import FlexFullContainer from '@/renderer/components/layout/FlexFullContainer';
 import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/platform';
 import { type IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
@@ -21,7 +25,7 @@ import classNames from 'classnames';
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Tooltip } from '@arco-design/web-react';
+import { Button, Tooltip } from '@arco-design/web-react';
 import { getSiderTooltipProps } from '@/renderer/utils/ui/siderTooltip';
 
 /** Builtin settings tab IDs in display order (must match router paths). */
@@ -219,14 +223,27 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
           <React.Fragment key={item.id}>
             {groupHeader}
             <Tooltip {...siderTooltipProps} content={item.label} position='right'>
-              <div
+              <Button
+                type='text'
+                htmlType='button'
+                aria-label={item.label}
+                aria-current={isSelected ? 'page' : undefined}
+                style={{
+                  display: 'flex',
+                  width: '100%',
+                  height: 34,
+                  padding: collapsed ? 0 : '0 10px',
+                  border: 0,
+                  borderRadius: 8,
+                  color: 'inherit',
+                }}
                 data-settings-id={item.id}
                 data-settings-path={item.path}
                 className={classNames(
                   'settings-sider__item h-34px rd-8px flex items-center gap-8px group cursor-pointer relative overflow-hidden shrink-0 conversation-item [&.conversation-item+&.conversation-item]:mt-2px transition-colors',
                   collapsed ? 'w-full justify-center px-0' : 'justify-start px-10px',
                   {
-                    'hover:bg-fill-3': !isSelected,
+                    '!bg-transparent hover:!bg-fill-3': !isSelected,
                     '!bg-fill-3': isSelected,
                   }
                 )}
@@ -262,7 +279,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
                     {item.label}
                   </div>
                 </FlexFullContainer>
-              </div>
+              </Button>
             </Tooltip>
           </React.Fragment>
         );

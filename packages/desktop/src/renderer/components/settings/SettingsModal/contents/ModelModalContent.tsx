@@ -479,12 +479,14 @@ const ModelModalContent: React.FC = () => {
                           </span>
                           {/* 供应商启用开关 / Provider enable switch */}
                           <Switch
+                            aria-label={`${t('settings.modelProvider')}: ${platform.name}`}
                             size='small'
                             checked={getProviderState(platform).checked}
                             onChange={() => toggleProviderEnabled(platform)}
                           />
                           <div className='flex items-center gap-4px'>
                             <Button
+                              aria-label={`${t('settings.addModel')}: ${platform.name}`}
                               size='mini'
                               className='model-provider-action-btn !w-28px !h-28px !min-w-28px text-t-secondary hover:text-t-primary'
                               icon={<Plus size='14' />}
@@ -495,12 +497,14 @@ const ModelModalContent: React.FC = () => {
                               onOk={() => removePlatform(platform.id)}
                             >
                               <Button
+                                aria-label={`${t('common.delete')}: ${platform.name}`}
                                 size='mini'
                                 className='model-provider-action-btn !w-28px !h-28px !min-w-28px text-t-secondary hover:text-t-primary'
                                 icon={<Minus size='14' />}
                               />
                             </Popconfirm>
                             <Button
+                              aria-label={`${t('common.edit')}: ${platform.name}`}
                               size='mini'
                               className='model-provider-action-btn !w-28px !h-28px !min-w-28px text-t-secondary hover:text-t-primary'
                               icon={<Write size='14' />}
@@ -610,6 +614,7 @@ const ModelModalContent: React.FC = () => {
 
                               {/* 模型启用开关 / Model enable switch */}
                               <Switch
+                                aria-label={`${t('settings.model')}: ${model}`}
                                 className='shrink-0'
                                 size='small'
                                 checked={isModelEnabled(platform, model)}
@@ -620,6 +625,7 @@ const ModelModalContent: React.FC = () => {
                             <div className='flex items-center gap-6px shrink-0'>
                               <Tooltip content={t('settings.configureModel')}>
                                 <Button
+                                  aria-label={`${t('settings.configureModel')}: ${model}`}
                                   size='mini'
                                   className='!w-28px !h-28px !min-w-28px !bg-[var(--color-bg-1)] text-t-secondary hover:text-t-primary hover:!bg-[var(--fill-0)]'
                                   icon={<SettingTwo theme='outline' size='16' />}
@@ -630,6 +636,7 @@ const ModelModalContent: React.FC = () => {
                               {/* 心跳检测按钮 / Health check button */}
                               <Tooltip content={t('settings.healthCheck')}>
                                 <Button
+                                  aria-label={`${t('settings.healthCheck')}: ${model}`}
                                   size='mini'
                                   className='!w-28px !h-28px !min-w-28px !bg-[var(--color-bg-1)] text-t-secondary hover:text-t-primary hover:!bg-[var(--fill-0)]'
                                   icon={<Heartbeat theme='outline' size='16' />}
@@ -668,6 +675,7 @@ const ModelModalContent: React.FC = () => {
                                 }}
                               >
                                 <Button
+                                  aria-label={`${t('common.delete')}: ${model}`}
                                   size='mini'
                                   className='!w-28px !h-28px !min-w-28px !bg-[var(--color-bg-1)] text-t-secondary hover:text-t-primary hover:!bg-[var(--fill-0)]'
                                   icon={<DeleteFour theme='outline' size='18' strokeWidth={2} />}

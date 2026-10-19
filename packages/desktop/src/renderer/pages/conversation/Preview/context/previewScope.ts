@@ -9,27 +9,22 @@
  * panel reset". The preview is isolated per **scope**: switching to a different
  * scope closes the open preview; staying within the same scope keeps it open.
  *
- * The scope dimension is the **project** (`project_id`), matching the product
- * model where the Explorer + preview are Project-level: switching conversations
- * within the same project keeps the preview open; switching project resets it.
- * Until the backend populates `conversation.project_id` (stage-3 contract), and
- * for conversations without a bound project, it falls back to the **workspace**
- * path — preserving the previous per-workspace behavior with no regression.
+ * 对话路由优先用会话 id，避免共享项目的另一会话文件被自动恢复（ADR-0032）。
+ * 不带会话 id 的原调用保留 project/workspace 隔离；旧项目记录不迁移或删除。
  *
  * Pure: no React, no I/O — so it is trivially unit-testable in isolation.
  */
 export type PreviewScopeKey = string | null;
 
 /**
- * Derive the preview isolation scope key. Project id takes precedence; workspace
- * is the fallback while project id is unavailable. Empty/undefined values are
- * treated as absent, yielding the next fallback or `null`.
+ * 有会话 id 时立即得到独立记录键，无需等待项目读取；原两参数调用保持兼容。
  */
 export function previewScopeKey(
   projectId: string | null | undefined,
-  workspace: string | null | undefined
+  workspace: string | null | undefined,
+  conversationId?: string
 ): PreviewScopeKey {
-  return projectId || workspace || null;
+  return conversationId ? `conversation:${conversationId}` : projectId || workspace || null;
 }
 
 /**

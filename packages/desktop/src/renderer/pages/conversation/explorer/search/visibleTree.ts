@@ -27,6 +27,8 @@ export function filterVisibleTree(nodes: TreeNode[], roots: DirRef[] | undefined
         root.pe_id === ref.pe_id && (ref.relative_path === '' || root.relative_path.startsWith(`${ref.relative_path}/`))
     );
     if (!ancestor) return [];
+    // 折叠目录没有 children，不等于目标目录不存在；保留可重新展开的祖先。
+    if (node.children === undefined) return [node];
     const children = filterVisibleTree(node.children ?? [], roots);
     return children.length ? [{ ...node, children }] : [];
   });

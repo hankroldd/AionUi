@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { previewScopeKey } from '@/renderer/pages/conversation/Preview/context/previewScope';
 import { act, render, cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -65,6 +66,48 @@ afterEach(() => {
 });
 
 describe('PreviewContext scope isolation (closePreviewIfScopeChanged)', () => {
+  it('keeps files from another conversation out of a fresh conversation in the same project', () => {
+    mount();
+    act(() => ctx.closePreviewIfScopeChanged(previewScopeKey('shared-project', '/shared', 'conversation-a')));
+    openADoc();
+    act(() => ctx.closePreviewIfScopeChanged(previewScopeKey('shared-project', '/shared', 'conversation-b')));
+    expect(ctx.isOpen).toBe(false);
+    expect(ctx.tabs).toHaveLength(0);
+    act(() => ctx.closePreviewIfScopeChanged(previewScopeKey('shared-project', '/shared', 'conversation-a')));
+    expect(ctx.isOpen).toBe(true);
+    expect(ctx.tabs[0].title).toBe('Doc');
+  });
+
+  it('keeps a long unsaved edit through repeated conversation switches', () => {
+    mount();
+    act(() => ctx.closePreviewIfScopeChanged('conversation:a'));
+    openADoc();
+    const draft = '未保存'.repeat(30_000);
+    act(() => ctx.updateContent(draft));
+    for (const text of [draft, `${draft}继续修改`]) {
+      act(() => ctx.updateContent(text));
+      act(() => ctx.closePreviewIfScopeChanged('conversation:b'));
+      expect(ctx.tabs).toHaveLength(0);
+      act(() => ctx.closePreviewIfScopeChanged('conversation:a'));
+      expect(ctx.activeTab?.content).toBe(text);
+      expect(ctx.activeTab?.originalContent).toBe('# hello');
+      expect(ctx.activeTab?.isDirty).toBe(true);
+    }
+  });
+
+  it('does not restore another account’s inactive unsaved preview after logout cleanup', () => {
+    mount();
+    act(() => ctx.closePreviewIfScopeChanged('conversation:a'));
+    openADoc();
+    act(() => ctx.updateContent('未保存'.repeat(30_000)));
+    act(() => ctx.closePreviewIfScopeChanged('conversation:b'));
+    localStorage.clear();
+    act(() => ctx.clearPreviewForScope());
+    act(() => ctx.closePreviewIfScopeChanged('conversation:a'));
+    expect(ctx.tabs).toHaveLength(0);
+    expect(ctx.isOpen).toBe(false);
+  });
+
   it('keeps the preview open when the scope key is unchanged', () => {
     mount();
     // Establish the current scope, then open a preview within it.

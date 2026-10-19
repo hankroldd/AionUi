@@ -27,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TChatConversation } from '@/common/config/storage';
 
+const { previewScopeChanged } = vi.hoisted(() => ({ previewScopeChanged: vi.fn() }));
 let currentId = 'c1';
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }));
 vi.mock('react-router-dom', () => ({ useParams: () => ({ id: currentId }), useNavigate: () => vi.fn() }));
@@ -34,7 +35,7 @@ vi.mock('@/renderer/pages/conversation/components/ChatConversation', () => ({
   default: () => <div data-testid='chat' />,
 }));
 vi.mock('@/renderer/pages/conversation/Preview', () => ({
-  usePreviewContext: () => ({ closePreviewIfScopeChanged: vi.fn() }),
+  usePreviewContext: () => ({ closePreviewIfScopeChanged: previewScopeChanged }),
 }));
 vi.mock('@/renderer/hooks/chat/useAutoTitle', () => ({ useAutoTitle: () => ({ syncTitleFromHistory: vi.fn() }) }));
 
@@ -62,6 +63,7 @@ const renderIndex = () =>
 
 beforeEach(() => {
   resetCurrentProjectForTest();
+  previewScopeChanged.mockClear();
   getConversationOrNull.mockClear();
   currentId = 'c1';
   // snapshot loaded from GET /api/conversations — every row carries project_id.
@@ -77,6 +79,14 @@ afterEach(() => {
 });
 
 describe('conversation route — synchronous project publish from list snapshot (①②)', () => {
+  it('switches preview ownership before the new conversation fetch resolves', () => {
+    const { rerender } = renderIndex();
+    expect(previewScopeChanged).toHaveBeenLastCalledWith('conversation:c1');
+    currentId = 'c2';
+    rerender(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><ChatConversationIndex /></SWRConfig>);
+    expect(previewScopeChanged).toHaveBeenLastCalledWith('conversation:c2');
+  });
+
   it('publishes the known conversation project id synchronously (fetch never resolves)', () => {
     renderIndex();
     expect(getConversationOrNull).toHaveBeenCalled(); // fetch started…

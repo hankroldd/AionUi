@@ -3,19 +3,12 @@
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
  *
- * The preview tab strip's only close affordance used to be the per-tab X. The
- * right-click menu offered close-left / right / others / all but had no way to
- * close the tab you actually right-clicked — and the menu itself never appeared,
- * because the preview panel's enter animation leaves a transform behind, which
- * makes a `position: fixed` descendant resolve against the panel instead of the
- * viewport and pushed the menu off-screen.
- *
- * These cover the portal that fixes that, the entries added alongside it, and
- * the right-click wiring, which had no test at all (the e2e only exercised
- * middle-click).
+ * 右键菜单必须挂到body，避开预览入场transform造成的固定定位偏移；
+ * 这些回归保留菜单动作、禁用态、键盘入口和原关闭回调。
  */
 
 import React from 'react';
+import userEvent from '@testing-library/user-event';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -377,5 +370,28 @@ describe('preview tab right-click wiring', () => {
     fireEvent.contextMenu(screen.getByText('beta.md'));
     expect(onContextMenu).toHaveBeenCalled();
     expect(onContextMenu.mock.calls[0][1]).toBe('b');
+  });
+});
+
+describe('preview context menu keyboard entry', () => {
+  it.each(['{Enter}', ' '])('focuses the first enabled action and accepts %s', async (key) => {
+    const user = userEvent.setup();
+    const handlers = renderMenu('b');
+    expect(screen.getByRole('button', { name: 'preview.close', exact: true })).toHaveFocus();
+    await user.keyboard(key);
+    expect(handlers.onCloseTab).toHaveBeenCalledWith('b');
+    expect(handlers.onClose).toHaveBeenCalled();
+  });
+
+  it('returns keyboard focus to the invoker on dismissal', () => {
+    const invoker = document.createElement('button');
+    document.body.append(invoker);
+    invoker.focus();
+    const view = renderMenu('b');
+    expect(screen.getByRole('button', { name: 'preview.close', exact: true })).toHaveFocus();
+    cleanup();
+    expect(view.container.isConnected).toBe(false);
+    expect(invoker).toHaveFocus();
+    invoker.remove();
   });
 });

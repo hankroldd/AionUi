@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { Button } from '@arco-design/web-react';
 import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -130,23 +131,20 @@ interface PreviewContextMenuProps {
   onRevealInFolder: (tabId: string) => void;
 }
 
-/**
- * 单个菜单项。禁用态只置灰并吞掉点击 —— 保留条目而不是隐藏，菜单的行高才稳定，
- * 用户也能看出「这项存在，只是现在没有目标」。
- *
- * A single menu entry. The disabled state greys out and swallows the click:
- * keeping the entry rather than hiding it holds the menu's layout steady and
- * shows the user the action exists but currently has no target.
- */
+/** 禁用条目保留位置，让用户看见当前不可用的操作。 */
 const MenuItem: React.FC<{
   label: string;
   shortcut?: string;
   disabled?: boolean;
   onSelect: () => void;
 }> = ({ label, shortcut, disabled, onSelect }) => (
-  <div
-    className={`flex items-center justify-between gap-24px px-12px py-8px text-12px transition-colors ${
-      disabled ? 'opacity-50 cursor-not-allowed text-t-tertiary' : 'cursor-pointer text-t-primary hover:bg-bg-3'
+  <Button
+    type='text'
+    htmlType='button'
+    aria-label={label}
+    disabled={disabled}
+    className={`!flex !w-full !h-auto items-center justify-between gap-24px !px-12px !py-8px !border-0 !rd-0 !text-12px !bg-transparent transition-colors ${
+      disabled ? 'opacity-50 cursor-not-allowed !text-t-tertiary' : 'cursor-pointer !text-t-primary hover:!bg-bg-3'
     }`}
     onClick={() => {
       if (disabled) return;
@@ -155,7 +153,7 @@ const MenuItem: React.FC<{
   >
     <span>{label}</span>
     {shortcut && <span className='text-11px text-t-tertiary flex-shrink-0'>{shortcut}</span>}
-  </div>
+  </Button>
 );
 
 /** 分隔线 / Divider */
@@ -187,6 +185,16 @@ const PreviewContextMenu: React.FC<PreviewContextMenuProps> = ({
   const { t } = useTranslation();
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x: contextMenu.x, y: contextMenu.y });
+
+  // 菜单打开时进入首个可用操作，关闭时回到原入口；操作本身使用原生按钮键盘行为。
+  useLayoutEffect(() => {
+    if (!contextMenu.show || !contextMenu.tabId) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    contextMenuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    return () => {
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [contextMenu.show, contextMenu.tabId]);
 
   // 点击外部关闭上下文菜单 / Close context menu when clicking outside
   useEffect(() => {

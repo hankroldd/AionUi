@@ -114,6 +114,19 @@ afterEach(() => {
 });
 
 describe('本次对话文件入口', () => {
+  it('全部折叠后保留可重新展开的会话祖先，不误报暂无文件', async () => {
+    h.fetch.mockResolvedValue(response(workspace('c1')));
+    mount();
+    await screen.findByText('report-current.pptx');
+    fireEvent.click(screen.getByRole('button', { name: 'conversation.explorer.collapseAll' }));
+    expect(screen.getByText('project')).toBeVisible();
+    expect(screen.queryByText('暂无本次对话文件')).toBeNull();
+    expect(screen.queryByText('other.txt')).toBeNull();
+    fireEvent.click(screen.getByText('project'));
+    expect(await screen.findByText('deck')).toBeVisible();
+    expect(screen.queryByText('other.txt')).toBeNull();
+  });
+
   it('活动会话尚未读到时不闪出共享项目树，全部入口保持可用', async () => {
     setCurrentConversation(null);
     mount();

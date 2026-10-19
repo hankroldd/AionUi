@@ -31,6 +31,21 @@ afterEach(() => {
 });
 
 describe('space locate-output intent', () => {
+  it('回收站优先显示自己的标题并移除旧空间定位警告，恢复找到后不再残留', async () => {
+    let restored = false;
+    fixture((q) => (q.get('origin') === 'outputs' && restored ? list([OUT], 1) : list([], 0)));
+    locate('res_out', '季度报告.docx');
+    const { rerender } = render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
+    await screen.findByText(/在“产物”里没找到/);
+    rerender(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' trash />);
+    expect(await screen.findByRole('heading', { name: '回收站', exact: true })).toBeVisible();
+    await waitFor(() => expect(screen.queryByText(/在“产物”里没找到/)).toBeNull());
+    restored = true;
+    rerender(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' trash={false} />);
+    await waitFor(() => expect(document.querySelector('[data-resource-id="res_out"]')).toBeTruthy());
+    await waitFor(() => expect(screen.queryByText(/在“产物”里没找到/)).toBeNull());
+  });
+
   it('opens Outputs searched by file name, marks and scrolls to the resource, and consumes the intent once (a remount does not re-apply it)', async () => {
     fixture((q) => (q.get('origin') === 'outputs' && q.get('q') === '季度报告.docx' ? list([OTHER, OUT], 2) : list([], 0)));
     locate('res_out', '季度报告.docx');

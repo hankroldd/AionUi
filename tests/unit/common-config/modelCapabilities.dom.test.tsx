@@ -214,12 +214,14 @@ vi.mock('@arco-design/web-react', async (importOriginal) => {
       children,
       icon,
       onClick,
+      'aria-label': label,
     }: {
       children?: React.ReactNode;
       icon?: React.ReactNode;
       onClick?: () => void;
+      'aria-label'?: string;
     }) => (
-      <button type='button' onClick={onClick}>
+      <button type='button' onClick={onClick} aria-label={label}>
         {icon}
         {children}
       </button>
@@ -251,8 +253,22 @@ vi.mock('@arco-design/web-react', async (importOriginal) => {
         ? React.cloneElement(children as React.ReactElement<{ onClick?: () => void }>, { onClick: onOk })
         : children,
     Select: Object.assign(MockSelect, { Option: MockSelectOption }),
-    Switch: ({ checked, onChange }: { checked?: boolean; onChange?: (checked: boolean) => void }) => (
-      <button type='button' role='switch' aria-checked={checked} onClick={() => onChange?.(!checked)}>
+    Switch: ({
+      checked,
+      onChange,
+      'aria-label': label,
+    }: {
+      checked?: boolean;
+      onChange?: (checked: boolean) => void;
+      'aria-label'?: string;
+    }) => (
+      <button
+        type='button'
+        role='switch'
+        aria-label={label}
+        aria-checked={checked}
+        onClick={() => onChange?.(!checked)}
+      >
         switch
       </button>
     ),
@@ -601,6 +617,28 @@ describe('configured model list', () => {
     mocks.updateProvider.mockResolvedValue(configuredProvider);
   });
 
+  it('names platform and model icon actions using existing translated labels', () => {
+    render(<ModelModalContent />);
+    for (const name of [
+      'settings.addModel: OpenAI compatible',
+      'common.delete: OpenAI compatible',
+      'common.edit: OpenAI compatible',
+      'settings.configureModel: gpt-responses',
+      'settings.healthCheck: gpt-responses',
+      'common.delete: gpt-responses',
+    ]) {
+      expect(screen.getByRole('button', { name, exact: true })).toBeInTheDocument();
+    }
+  });
+
+  it('names the provider and model enable switches', () => {
+    render(<ModelModalContent />);
+    expect(screen.getByRole('switch', { name: 'settings.modelProvider: OpenAI compatible' })).toBeInTheDocument();
+    for (const model of configuredProvider.models) {
+      expect(screen.getByRole('switch', { name: `settings.model: ${model}` })).toHaveAttribute('aria-checked', 'true');
+    }
+  });
+
   it('shows explicit and automatic Vision and API mode states', () => {
     render(<ModelModalContent />);
 
@@ -615,7 +653,7 @@ describe('configured model list', () => {
   it('opens the selected model in the configuration dialog', async () => {
     render(<ModelModalContent />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'configure' })[1]);
+    fireEvent.click(screen.getByRole('button', { name: 'settings.configureModel: gpt-chat', exact: true }));
 
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -627,7 +665,7 @@ describe('configured model list', () => {
   it('removes all per-model state when deleting a model', async () => {
     render(<ModelModalContent />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'delete' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'common.delete: gpt-responses', exact: true }));
 
     await waitFor(() => {
       expect(mocks.updateProvider).toHaveBeenCalledWith(

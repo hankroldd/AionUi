@@ -26,16 +26,10 @@ const ChatConversationIndex: React.FC = () => {
     return getConversationOrNull(id!);
   });
 
-  // Close preview only when the isolation scope changes, not on every
-  // conversation switch. Same-scope conversations keep the preview open. The
-  // scope is `previewScopeKey` = project (falling back to workspace until the
-  // backend populates project_id). The ref lives in PreviewContext (app-root
-  // level) so it survives remounts.
-  useEffect(() => {
-    if (!data) return;
-    const workspace = (data.extra as { workspace?: string } | undefined)?.workspace ?? null;
-    closePreviewIfScopeChanged(previewScopeKey(data.project_id ?? null, workspace));
-  }, [data, closePreviewIfScopeChanged]);
+  // [mycowork] 切页前换预览记录，不能等异步项目读取后才清掉另一会话的文件（ADR-0032）。
+  useLayoutEffect(() => {
+    if (id) closePreviewIfScopeChanged(previewScopeKey(null, null, id));
+  }, [id, closePreviewIfScopeChanged]);
 
   // Publish the active project SYNCHRONOUSLY on conversation switch, from the
   // in-memory list snapshot (every row carries project_id) — before the async

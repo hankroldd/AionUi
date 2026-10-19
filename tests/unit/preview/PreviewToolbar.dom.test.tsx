@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import PreviewToolbar from '@/renderer/pages/conversation/Preview/components/PreviewPanel/PreviewToolbar';
 
 vi.mock('react-i18next', () => ({
@@ -77,5 +78,84 @@ describe('PreviewToolbar save button', () => {
     expect(save.parentElement?.lastElementChild).toBe(save);
     // ...and it must come after the refresh control in DOM order.
     expect(refresh.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+afterEach(cleanup);
+
+describe('PreviewToolbar keyboard actions', () => {
+  it.each(['{Enter}', ' '])('Tab reaches visible actions and %s uses each original callback', async (key) => {
+    const user = userEvent.setup();
+    const props = {
+      ...baseProps,
+      content_type: 'html',
+      isHTML: true,
+      showOpenInSystemButton: true,
+      refreshState: 'idle',
+      refreshActionable: true,
+      onRefresh: vi.fn(),
+      showSave: true,
+      saveActionable: true,
+      onSave: vi.fn(),
+      onViewModeChange: vi.fn(),
+      onSplitScreenToggle: vi.fn(),
+      onOpenInSystem: vi.fn(),
+      onDownload: vi.fn(),
+      onInspectModeToggle: vi.fn(),
+    };
+    render(<PreviewToolbar {...props} />);
+    for (const name of [
+      'preview.code',
+      'preview.preview',
+      'preview.openSplitScreen',
+      'preview.refresh.label',
+      'preview.openInSystemApp',
+      'preview.downloadFile',
+      'preview.html.inspectElementEnable',
+      'common.save',
+    ]) {
+      // Each activation depends on the preceding keyboard focus.
+      // eslint-disable-next-line no-await-in-loop
+      await user.tab();
+      expect(screen.getByRole('button', { name, exact: true })).toHaveFocus();
+      // eslint-disable-next-line no-await-in-loop
+      await user.keyboard(key);
+    }
+    expect(props.onViewModeChange.mock.calls).toEqual([['source'], ['preview']]);
+    expect(
+      [
+        props.onSplitScreenToggle,
+        props.onRefresh,
+        props.onOpenInSystem,
+        props.onDownload,
+        props.onInspectModeToggle,
+        props.onSave,
+      ].map((handler) => handler.mock.calls.length)
+    ).toEqual([1, 1, 1, 1, 1, 1]);
+  });
+
+  it('exposes disabled refresh and save without allowing keyboard activation', async () => {
+    const user = userEvent.setup();
+    const onRefresh = vi.fn(),
+      onSave = vi.fn();
+    render(
+      <PreviewToolbar
+        {...baseProps}
+        hasFilePath={false}
+        refreshState='disabled'
+        refreshActionable={false}
+        onRefresh={onRefresh}
+        showSave
+        saveActionable={false}
+        onSave={onSave}
+      />
+    );
+    expect(screen.getByTestId('preview-refresh')).toBeDisabled();
+    expect(screen.getByTestId('preview-save')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('preview-refresh'));
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'preview.downloadFile' })).toHaveFocus();
+    expect(onRefresh).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
   });
 });

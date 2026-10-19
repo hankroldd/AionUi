@@ -4,160 +4,39 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { iconColors } from '@/renderer/styles/colors';
-import { Close } from '@icon-park/react';
+import { Button } from '@arco-design/web-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { shouldShowDownload } from './previewToolbarUtils';
 
-/**
- * PreviewToolbar 组件属性
- * PreviewToolbar component props
- */
+/** 预览工具栏属性。 */
 interface PreviewToolbarProps {
-  /**
-   * 内容类型
-   * Content type
-   */
   content_type: string;
-
-  /**
-   * 是否为 Markdown 文件
-   * Whether it's a Markdown file
-   */
   isMarkdown: boolean;
-
-  /**
-   * 是否为 HTML 文件
-   * Whether it's an HTML file
-   */
   isHTML: boolean;
-
-  /**
-   * 当前视图模式
-   * Current view mode
-   */
   viewMode: 'source' | 'preview';
-
-  /**
-   * 是否启用分屏模式
-   * Whether split-screen mode is enabled
-   */
   isSplitScreenEnabled: boolean;
-
-  /**
-   * 文件名
-   * Filename
-   */
   file_name?: string;
-
-  /**
-   * 是否显示"在系统中打开"按钮
-   * Whether to show "Open in System" button
-   */
   showOpenInSystemButton: boolean;
-
-  /**
-   * 这个 tab 没有内容可操作（超过大小上限，或格式无法渲染）。
-   * 视图切换、分屏、审查元素都是对内容的操作，隐藏；
-   * 但「在系统中打开」与「下载」照常显示 —— 那是用户唯一的出路。
-   *
-   * The tab has no content to act on — either it exceeded the size ceiling or its
-   * format cannot be rendered. View-mode switching, split screen and inspect all
-   * operate on content, so they are hidden; "open in system" and "download" stay,
-   * because they are the only way the user reaches the file.
-   */
+  /** 无可渲染内容时隐藏内容操作，保留系统打开和下载两个文件出口。 */
   hasNoRenderableContent?: boolean;
-
-  /**
-   * 文件是否在磁盘上（有 file_path）。
-   * 刻意与 showOpenInSystemButton 分开传：后者现在也接受纯 fileRef（逃生出口），
-   * 不再等价于「文件在磁盘上」，继续复用它会让 Explorer 打开的 code/md tab
-   * 悄悄丢掉下载按钮。
-   *
-   * Whether the file exists on disk (has a file_path). Passed separately from
-   * showOpenInSystemButton on purpose: that flag now also accepts a bare fileRef
-   * (the escape hatch), so it no longer means "on disk". Reusing it here would
-   * silently drop the download button from explorer-opened code/markdown tabs.
-   */
+  /** 与系统打开分开：后者也接受纯 fileRef，不能再代表文件已在磁盘上。 */
   hasFilePath: boolean;
-
-  /**
-   * 刷新按钮状态 token；`'hidden'` 或未提供时不渲染。
-   * Refresh control state token; not rendered when `'hidden'` or absent.
-   */
+  /** hidden 或未提供时不渲染刷新。 */
   refreshState?: string;
-
-  /** 刷新按钮是否可点 / Whether the refresh control accepts a click */
   refreshActionable?: boolean;
-
-  /** 点击刷新 / Reload the current tab */
   onRefresh?: () => void;
-
-  /**
-   * 是否显示保存按钮（仅可编辑类型且有可渲染内容时）。
-   * Whether to show the save button (only editable types with renderable content).
-   */
   showSave?: boolean;
-
-  /** 保存按钮是否可点（有未保存修改时）/ Whether the save control accepts a click (has unsaved edits) */
   saveActionable?: boolean;
-
-  /** 点击保存 / Save the current tab */
   onSave?: () => void;
-
-  /**
-   * 设置视图模式
-   * Set view mode
-   */
   onViewModeChange: (mode: 'source' | 'preview') => void;
-
-  /**
-   * 设置分屏模式
-   * Set split-screen mode
-   */
   onSplitScreenToggle: () => void;
-
-  /**
-   * 在系统中打开文件
-   * Open file in system
-   */
   onOpenInSystem: () => void;
-
-  /**
-   * 下载文件
-   * Download file
-   */
   onDownload: () => void;
-
-  /**
-   * 关闭预览面板
-   * Close preview panel
-   */
   onClose: () => void;
-
-  /**
-   * HTML 审核元素模式（仅HTML类型使用）
-   * HTML inspect mode (only for HTML type)
-   */
   inspectMode?: boolean;
-
-  /**
-   * 切换HTML审核元素模式（仅HTML类型使用）
-   * Toggle HTML inspect mode (only for HTML type)
-   */
   onInspectModeToggle?: () => void;
-
-  /**
-   * 左侧额外渲染内容
-   * Extra content rendered on the left section
-   */
   leftExtra?: React.ReactNode;
-
-  /**
-   * 右侧额外渲染内容
-   * Extra content rendered on the right section
-   */
   rightExtra?: React.ReactNode;
 }
 
@@ -175,7 +54,6 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
   isHTML,
   viewMode,
   isSplitScreenEnabled,
-  file_name,
   showOpenInSystemButton,
   hasNoRenderableContent = false,
   hasFilePath,
@@ -189,7 +67,6 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
   onSplitScreenToggle,
   onOpenInSystem,
   onDownload,
-  onClose,
   inspectMode,
   onInspectModeToggle,
   leftExtra,
@@ -205,8 +82,10 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
   const showDownload = shouldShowDownload(content_type, hasFilePath);
 
   const toolbarBtn =
-    'flex items-center gap-2px px-8px py-3px rd-4px cursor-pointer transition-colors duration-150 text-12px font-medium text-t-secondary hover:text-t-primary hover:bg-bg-3';
-  const toolbarBtnActive = '!text-white bg-brand hover:!text-white hover:bg-brand-hover';
+    'preview-toolbar-action !flex items-center gap-2px !h-auto !px-8px !py-3px !border-0 !rd-4px cursor-pointer transition-colors duration-150 !text-12px !font-medium';
+  const toolbarBtnIdle = '!bg-transparent hover:!bg-bg-3';
+  const toolbarBtnDefault = `${toolbarBtn} ${toolbarBtnIdle} !text-t-secondary hover:!text-t-primary`;
+  const toolbarBtnActive = `${toolbarBtn} !text-white !bg-brand hover:!text-white hover:!bg-brand-hover`;
   const toolbarIconSize = 12;
 
   return (
@@ -220,8 +99,13 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
           {(isMarkdown || isHTML || isDiff) && !hasNoRenderableContent && (
             <>
               <div className='flex items-center h-full gap-0'>
-                <div
-                  className={`flex items-center h-full px-10px cursor-pointer transition-all duration-150 text-12px font-medium ${viewMode === 'source' ? 'text-brand bg-aou-2 border-b-4 border-brand' : 'text-t-secondary hover:text-t-primary hover:bg-bg-3'}`}
+                <Button
+                  type='text'
+                  htmlType='button'
+                  aria-label={isHTML ? t('preview.code') : t('preview.source')}
+                  aria-pressed={viewMode === 'source'}
+                  style={{ height: '100%', padding: '0 10px', borderRadius: 0, borderWidth: 0 }}
+                  className={`!flex items-center cursor-pointer transition-all duration-150 !text-12px !font-medium ${viewMode === 'source' ? '!text-brand !bg-aou-2 !border-b-4 !border-brand' : '!text-t-secondary !bg-transparent hover:!text-t-primary hover:!bg-bg-3'}`}
                   onClick={() => {
                     try {
                       onViewModeChange('source');
@@ -231,9 +115,14 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                   }}
                 >
                   {isHTML ? t('preview.code') : t('preview.source')}
-                </div>
-                <div
-                  className={`flex items-center h-full px-10px cursor-pointer transition-all duration-150 text-12px font-medium ${viewMode === 'preview' ? 'text-brand bg-aou-2 border-b-4 border-brand' : 'text-t-secondary hover:text-t-primary hover:bg-bg-3'}`}
+                </Button>
+                <Button
+                  type='text'
+                  htmlType='button'
+                  aria-label={t('preview.preview')}
+                  aria-pressed={viewMode === 'preview'}
+                  style={{ height: '100%', padding: '0 10px', borderRadius: 0, borderWidth: 0 }}
+                  className={`!flex items-center cursor-pointer transition-all duration-150 !text-12px !font-medium ${viewMode === 'preview' ? '!text-brand !bg-aou-2 !border-b-4 !border-brand' : '!text-t-secondary !bg-transparent hover:!text-t-primary hover:!bg-bg-3'}`}
                   onClick={() => {
                     try {
                       onViewModeChange('preview');
@@ -243,11 +132,15 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                   }}
                 >
                   {t('preview.preview')}
-                </div>
+                </Button>
               </div>
               {!isDiff && (
-                <div
-                  className={`flex items-center px-8px py-3px rd-4px cursor-pointer transition-colors duration-150 ${isSplitScreenEnabled ? toolbarBtnActive : 'text-t-secondary hover:bg-bg-3'}`}
+                <Button
+                  type='text'
+                  htmlType='button'
+                  aria-label={isSplitScreenEnabled ? t('preview.closeSplitScreen') : t('preview.openSplitScreen')}
+                  aria-pressed={isSplitScreenEnabled}
+                  className={isSplitScreenEnabled ? toolbarBtnActive : toolbarBtnDefault}
                   onClick={() => {
                     try {
                       onSplitScreenToggle();
@@ -268,13 +161,20 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                     <rect x='3' y='3' width='18' height='18' rx='2' />
                     <line x1='12' y1='3' x2='12' y2='21' />
                   </svg>
-                </div>
+                </Button>
               )}
             </>
           )}
 
           {preferActionButtonsInFront && showOpenInSystemButton && (
-            <div className={toolbarBtn} onClick={onOpenInSystem} title={t('preview.openInSystemApp')}>
+            <Button
+              type='text'
+              htmlType='button'
+              aria-label={t('preview.openInSystemApp')}
+              className={toolbarBtnDefault}
+              onClick={onOpenInSystem}
+              title={t('preview.openInSystemApp')}
+            >
               <svg
                 width={toolbarIconSize}
                 height={toolbarIconSize}
@@ -289,10 +189,17 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                 <line x1='10' y1='14' x2='21' y2='3' />
               </svg>
               <span>{t('preview.openInSystemApp')}</span>
-            </div>
+            </Button>
           )}
           {preferActionButtonsInFront && showDownload && (
-            <div className={toolbarBtn} onClick={() => void onDownload()} title={t('preview.downloadFile')}>
+            <Button
+              type='text'
+              htmlType='button'
+              aria-label={t('preview.downloadFile')}
+              className={toolbarBtnDefault}
+              onClick={() => void onDownload()}
+              title={t('preview.downloadFile')}
+            >
               <svg
                 width={toolbarIconSize}
                 height={toolbarIconSize}
@@ -307,7 +214,7 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                 <line x1='12' y1='15' x2='12' y2='3' />
               </svg>
               <span>{t('common.download')}</span>
-            </div>
+            </Button>
           )}
           {leftExtra}
         </div>
@@ -321,10 +228,14 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
               preferActionButtonsInFront, and only PDF injects leftExtra, so anything
               placed in them jumps sides when the tab type changes. */}
           {refreshState !== undefined && refreshState !== 'hidden' && (
-            <div
+            <Button
+              type='text'
+              htmlType='button'
+              aria-label={t('preview.refresh.label')}
+              disabled={!refreshActionable}
               data-testid='preview-refresh'
               data-refresh-state={refreshState}
-              className={`${toolbarBtn} ${refreshState === 'updated' ? '!text-warning-6' : ''} ${
+              className={`${toolbarBtn} ${toolbarBtnIdle} ${refreshState === 'updated' ? '!text-warning-6' : '!text-t-secondary hover:!text-t-primary'} ${
                 refreshActionable ? '' : '!cursor-not-allowed opacity-50'
               }`}
               onClick={refreshActionable ? onRefresh : undefined}
@@ -350,13 +261,20 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                 <polyline points='21 3 21 9 15 9' />
               </svg>
               <span>{t('preview.refresh.label')}</span>
-            </div>
+            </Button>
           )}
 
           {rightExtra}
 
           {!preferActionButtonsInFront && showOpenInSystemButton && (
-            <div className={toolbarBtn} onClick={onOpenInSystem} title={t('preview.openInSystemApp')}>
+            <Button
+              type='text'
+              htmlType='button'
+              aria-label={t('preview.openInSystemApp')}
+              className={toolbarBtnDefault}
+              onClick={onOpenInSystem}
+              title={t('preview.openInSystemApp')}
+            >
               <svg
                 width={toolbarIconSize}
                 height={toolbarIconSize}
@@ -371,11 +289,18 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                 <line x1='10' y1='14' x2='21' y2='3' />
               </svg>
               <span>{t('preview.openInSystemApp')}</span>
-            </div>
+            </Button>
           )}
 
           {!preferActionButtonsInFront && showDownload && (
-            <div className={toolbarBtn} onClick={() => void onDownload()} title={t('preview.downloadFile')}>
+            <Button
+              type='text'
+              htmlType='button'
+              aria-label={t('preview.downloadFile')}
+              className={toolbarBtnDefault}
+              onClick={() => void onDownload()}
+              title={t('preview.downloadFile')}
+            >
               <svg
                 width={toolbarIconSize}
                 height={toolbarIconSize}
@@ -390,12 +315,18 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                 <line x1='12' y1='15' x2='12' y2='3' />
               </svg>
               <span>{t('common.download')}</span>
-            </div>
+            </Button>
           )}
 
           {isHTML && !hasNoRenderableContent && onInspectModeToggle && (
-            <div
-              className={`${toolbarBtn} ${inspectMode ? toolbarBtnActive : ''}`}
+            <Button
+              type='text'
+              htmlType='button'
+              aria-label={
+                inspectMode ? t('preview.html.inspectElementDisable') : t('preview.html.inspectElementEnable')
+              }
+              aria-pressed={Boolean(inspectMode)}
+              className={inspectMode ? toolbarBtnActive : toolbarBtnDefault}
               onClick={onInspectModeToggle}
               title={inspectMode ? t('preview.html.inspectElementDisable') : t('preview.html.inspectElementEnable')}
             >
@@ -414,16 +345,20 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                 <path d='M13 13l6 6' />
               </svg>
               <span>{inspectMode ? t('preview.html.inspecting') : t('preview.html.inspectElement')}</span>
-            </div>
+            </Button>
           )}
 
           {/* 保存：可编辑类型才出现，放在这一栏最后、最靠右；无未保存修改时置灰不可点。
               Save: appears only for editable types, placed last (rightmost) in this row;
               greyed out and non-clickable when there is nothing unsaved. */}
           {showSave && (
-            <div
+            <Button
+              type='text'
+              htmlType='button'
+              aria-label={t('common.save')}
+              disabled={!saveActionable}
               data-testid='preview-save'
-              className={`${toolbarBtn} ${saveActionable ? '!text-warning-6' : '!cursor-not-allowed opacity-50'}`}
+              className={`${toolbarBtn} ${toolbarBtnIdle} ${saveActionable ? '!text-warning-6' : '!text-t-secondary !cursor-not-allowed opacity-50'}`}
               onClick={saveActionable ? onSave : undefined}
               title={saveActionable ? t('preview.save.tooltip') : t('preview.save.clean')}
             >
@@ -442,7 +377,7 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                 <polyline points='7 3 7 8 15 8' />
               </svg>
               <span>{t('common.save')}</span>
-            </div>
+            </Button>
           )}
         </div>
       </div>

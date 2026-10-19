@@ -135,7 +135,7 @@ export interface PreviewContextValue {
   closePreview: () => void;
   /** 切换最大化 / Toggle maximized. */
   toggleMaximized: () => void;
-  /** Discard this scope's tabs entirely (see closePreview for the difference). */
+  /** 登出时丢弃当前标签及各会话未保存快照（收起面板则用 closePreview）。 */
   clearPreviewForScope: () => void;
   closeTab: (tabId: string) => void;
   switchTab: (tabId: string) => void;
@@ -184,7 +184,7 @@ export interface PreviewContextValue {
   clearTabUpdate: (tabId: string) => void;
   findPreviewTab: (type: PreviewContentType, content?: string, metadata?: PreviewMetadata) => PreviewTab | null; // 查找匹配的 tab
   closePreviewByIdentity: (type: PreviewContentType, content?: string, metadata?: PreviewMetadata) => void; // 根据内容关闭指定 tab
-  closePreviewIfScopeChanged: (scopeKey: PreviewScopeKey) => void; // 切换隔离 scope(project;见 previewScope.ts):持久化旧 scope、恢复新 scope 的 tabs+可见性(per-project)
+  closePreviewIfScopeChanged: (scopeKey: PreviewScopeKey) => void; // 切换会话优先的预览记录，见 previewScope.ts。
 
   // 发送框集成 / Sendbox integration
   addToSendBox: (text: string) => void;
@@ -199,9 +199,8 @@ export interface PreviewContextValue {
 
 const PreviewContext = createContext<PreviewContextValue | null>(null);
 
-// Persistence is per **preview scope** (project id, or workspace fallback — see
-// `previewScope.ts`), so each project restores its own open tabs + visibility
-// when switching conversations / projects. Key: `preview-ui:<scope>`.
+// 持久化按预览记录键隔离；对话路由使用会话 id，其余调用保留项目 / 工作目录键。
+// Key: `preview-ui:<scope>`，见 previewScope.ts。
 
 /**
  * How many scopes keep persisted state, least-recently-written evicted first.
@@ -538,6 +537,8 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   // The preview scope currently loaded into state (project id / workspace / null).
   const currentScopeRef = useRef<PreviewScopeKey>(null);
+  // 未保存内容在当前登录期间保留完整内存快照，不受磁盘的 80k / LRU 限制。
+  const unsavedScopesRef = useRef(new Map<string, PersistedScopeState>());
   // Mirror activeTabId in a ref so setTabs updaters can read the latest value
   // without adding activeTabId to their dependencies.
   const activeTabIdRef = useRef<string | null>(null);
@@ -908,7 +909,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   /**
-   * Discard this scope's tabs outright — the panel closes and nothing is restored.
+   * 登出入口清除当前标签与会话内存快照；持久化记录由原 auth 清理流程处理。
    *
    * Separated from {@link closePreview} because "I am done with these files" and "get
    * this panel out of my way" were the same function, and every caller meant the
@@ -917,6 +918,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const toggleMaximized = useCallback(() => setIsMaximized((prev) => !prev), []);
 
   const clearPreviewForScope = useCallback(() => {
+    unsavedScopesRef.current.clear(); // 登出入口同时清除其他会话的未保存快照。
     setIsMaximized(false);
     setIsOpen(false);
     setTabs([]);
@@ -924,16 +926,19 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setDomSnippets([]);
   }, []);
 
-  // Switch the preview scope (project id / workspace fallback / null). Persists
-  // the leaving scope's state, then restores the entering scope's persisted open
-  // tabs + active tab + visibility — this is what makes preview per-project.
+  // 切换预览记录：未保存内容优先从本登录会话的完整快照恢复，其余沿原持久化逻辑。
   // Same scope is a no-op. `currentScopeRef` lives in the app-root context so it
   // survives conversation-page remounts.
   const closePreviewIfScopeChanged = useCallback(
     (scopeKey: PreviewScopeKey) => {
       const prev = currentScopeRef.current;
       if (prev === scopeKey) return;
-      if (prev != null) persistScopeState(prev, { isOpen, tabs, activeTabId });
+      if (prev != null) {
+        const state = { isOpen, tabs, activeTabId };
+        if (tabs.some((tab) => tab.isDirty)) unsavedScopesRef.current.set(prev, state);
+        else unsavedScopesRef.current.delete(prev);
+        persistScopeState(prev, state);
+      }
       // Release the leaving scope's directory subscriptions.
       //
       // Placed before the state updates as a matter of habit, not because the position
@@ -947,7 +952,8 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // would drop the subscriptions the restore had just created.
       resetPreviewWatch();
       currentScopeRef.current = scopeKey;
-      const loaded = scopeKey != null ? loadScopeState(scopeKey) : EMPTY_SCOPE_STATE;
+      const loaded =
+        scopeKey != null ? (unsavedScopesRef.current.get(scopeKey) ?? loadScopeState(scopeKey)) : EMPTY_SCOPE_STATE;
       // Subscriptions for these tabs come from the tabs effect, which this setTabs
       // triggers — restored tabs are subscribed exactly like freshly opened ones.
       setTabs(loaded.tabs);

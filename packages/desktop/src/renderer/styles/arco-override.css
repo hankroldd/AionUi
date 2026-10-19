@@ -513,8 +513,12 @@ body[arco-theme='dark'] .arco-message-error {
 .mycowork-preview-toolbar {
   container-type: inline-size;
 }
+.mycowork-preview-toolbar button.preview-toolbar-action > svg + span {
+  margin-left: 0;
+}
 @container (max-width: 560px) {
-  .mycowork-preview-toolbar div[title] > span {
+  .mycowork-preview-toolbar div[title] > span,
+  .mycowork-preview-toolbar button.preview-toolbar-action[title] > span {
     display: none;
   }
 }

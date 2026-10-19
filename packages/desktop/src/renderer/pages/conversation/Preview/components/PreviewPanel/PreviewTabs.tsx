@@ -1,4 +1,6 @@
 /**
+ * 文件：packages/desktop/src/renderer/pages/conversation/Preview/components/PreviewPanel/PreviewTabs.tsx
+ * 职责：提供可通过键盘操作的预览标签和面板按钮，关闭请求仍交给宿主确认。
  * @license
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
@@ -8,6 +10,7 @@ import { iconColors } from '@/renderer/styles/colors';
 import { Close, Plus } from '@icon-park/react';
 import { IconFullscreen, IconFullscreenExit, IconShrink } from '@arco-design/web-react/icon';
 import React from 'react';
+import { Button } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import type { TabFadeState } from '../../hooks/useTabOverflow';
 
@@ -26,6 +29,7 @@ import type { TabFadeState } from '../../hooks/useTabOverflow';
  * more tabs are there.
  */
 const MAX_TAB_WIDTH_PX = 180;
+const BUTTON_STYLE: React.CSSProperties = { display: 'flex', padding: 0, border: 0, color: 'inherit' };
 
 /**
  * Tab 信息
@@ -234,7 +238,14 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                 {/* min-w-0 是省略号生效的前提：flex 子项默认按内容撑开，不允许收缩
                     min-w-0 is what makes truncation possible: a flex child defaults
                     to its content width and refuses to shrink below it. */}
-                <span className='text-12px flex items-center gap-4px min-w-0'>
+                <Button
+                  type='text'
+                  htmlType='button'
+                  className='items-center gap-4px min-w-0 flex-1 !bg-transparent'
+                  style={{ ...BUTTON_STYLE, height: '100%', fontSize: 12 }}
+                  aria-label={tab.title}
+                  aria-pressed={tab.id === activeTabId}
+                >
                   {/* 站点图标（浏览器 tab）/ Site icon (browser tabs) */}
                   {tab.favicon && (
                     <img
@@ -269,7 +280,7 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                       title={t('preview.unsavedChangesTitle')}
                     />
                   )}
-                </span>
+                </Button>
                 {/* 叉叉比加号「显得」大，是因为加号有 24px 的悬停底框衬托，而叉叉是
                     一个裸露的图标。所以这里给叉叉同样的方框（16px，比加号的 24px 小
                     一档，因为它在 tab 内部），并把图标本身收到 12px，视觉重量就和加号
@@ -278,15 +289,19 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                     24px hover box while the close icon was bare. Giving it the same kind
                     of box (16px — one step down from the plus's 24px since it lives inside
                     a tab) and trimming the glyph to 12px evens out their visual weight. */}
-                <span
-                  className='flex items-center justify-center w-16px h-16px rd-4px flex-shrink-0 hover:bg-bg-3 transition-colors'
+                <Button
+                  type='text'
+                  htmlType='button'
+                  className='items-center justify-center rd-4px flex-shrink-0 !bg-transparent hover:!bg-bg-3 transition-colors'
+                  style={{ ...BUTTON_STYLE, width: 16, height: 16 }}
+                  aria-label={`${t('preview.closeTabTitle')}: ${tab.title}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onCloseTab(tab.id);
                   }}
                 >
                   <Close theme='outline' size='12' fill={iconColors.secondary} className='hover:fill-primary' />
-                </span>
+                </Button>
               </div>
             ))
           ) : (
@@ -295,13 +310,17 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
 
           {/* 新建浏览器 tab / New browser tab */}
           {onNewBrowserTab && (
-            <div
-              className='flex items-center justify-center w-24px h-24px ms-4px rd-4px cursor-pointer flex-shrink-0 hover:bg-bg-3 transition-colors'
+            <Button
+              type='text'
+              htmlType='button'
+              className='items-center justify-center ms-4px rd-4px flex-shrink-0 !bg-transparent hover:!bg-bg-3 transition-colors'
+              style={{ ...BUTTON_STYLE, width: 24, height: 24 }}
+              aria-label={t('preview.browser.newTab')}
               onClick={onNewBrowserTab}
               title={t('preview.browser.newTab')}
             >
               <Plus theme='outline' size='14' fill={iconColors.secondary} />
-            </div>
+            </Button>
           )}
         </div>
 
@@ -311,8 +330,13 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
             {/* 最大化 / 还原：隐藏聊天区让预览铺满，两侧面板保持不变
                 Maximize / restore: hide the chat area so the preview fills it; side panels stay unchanged */}
             {onToggleMaximize && (
-              <div
-                className='flex items-center justify-center w-20px h-20px rd-4px cursor-pointer hover:bg-bg-3 transition-colors'
+              <Button
+                type='text'
+                htmlType='button'
+                className='items-center justify-center rd-4px !bg-transparent hover:!bg-bg-3 transition-colors'
+                style={{ ...BUTTON_STYLE, width: 20, height: 20 }}
+                aria-label={isMaximized ? t('preview.restorePanel') : t('preview.maximizePanel')}
+                aria-pressed={Boolean(isMaximized)}
                 onClick={onToggleMaximize}
                 title={isMaximized ? t('preview.restorePanel') : t('preview.maximizePanel')}
               >
@@ -321,16 +345,20 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                 ) : (
                   <IconFullscreen style={{ fontSize: 14, color: iconColors.secondary }} />
                 )}
-              </div>
+              </Button>
             )}
             {onClosePanel && (
-              <div
-                className='flex items-center justify-center w-20px h-20px rd-4px cursor-pointer hover:bg-bg-3 transition-colors'
+              <Button
+                type='text'
+                htmlType='button'
+                className='items-center justify-center rd-4px !bg-transparent hover:!bg-bg-3 transition-colors'
+                style={{ ...BUTTON_STYLE, width: 20, height: 20 }}
+                aria-label={t('preview.collapsePanel')}
                 onClick={onClosePanel}
                 title={t('preview.collapsePanel')}
               >
                 <IconShrink style={{ fontSize: 14, color: iconColors.secondary }} />
-              </div>
+              </Button>
             )}
           </div>
         )}

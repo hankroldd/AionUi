@@ -203,7 +203,8 @@ describe('P15 切片 B：如何更新 / 断开（只读指引，D294）', () => 
     expect(arxiv.textContent).not.toMatch(/新密钥|吊销密钥/);
     expect(root.textContent).toContain('两处一起改、一起重启');
     expect(root.textContent).toContain('JWT_SECRET'); // Document Server 一侧改哪里
-    expect(root.textContent).toContain('吊销密钥要到 WeKnora 自己的管理界面里做');
+    expect(root.textContent).toContain('密钥的轮换或吊销需在对应服务的管理端处理');
+    expect(screen.getByTestId('conn-guide-office').textContent).not.toContain('WeKnora');
     expect(root.textContent).toContain('ingest_not_configured');
     expect(root.innerHTML).not.toContain('sk-fixture-0000');
     LIST[0] = cap('knowledge.retrieval', 'not_configured');

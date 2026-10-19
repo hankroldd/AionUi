@@ -123,7 +123,9 @@ describe('preview "Edit" (D125)', () => {
       // [mycowork] the toolbar is a CSS container; labelled buttons keep a title so the icon-only narrow mode stays accessible
       const toolbar = document.querySelector('.mycowork-preview-toolbar');
       expect(toolbar).not.toBeNull();
-      expect(toolbar?.querySelectorAll('div[title] > span').length).toBeGreaterThan(0);
+      expect(
+        toolbar?.querySelectorAll('button.preview-toolbar-action[title][aria-label] > span').length
+      ).toBeGreaterThan(0);
       fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
       await waitFor(() => expect(window.location.hash).toBe('#/office/edit-text/res_1'));
       expect(JSON.parse(String(posts('/edit-target')[0]?.[1]?.body))).toEqual({ relative_path: 'notes.txt' });

@@ -140,7 +140,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const workspaceTooltip = workspaceCollapsed
     ? t('common.expandMore', { defaultValue: 'Expand workspace' })
     : t('common.collapse', { defaultValue: 'Collapse workspace' });
-  const backToChatTooltip = t('common.back', { defaultValue: 'Back to Chat' });
+  const backToChatTooltip = t('common.backToPrevious', { defaultValue: 'Back to previous page' });
   const feedbackTooltip = t('conversation.welcome.quickActionFeedback', { defaultValue: 'Report Issue' });
   const isSettingsRoute = location.pathname.startsWith('/settings');
   const iconSize = 18;
@@ -149,8 +149,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const desktopIconStroke = layout?.isMobile ? undefined : 2.5;
   // 统一在标题栏左侧展示主侧栏开关 / Always expose sidebar toggle on titlebar left side
   const showSiderToggle =
-    Boolean(layout?.setSiderCollapsed) &&
-    (layout?.isMobile || !mycoworkNoSiderRoute(location.pathname));
+    Boolean(layout?.setSiderCollapsed) && (layout?.isMobile || !mycoworkNoSiderRoute(location.pathname));
   const showBackToChatButton = Boolean(layout?.isMobile && isSettingsRoute);
   const siderTooltip = layout?.siderCollapsed
     ? t('common.expandMore', { defaultValue: 'Expand sidebar' })

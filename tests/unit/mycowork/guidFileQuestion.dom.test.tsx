@@ -11,10 +11,12 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { getScope, setScopeSelection } from '@mycowork/ui';
 import GuidPage from '@/renderer/pages/guid/GuidPage';
+import type { AssistantDetail } from '@/common/types/agent/assistantTypes';
 
 const boundary = vi.hoisted(() => ({
   translate: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
   owner: 'fixture-owner',
+  detail: null as AssistantDetail | null,
   fetch: vi.fn(),
   create: vi.fn(),
   dialog: vi.fn(),
@@ -90,7 +92,10 @@ vi.mock('@/renderer/pages/conversation/Preview/components/editors', () => ({
 }));
 vi.mock('@/renderer/components/Markdown', () => ({ default: () => null }));
 vi.mock('@/renderer/pages/conversation/Preview/components/viewers', () => ({ MarkdownViewer: () => null }));
-vi.mock('swr', () => ({ default: () => ({ data: null }), mutate: vi.fn() }));
+vi.mock('swr', () => ({
+  default: (key: unknown) => ({ data: typeof key === 'string' && key.startsWith('guid.assistant.detail.') ? boundary.detail : null }),
+  mutate: vi.fn(),
+}));
 vi.mock('@/renderer/pages/guid/components/GuidActionRow', () => ({
   default: ({
     onFilesPicked,
@@ -139,6 +144,7 @@ function tree(state: unknown = null, strict = false) {
 const input = () => screen.getByTestId('guid-input');
 beforeEach(() => {
   boundary.owner = 'fixture-owner';
+  boundary.detail = null;
   boundary.fetch.mockReset();
   boundary.create.mockReset();
   boundary.dialog.mockReset();
@@ -183,4 +189,28 @@ it('another account\'s intent installs an empty required set (send refused), nev
   render(tree(owned('另一个账号的问题', 'other-owner')));
   await waitFor(() => expect(getScope()).toMatchObject({ items: [], views: [], requiredResourceIds: [] }));
   expect(boundary.create).not.toHaveBeenCalled();
+});
+
+
+it.each([
+  { local: [], english: [], base: ['根据资料制作虚构汇报 PPT'], expected: '根据资料制作虚构汇报 PPT' },
+  { local: ['自定义中文示例'], english: ['English custom prompt'], base: ['默认示例'], expected: '自定义中文示例' },
+  { local: [], english: ['English custom prompt'], base: ['默认示例'], expected: 'English custom prompt' },
+])('renders the first non-empty assistant prompt array, preserving locale priority: $expected', async ({ local, english, base, expected }) => {
+  boundary.detail = {
+    id: 'fixture-assistant', source: 'user', agent_status: 'online', team_selectable: true, deletable: true,
+    profile: { name: '虚构材料助手', name_i18n: {}, description_i18n: {} },
+    state: { enabled: true, sort_order: 0 }, engine: { agent_id: 'aionrs' },
+    rules: { content: '', storage_mode: 'inline' },
+    prompts: { recommended: base, recommended_i18n: { 'zh-CN': local, 'en-US': english } },
+    defaults: {
+      model: { mode: 'inherit' }, permission: { mode: 'inherit' }, thought_level: { mode: 'inherit' },
+      skills: { mode: 'fixed', value: [] }, mcps: { mode: 'fixed', value: [] },
+    },
+    capabilities: { default_skill_ids: [], custom_skill_names: [], default_disabled_builtin_skill_ids: [] },
+    preferences: { last_skill_ids: [], last_disabled_builtin_skill_ids: [], last_mcp_ids: [] },
+  };
+  render(tree());
+  expect(await screen.findByRole('button', { name: expected })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'guid.defaultPrompts.understand' })).toBeNull();
 });

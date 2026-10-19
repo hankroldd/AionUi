@@ -32,6 +32,7 @@ vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
 }));
 vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', () => ({ usePreviewContext: () => state }));
 import MyCoworkRail from '@/renderer/mycowork-rail';
+import { KnowledgePage } from '@mycowork/ui';
 
 function RouteProbe() {
   const navigate = useNavigate();
@@ -200,14 +201,26 @@ describe('MyCowork icon rail', () => {
     const trigger = screen.getByRole('button', { name: '更多' });
     fireEvent.click(trigger);
     const menu = await screen.findByRole('menu', { name: '更多' });
-    expect(screen.getAllByRole('menuitem').map((n) => n.textContent)).toEqual(['知识管理', '导入记录', '能力中心', '首次设置', '办公定时', '研究记录']);
-    const first = screen.getByRole('menuitem', { name: '知识管理' });
+    expect(screen.getAllByRole('menuitem').map((n) => n.textContent)).toEqual([
+      '知识管理（预留）',
+      '导入记录',
+      '能力中心',
+      '首次设置',
+      '办公定时（未开放执行）',
+      '研究记录',
+    ]);
+    const first = screen.getByRole('menuitem', { name: '知识管理（预留）' });
     first.focus();
     fireEvent.keyDown(first, { key: 'ArrowDown' });
     expect(document.activeElement?.textContent).toBe('导入记录');
     fireEvent.keyDown(menu, { key: 'Escape' });
     expect(document.activeElement).toBe(trigger);
     await waitFor(() => expect(trigger.getAttribute('aria-expanded')).toBe('false'));
+  });
+  it('reserved knowledge settings link to the existing Space management entry', () => {
+    render(<KnowledgePage lang='zh-CN' />);
+    expect(screen.getByRole('link', { name: '去空间管理知识库' })).toHaveAttribute('href', '#/office/space');
+    expect(screen.getAllByText('暂未开放')).toHaveLength(4);
   });
   it.each([
     ['浅色', 'light'],

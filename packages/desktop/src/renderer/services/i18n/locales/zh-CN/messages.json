@@ -1,4 +1,5 @@
 {
+  "permissionInputUnavailable": "完整工具参数不可用，请先查看操作说明；不确定时拒绝本次操作。",
   "fileChanges": "文件变更",
   "fileChangesCount": "{{count}} 个文件变更",
   "fileChangesCount_one": "{{count}} 个文件变更",

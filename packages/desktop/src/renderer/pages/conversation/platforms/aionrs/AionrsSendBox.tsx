@@ -51,6 +51,7 @@ import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import { Button, Message, Tag } from '@arco-design/web-react';
 import { acceptOfficeTask, SavedResults, TaskCompletion } from '@mycowork/ui';
 import { Brain, Lightning, MagicHat, Shield } from '@icon-park/react';
+import useSWR from 'swr';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
@@ -221,6 +222,11 @@ const AionrsSendBox: React.FC<{
     conversationContext?.workspace, conversationContext?.assistantId, current_model?.id, current_model?.use_model,
     runtimeMode?.currentValue, currentMode, runtimeThoughtLevel?.currentValue]);
   const persistentDraft = useConversationPersistentDraft(conversation_id, draftState, onRestoreDraft, !teamRuntime && !teamSendMessage && !teamPermission);
+  const { data: officeQueueBlocked, error: queueCheckError } = useSWR(
+    persistentDraft.enabled ? ['office-queue-availability', conversation_id, conversationContext?.assistantId] : null,
+    () => isOfficeConversation(conversation_id, conversationContext?.assistantId)
+  );
+  const queueUnavailable = persistentDraft.enabled && officeQueueBlocked !== false;
   const draftStateRef = useLatestRef(draftState);
   const sendingDraftRef = useRef(false);
 
@@ -976,15 +982,21 @@ const AionrsSendBox: React.FC<{
         slash_commands={slash_commands}
         onSlashBuiltinCommand={onSlashBuiltinCommand}
         onAddToDraft={handleAddToQueue}
-        addToDraftDisabled={!canQueueCurrentDraft || !persistentDraft.ready}
-        addToDraftTooltip={
-          isBusy
-            ? t('conversation.commandQueue.addToQueueBusyHint', {
-                defaultValue: 'Save to Draft box and send it later.',
-              })
-            : t('conversation.commandQueue.addToQueue', { defaultValue: 'Save to Draft box' })
-        }
-        allowSendWhileLoading
+        addToDraftDisabled={queueUnavailable || !canQueueCurrentDraft || !persistentDraft.ready}
+          addToDraftTooltip={
+            queueUnavailable
+              ? officeQueueBlocked
+                ? t('conversation.commandQueue.officeUnavailable')
+                : queueCheckError
+                  ? t('conversation.commandQueue.availabilityFailed')
+                  : t('conversation.commandQueue.availabilityChecking')
+              : isBusy
+                ? t('conversation.commandQueue.addToQueueBusyHint', {
+                    defaultValue: 'Save to Draft box and send it later.',
+                  })
+                : t('conversation.commandQueue.addToQueue', { defaultValue: 'Save to Draft box' })
+          }
+          allowSendWhileLoading
         sendButtonPrefix={
           teamRuntime?.onInterruptSend && content.trim() ? (
             <Button

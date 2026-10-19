@@ -2,7 +2,7 @@
  * 文件：tests/unit/mycowork/a11ySemantics.dom.test.tsx
  * 职责：R049 语义标签验收的 DOM 断言：控件有可访问名称、状态不只靠颜色、列表用列表语义、提示可被读屏播报、Popconfirm 可用 Esc 关闭。
  * 边界：只替换 fetch；数据均为虚构。IME 组合输入不在此重复：见 officeResources.b/c、officeFileQuestion 的 isComposing 用例；
- *       “产物类型”Select 的名称见 outputProfileSend；真实 IME/触屏设备验收归负责人。
+ *       “写作结构”Select 的名称见 outputProfileSend；真实 IME/触屏设备验收归负责人。
  * 关联：MyCowork .claude/rules/ui.md；R049。
  */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -61,7 +61,9 @@ afterEach(() => vi.unstubAllGlobals());
 describe('R049 语义标签', () => {
   it('能力页：状态 Tag 带文字、重新检查按钮有名称、读失败的提示可被读屏播报', async () => {
     fetchMock.mockResolvedValue(
-      reply(200, { capabilities: [cap({ state: 'temporarily_unavailable', reason: '虚构' }), cap({ id: 'office-edit' })] }),
+      reply(200, {
+        capabilities: [cap({ state: 'temporarily_unavailable', reason: '虚构' }), cap({ id: 'office-edit' })],
+      })
     );
     render(<OfficeCapabilitiesSlot />, { wrapper: MemoryRouter });
     const row = await screen.findByTestId('capability-knowledge');
@@ -80,7 +82,7 @@ describe('R049 语义标签', () => {
 
   it('首次使用清单：步骤用列表语义，每步状态是文字', async () => {
     fetchMock.mockImplementation(async (url: string) =>
-      String(url).includes('/api/') ? reply(200, { data: {} }) : reply(200, { capabilities: [cap({})] }),
+      String(url).includes('/api/') ? reply(200, { data: {} }) : reply(200, { capabilities: [cap({})] })
     );
     render(<OfficeSetupSlot />);
     const steps = await screen.findByTestId('mycowork-setup-steps');
@@ -106,7 +108,7 @@ describe('R049 语义标签', () => {
 
   it('范围按钮有可访问名称', async () => {
     fetchMock.mockResolvedValue(reply(200, { items: [] }));
-    render(<ScopeChip lang="zh-CN" />);
+    render(<ScopeChip lang='zh-CN' />);
     expect(await screen.findByRole('button', { name: /资料范围/ })).toBeInTheDocument();
   });
 });

@@ -62,7 +62,8 @@ const CONTEXT = {
   withheld: 1,
   superseded: false,
 };
-const SUMMARY = '项目A资料 + 产品库；不联网搜索；AI 可引用 8 · 处理中 1 · 不可用 2；发送时有 1 份资料还在处理中（处理完后本轮可能读到）'; // D145 文案 + W4-9 ③
+const SUMMARY =
+  '项目A资料（整库） + 产品库（整库）；不联网搜索；来源库状态（发送时）：就绪 8 · 处理中 1 · 不可用 2；发送时有 1 份资料还在处理中（处理完后本轮可能读到）'; // D145 文案 + W4-9 ③
 
 const emit = (m: StreamMessage) => act(() => streamListeners.forEach((fn) => fn(m)));
 
@@ -76,7 +77,9 @@ describe('ConversationScopeSlot', () => {
     navigateMock.mockReset();
     // 范围条里的记忆建议徽标（R058）另读 /memory-items，这里统一回空，不占用本文件对 fetchMock 的计数与顺序
     vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
-      String(url).includes('/memory-items') ? Promise.resolve(reply(200, { items: [], total: 0 })) : fetchMock(url, init),
+      String(url).includes('/memory-items')
+        ? Promise.resolve(reply(200, { items: [], total: 0 }))
+        : fetchMock(url, init)
     );
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -87,8 +90,22 @@ describe('ConversationScopeSlot', () => {
     expect(await screen.findByText(SUMMARY)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       '/bridge/v1/conversations/conv%201/context',
-      expect.objectContaining({ credentials: 'same-origin' }),
+      expect.objectContaining({ credentials: 'same-origin' })
     );
+  });
+
+  it.each([1, 0])('distinguishes %i frozen files from the source library counts', async (member_count) => {
+    fetchMock.mockResolvedValue(
+      reply(200, {
+        ...CONTEXT,
+        brief: { ...CONTEXT.brief, groups: [{ ...CONTEXT.brief.groups[0], mode: 'subset', member_count }] },
+      })
+    );
+    render(<ConversationScopeSlot conversation_id='conv-1' />);
+    const strip = await screen.findByTestId('mycowork-scope-strip');
+    await waitFor(() => expect(strip).toHaveTextContent(`项目A资料（本轮已选 ${member_count} 份）`));
+    expect(strip).toHaveTextContent('来源库状态（发送时）：就绪 3 · 处理中 1 · 不可用 0');
+    expect(strip).not.toHaveTextContent('AI 可引用 3');
   });
 
   it('says "plain chat only" when the conversation has no plan (404)', async () => {
@@ -123,7 +140,9 @@ describe('ConversationScopeSlot', () => {
     fetchMock.mockResolvedValueOnce(reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'x' } }));
     fetchMock.mockResolvedValue(reply(200, CONTEXT));
     render(<ConversationScopeSlot conversation_id='conv-1' />);
-    expect(await screen.findByText('资料服务暂不可用，请稍后重试；手头的文件仍可打开和编辑，只是暂时不能语义检索')).toBeInTheDocument();
+    expect(
+      await screen.findByText('资料服务暂不可用，请稍后重试；手头的文件仍可打开和编辑，只是暂时不能语义检索')
+    ).toBeInTheDocument();
     expect(screen.queryByText('未选择资料：仅普通对话')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '刷新' }));
     expect(await screen.findByText(SUMMARY)).toBeInTheDocument();
@@ -159,7 +178,9 @@ describe('ConversationScopeSlot', () => {
       reply(200, { ...CONTEXT, handoff: { from_plan_id: 'plan_0', carried, removed: 2, removed_revoked: 0 } })
     );
     render(<ConversationScopeSlot conversation_id='conv-new' />);
-    expect(await screen.findByText(/因减少资料新开的对话：带入 1 份仍在范围内、已读过的资料，移出 2 份/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/因减少资料新开的对话：带入 1 份仍在范围内、已读过的资料，移出 2 份/)
+    ).toBeInTheDocument();
   });
 
   describe('change sources', () => {
@@ -256,7 +277,8 @@ describe('ConversationScopeSlot', () => {
           ...CONTEXT.brief,
           scopes,
           groups: CONTEXT.brief.groups.map((g, i) =>
-            i === 0 ? { ...g, mode: 'subset', member_count: 1, counts: counts(1, 0, 0, 0) } : g),
+            i === 0 ? { ...g, mode: 'subset', member_count: 1, counts: counts(1, 0, 0, 0) } : g
+          ),
         },
       });
       await openDrawer();

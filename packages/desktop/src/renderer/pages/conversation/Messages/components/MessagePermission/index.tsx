@@ -5,12 +5,13 @@
  */
 
 import { ipcBridge } from '@/common';
-import type { IMessagePermission } from '@/common/chat/chatLib';
+import type { IMessagePermission, IMessageToolCall } from '@/common/chat/chatLib';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { hidesAlwaysAllow } from '@/renderer/mycowork-approval-guard';
 import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PermissionRequestPanel } from './PermissionRequestPanel';
+import { useMessageList } from '../../hooks';
 import {
   classifyLegacyPermission,
   normalizePermissionOperationKind,
@@ -25,6 +26,22 @@ const MessagePermission: React.FC<MessagePermissionProps> = React.memo(({ messag
   const { t } = useTranslation();
   const content = message.content || ({} as IMessagePermission['content']);
   const { description, title, action, call_id, command_type } = content;
+  const messages = useMessageList();
+  // [mycowork] 只展示同一批准请求的原始工具输入，不从模型文字猜测命令。
+  const tool = messages.find(
+    (item): item is IMessageToolCall =>
+      item.type === 'tool_call' &&
+      item.conversation_id === message.conversation_id &&
+      Boolean(call_id) &&
+      item.content.call_id === call_id
+  );
+  const input = tool?.content.input ?? tool?.content.args;
+  const detail =
+    input && Object.keys(input).length > 0
+      ? JSON.stringify(input, null, 2)
+      : t('messages.permissionInputUnavailable', {
+          defaultValue: '完整工具参数不可用，请先查看操作说明；不确定时拒绝本次操作。',
+        });
   const mcpServers = useConversationContextSafe()?.loadedMcpServers;
   // [mycowork] D115：MyCowork 会话的 mcp 类与 exec 类卡片不给“始终允许”（aionrs 按类别记住，会连带放行 Bridge 写工具或免批准 shell）
   const options = (Array.isArray(content.options) ? content.options : []).filter(
@@ -69,7 +86,8 @@ const MessagePermission: React.FC<MessagePermissionProps> = React.memo(({ messag
       title={displayTitle}
       description={description && description !== displayTitle ? description : undefined}
       operationKind={normalizePermissionOperationKind(action)}
-      detail={command_type}
+      detail={detail}
+      detailLabelKey='messages.requestDetails'
       options={panelOptions}
       onConfirm={handleConfirm}
     />

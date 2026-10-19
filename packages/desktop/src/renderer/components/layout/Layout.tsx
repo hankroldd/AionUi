@@ -438,12 +438,15 @@ const Layout: React.FC<{
                       ></path>
                     </svg>
                   </div>
-                  <Tooltip content={t('common.back', { defaultValue: 'Back to Chat' })} position='bottom'>
+                  <Tooltip
+                    content={t('common.backToPrevious', { defaultValue: 'Back to previous page' })}
+                    position='bottom'
+                  >
                     <div
                       className='text-16px text-t-primary collapsed-hidden font-semibold cursor-pointer'
                       role='button'
                       tabIndex={0}
-                      aria-label={t('common.back', { defaultValue: 'Back to Chat' })}
+                      aria-label={t('common.backToPrevious', { defaultValue: 'Back to previous page' })}
                       onClick={handleBrandHome}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {

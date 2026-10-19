@@ -15,7 +15,13 @@ vi.mock('@/common/adapter/httpBridge', () => ({ wsEmitter: () => ({ on: () => ()
 const { watchTurnEnd, watchTurnEnded } = await import('@/renderer/mycowork-task-send');
 
 const owner = { ownerKey: 'u1', isCurrent: () => true };
-const base = { run_id: 'r1', submission_id: 's1', created_at: '2026-10-17T00:00:00Z', conversation_id: 'c1', turn_id: 't1' };
+const base = {
+  run_id: 'r1',
+  submission_id: 's1',
+  created_at: '2026-10-17T00:00:00Z',
+  conversation_id: 'c1',
+  turn_id: 't1',
+};
 const mk = (o: Partial<CompletionRun>) => ({ ...base, status: 'running', ...o }) as CompletionRun;
 const calls: Array<{ url: string; body: unknown }> = [];
 let reply: Partial<CompletionRun> = {};
@@ -71,13 +77,13 @@ it('每轮只转发一次', async () => {
 });
 
 it('只有turn_end=ok且running才显示接受', () => {
-  const t = (run: CompletionRun) => render(<TaskCompletion run={run} lang="zh-CN" onAccept={async () => {}} />);
+  const t = (run: CompletionRun) => render(<TaskCompletion run={run} lang='zh-CN' onAccept={async () => {}} />);
   t(mk({ turn_end: null }));
-  expect(screen.queryByText('接受')).toBeNull();
+  expect(screen.queryByText('标记本轮完成')).toBeNull();
   cleanup();
   t(mk({ turn_end: 'ok' }));
-  expect(screen.getByText('本轮已结束，待确认')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '接受' })).toBeInTheDocument();
+  expect(screen.getByText('本轮回复已结束，可继续补充要求')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '标记本轮完成' })).toBeInTheDocument();
   cleanup();
   t(mk({ turn_end: 'ok', status: 'failed' }));
   expect(screen.queryByRole('button')).toBeNull();
@@ -98,39 +104,47 @@ it('turn.completed 无state时只重读run并显示待确认，不转发turn-end
   await waitFor(() => expect(onEnded).toHaveBeenCalledTimes(1));
   expect(calls0).toEqual(['/bridge/v1/tasks/r1']);
   expect(calls).toHaveLength(0);
-  render(<TaskCompletion run={mk({})} turnEnded lang="zh-CN" onAccept={async () => {}} />);
-  expect(screen.getByText('本轮已结束，待确认')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '接受' })).toBeInTheDocument();
+  render(<TaskCompletion run={mk({})} turnEnded lang='zh-CN' onAccept={async () => {}} />);
+  expect(screen.getByText('本轮回复已结束，可继续补充要求')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '标记本轮完成' })).toBeInTheDocument();
 });
 
 it('接受遇到409：隐藏按钮，显示本轮尚未结束', async () => {
   const onAccept = vi.fn(async () => {
     throw new Error('REVISION_CONFLICT');
   });
-  render(<TaskCompletion run={mk({})} turnEnded lang="zh-CN" onAccept={onAccept} />);
-  fireEvent.click(screen.getByRole('button', { name: '接受' }));
+  render(<TaskCompletion run={mk({})} turnEnded lang='zh-CN' onAccept={onAccept} />);
+  fireEvent.click(screen.getByRole('button', { name: '标记本轮完成' }));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('本轮尚未结束'));
   expect(screen.queryByRole('button')).toBeNull();
 });
 
 it('接受后显示已完成 / 完成有提醒（zh 与 en）', async () => {
   const onAccept = vi.fn(async () => {});
-  const { rerender } = render(<TaskCompletion run={mk({ turn_end: 'ok' })} lang="en" onAccept={onAccept} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+  const { rerender } = render(<TaskCompletion run={mk({ turn_end: 'ok' })} lang='en' onAccept={onAccept} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Mark this turn complete' }));
   expect(onAccept).toHaveBeenCalledWith('r1');
-  rerender(<TaskCompletion run={mk({ status: 'completed' })} lang="zh-CN" onAccept={onAccept} />);
-  expect(screen.getByRole('status')).toHaveTextContent('已完成（你已确认）');
-  rerender(<TaskCompletion run={mk({ status: 'completed_with_warnings' })} lang="zh-CN" onAccept={onAccept} />);
-  expect(screen.getByRole('status')).toHaveTextContent('完成，有提醒：本轮未登记文件成果');
-  rerender(<TaskCompletion run={mk({ status: 'completed' })} lang="en" onAccept={onAccept} />);
-  expect(screen.getByRole('status')).toHaveTextContent('Completed (confirmed by you)');
+  rerender(<TaskCompletion run={mk({ status: 'completed' })} lang='zh-CN' onAccept={onAccept} />);
+  expect(screen.getByRole('status')).toHaveTextContent('本轮已标记完成');
+  rerender(<TaskCompletion run={mk({ status: 'completed_with_warnings' })} lang='zh-CN' onAccept={onAccept} />);
+  expect(screen.getByRole('status')).toHaveTextContent('本轮已标记完成（未登记文件成果）');
+  rerender(<TaskCompletion run={mk({ status: 'completed' })} lang='en' onAccept={onAccept} />);
+  expect(screen.getByRole('status')).toHaveTextContent('Turn marked complete');
 });
 
 it('TURN_ERROR 显示出错，其他失败不冒充', () => {
-  render(<TaskCompletion run={mk({ status: 'failed', delivery_error: 'TURN_ERROR' })} lang="zh-CN" onAccept={async () => {}} />);
+  render(
+    <TaskCompletion
+      run={mk({ status: 'failed', delivery_error: 'TURN_ERROR' })}
+      lang='zh-CN'
+      onAccept={async () => {}}
+    />
+  );
   expect(screen.getByRole('status')).toHaveTextContent('本轮运行出错（原因未知）');
   cleanup();
-  const { container } = render(<TaskCompletion run={mk({ status: 'failed', delivery_error: 'X' })} lang="zh-CN" onAccept={async () => {}} />);
+  const { container } = render(
+    <TaskCompletion run={mk({ status: 'failed', delivery_error: 'X' })} lang='zh-CN' onAccept={async () => {}} />
+  );
   expect(container).toBeEmptyDOMElement();
 });
 
@@ -142,7 +156,8 @@ it('取消订阅后，在途的重读返回也不回调（新一轮或卸载不�
     'fetch',
     () =>
       new Promise<Response>((r) => {
-        release = () => r(new Response(JSON.stringify(mk({})), { status: 200, headers: { 'content-type': 'application/json' } }));
+        release = () =>
+          r(new Response(JSON.stringify(mk({})), { status: 200, headers: { 'content-type': 'application/json' } }));
       })
   );
   const stop = watchTurnEnded(owner, base, onEnded, (c) => ((cb = c), () => {}));
@@ -161,7 +176,8 @@ it('watchTurnEnd：取消订阅后，在途的转发返回也不回调', async (
     'fetch',
     () =>
       new Promise<Response>((r) => {
-        release = () => r(new Response(JSON.stringify(mk({})), { status: 200, headers: { 'content-type': 'application/json' } }));
+        release = () =>
+          r(new Response(JSON.stringify(mk({})), { status: 200, headers: { 'content-type': 'application/json' } }));
       })
   );
   const stop = watchTurnEnd(owner, base, onRun, (c) => ((cb = c), () => {}));

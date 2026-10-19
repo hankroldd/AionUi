@@ -1,6 +1,6 @@
 /**
  * 文件：tests/unit/mycowork/outputProfileSend.dom.test.tsx
- * 职责：验证首页“产物类型”（输出 Profile，D277）：选综述后办公发送与令牌请求带 profile；默认不带；没有计划时不显示也不读登记。
+ * 职责：验证首页“写作结构”（输出 Profile，D277）：选综述后办公发送与令牌请求带 profile；默认不带；没有计划时不显示也不读登记。
  * 边界：只替换HTTP边界，使用真实 ScopeChip、范围 store 与办公提交客户端；数据均为虚构。
  * 关联：MyCowork docs/contracts/output-profile.md §3；R051。
  */
@@ -76,7 +76,7 @@ const send = () => submitOfficeTask({ ownerKey: 'owner-profile', isCurrent: () =
 
 it('选“综述”后，办公发送与令牌请求都带 profile=review', async () => {
   render(<ScopeChip lang='zh-CN' assistantId={scene} />);
-  fireEvent.click(await screen.findByRole('combobox', { name: '产物类型' }));
+  fireEvent.click(await screen.findByRole('combobox', { name: '写作结构' }));
   fireEvent.click(await screen.findByText('综述'));
   await waitFor(() => expect(getScope().profile).toBe('review'));
   await act(async () => void (await send()));
@@ -86,15 +86,15 @@ it('选“综述”后，办公发送与令牌请求都带 profile=review', asyn
 
 it('默认不带 profile，发送请求与原来一致', async () => {
   render(<ScopeChip lang='zh-CN' assistantId={scene} />);
-  expect(await screen.findByRole('combobox', { name: '产物类型' })).toHaveTextContent('默认');
+  expect(await screen.findByRole('combobox', { name: '写作结构' })).toHaveTextContent('默认');
   await act(async () => void (await send()));
   expect(posted['/bridge/v1/tasks']).not.toHaveProperty('profile');
   expect(posted.tokens).not.toHaveProperty('profile');
 });
 
-it('没有资料也不是场景助手（普通对话）时不显示产物类型', async () => {
+it('没有资料也不是场景助手（普通对话）时不显示写作结构', async () => {
   render(<ScopeChip lang='zh-CN' />);
   await screen.findByRole('button', { name: /资料范围/ });
-  expect(screen.queryByRole('combobox', { name: '产物类型' })).toBeNull();
+  expect(screen.queryByRole('combobox', { name: '写作结构' })).toBeNull();
   expect(vi.mocked(fetch)).not.toHaveBeenCalled(); // 不展开就不读登记，普通对话没有额外请求
 });

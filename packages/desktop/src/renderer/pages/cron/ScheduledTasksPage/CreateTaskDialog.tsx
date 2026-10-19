@@ -523,8 +523,10 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   }, []);
 
   const handleSubmit = async () => {
+    // 字段错误由表单就地提示，不当成创建任务失败。
+    const values = await form.validate().catch((): null => null);
+    if (!values) return;
     try {
-      const values = await form.validate();
       setSubmitting(true);
 
       const scheduleExpr = scheduleInfo.expr;

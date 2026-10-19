@@ -528,6 +528,9 @@
       "manual": "Manual send"
     },
     "addToQueue": "Save to Draft box",
+    "officeUnavailable": "Office tasks do not support queued sending yet. Your input is saved automatically; send it when idle.",
+    "availabilityFailed": "Queued sending is temporarily unavailable. Your input is saved automatically; try again later.",
+    "availabilityChecking": "Checking whether queued sending is available. Your input is saved automatically.",
     "addToQueueShortcut": "⌘ + Enter / Ctrl + Enter",
     "midturnBlocked": "This agent is still working, so the message can’t be sent directly. Save it to Draft box and send it later.",
     "enterShortcut": "Enter",

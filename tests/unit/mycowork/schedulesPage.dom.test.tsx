@@ -82,6 +82,8 @@ describe('OfficeSchedulesSlot', () => {
     const notice = screen.getByTestId('mycowork-schedules-notice');
     expect(notice).toHaveTextContent('不会自动执行');
     expect(notice).toHaveTextContent('互相独立、不同步');
+    expect(notice).toHaveTextContent('不携带办公资料范围');
+    expect(within(notice).getByRole('link', { name: '去定时任务' })).toHaveAttribute('href', '#/scheduled');
     expect(fetchMock.mock.calls[0]![0]).toBe('/bridge/v1/schedules');
   });
 

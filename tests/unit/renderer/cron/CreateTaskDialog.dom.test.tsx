@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Message } from '@arco-design/web-react';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import type { ICronJob } from '@/common/adapter/ipcBridge';
 import type { TChatConversation } from '@/common/config/storage';
@@ -152,6 +153,23 @@ describe('CreateTaskDialog', () => {
 
     expect(await screen.findByText('cron.page.form.name')).toBeInTheDocument();
     expect(screen.queryByText('cron.page.form.description')).not.toBeInTheDocument();
+  });
+
+  it('keeps required-field validation in the form without an internal-error toast', async () => {
+    const onClose = vi.fn();
+    render(<CreateTaskDialog visible onClose={onClose} />);
+    await userEvent.setup().click(await screen.findByTestId('modal-ok'));
+    expect(await screen.findByText('cron.page.form.nameRequired')).toBeInTheDocument();
+    expect(Message.error).not.toHaveBeenCalled();
+    expect(ipcBridge.cron.addJob.invoke).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('still displays a real task update failure after valid input', async () => {
+    vi.mocked(ipcBridge.cron.updateJob.invoke).mockRejectedValueOnce(new Error('service unavailable'));
+    render(<CreateTaskDialog visible onClose={() => {}} editJob={job()} />);
+    await userEvent.setup().click(await screen.findByTestId('modal-ok'));
+    await waitFor(() => expect(Message.error).toHaveBeenCalledWith('error'));
   });
 
   it('offers custom frequency when creating a task', async () => {

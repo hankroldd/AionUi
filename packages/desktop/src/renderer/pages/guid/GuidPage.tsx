@@ -348,14 +348,14 @@ const GuidPage: React.FC = () => {
   }, [agentSelection.assistants, selectedAssistantId, agentSelection.selectedAssistantId]);
   const selectedAssistantPrompts = useMemo(() => {
     if (!selectedAssistantId) return [];
-    const resolvedPrompts =
-      selectedAssistantDetail?.prompts.recommended_i18n?.[localeKey] ||
-      selectedAssistantDetail?.prompts.recommended_i18n?.['en-US'] ||
-      selectedAssistantDetail?.prompts.recommended ||
-      selectedAssistantRecord?.prompts_i18n?.[localeKey] ||
-      selectedAssistantRecord?.prompts_i18n?.['en-US'] ||
-      selectedAssistantRecord?.prompts ||
-      [];
+    const resolvedPrompts = [
+      selectedAssistantDetail?.prompts.recommended_i18n?.[localeKey],
+      selectedAssistantDetail?.prompts.recommended_i18n?.['en-US'],
+      selectedAssistantDetail?.prompts.recommended,
+      selectedAssistantRecord?.prompts_i18n?.[localeKey],
+      selectedAssistantRecord?.prompts_i18n?.['en-US'],
+      selectedAssistantRecord?.prompts,
+    ].find((prompts) => prompts && prompts.length > 0) ?? [];
 
     if (resolvedPrompts.length > 0) {
       return resolvedPrompts;

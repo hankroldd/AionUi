@@ -1,4 +1,5 @@
 {
+  "permissionInputUnavailable": "Full tool input is unavailable. Review the description, and reject this operation if unsure.",
   "fileChanges": "File Changes",
   "fileChangesCount": "{{count}} File Changes",
   "fileChangesCount_one": "{{count}} File Change",

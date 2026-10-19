@@ -75,7 +75,7 @@ import Layout from '@renderer/components/layout/Layout';
 
 const renderLayout = () => render(<Layout sider={<div>sider</div>} />);
 
-const BACK_KEY = 'common.back';
+const BACK_KEY = 'common.backToPrevious';
 
 describe('Layout sider brand Home button', () => {
   beforeEach(() => {
@@ -108,11 +108,11 @@ describe('Layout sider brand Home button', () => {
 
   it('navigates to the recorded last non-settings path when clicked in a settings route', () => {
     currentPathname = '/settings/about';
-    sessionStorage.setItem('aion:last-non-settings-path', '/conversation/abc');
+    sessionStorage.setItem('aion:last-non-settings-path', '/office/imports?batch=fictional');
     renderLayout();
 
     fireEvent.click(screen.getByLabelText(BACK_KEY));
-    expect(navigate).toHaveBeenCalledWith('/conversation/abc');
+    expect(navigate).toHaveBeenCalledWith('/office/imports?batch=fictional');
   });
 
   it('falls back to /guid in a settings route when no path is recorded', () => {

@@ -528,6 +528,9 @@
       "manual": "手动发送"
     },
     "addToQueue": "存到草稿箱",
+    "officeUnavailable": "办公任务暂不支持队列发送；输入会自动保存，请在空闲时发送。",
+    "availabilityFailed": "暂时无法确认队列是否可用；输入会自动保存，请稍后重试。",
+    "availabilityChecking": "正在确认队列是否可用；输入会自动保存。",
     "addToQueueShortcut": "⌘ + Enter / Ctrl + Enter",
     "midturnBlocked": "当前 Agent 正在处理，暂时不能直接发送。可以先存到草稿箱，稍后发送。",
     "enterShortcut": "Enter",

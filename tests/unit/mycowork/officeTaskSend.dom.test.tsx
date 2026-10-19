@@ -10,6 +10,7 @@ import React, { useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createInstance } from 'i18next';
+import enConversation from '@/renderer/services/i18n/locales/en-US/conversation.json';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
 import { SWRConfig } from 'swr';
@@ -35,9 +36,7 @@ const i18n = createInstance();
 void i18n.init({
   lng: 'en',
   fallbackLng: 'en',
-  resources: {
-    en: { translation: { conversation: { commandQueue: { sendNow: 'Send now', addToQueue: 'Save to Draft box' } } } },
-  },
+  resources: { en: { translation: { conversation: enConversation } } },
 });
 const empty = (): DraftState => ({ content: '', files: [], sessions: [] });
 const navigate = vi.fn(async () => {});
@@ -272,11 +271,12 @@ it('后续办公发送真实任务ACK进入原runtime UI，受理后清输入而
   expect(ipcCount('conversation.sendMessage')).toBe(0);
   expect(fixture.task?.turn_id).toBe('host-task-turn');
 });
-it('办公拒绝保留输入，办公加入队列也保留输入且没有投递', async () => {
+it('办公队列入口明确禁用，快捷键与发送拒绝都保留输入且不绕过任务接口', async () => {
   const input = await mountConversation();
   fireEvent.change(input, { target: { value: '保留的虚构办公输入' } });
-  fireEvent.click(screen.getByRole('button', { name: /Save to Draft box/ }));
-  await waitFor(() => expect(document.body).toHaveTextContent('队列发送尚未接通'));
+  const queue = await screen.findByRole('button', { name: /Office tasks do not support queued sending/ });
+  expect(queue).toBeDisabled();
+  fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', ctrlKey: true });
   expect(input).toHaveValue('保留的虚构办公输入');
   expect(count('/bridge/v1/tasks')).toBe(0);
   fixture.rejectTask = true;
@@ -348,7 +348,7 @@ const runOf = (status: TaskRun['status'], saved?: TaskRun['saved_results']): Tas
   ...(saved ? { saved_results: saved } : {}),
 });
 it('失败的任务带 2 个已登记结果：一行汇总 + 2 条指向对应版本的链接，链接可聚焦', () => {
-  render(<SavedResults run={runOf('failed', results(2))} lang="zh-CN" />);
+  render(<SavedResults run={runOf('failed', results(2))} lang='zh-CN' />);
   expect(screen.getByText('已登记 2 个结果')).toBeInTheDocument();
   const links = screen.getAllByRole('link');
   expect(links.map((a) => a.getAttribute('href'))).toEqual([
@@ -361,17 +361,17 @@ it('失败的任务带 2 个已登记结果：一行汇总 + 2 条指向对应�
   expect(document.body).not.toHaveTextContent('全部');
 });
 it('已停止的任务显示；空或缺省、进行中都不出任何文字', () => {
-  const { unmount } = render(<SavedResults run={runOf('cancelled', results(1))} lang="en-US" />);
+  const { unmount } = render(<SavedResults run={runOf('cancelled', results(1))} lang='en-US' />);
   expect(screen.getByText('1 saved result registered')).toBeInTheDocument();
   unmount();
   for (const run of [runOf('failed', []), runOf('failed'), runOf('running', results(2))]) {
-    const { container, unmount: u } = render(<SavedResults run={run} lang="zh-CN" />);
+    const { container, unmount: u } = render(<SavedResults run={run} lang='zh-CN' />);
     expect(container).toBeEmptyDOMElement();
     u();
   }
 });
 it('7 个结果只列 5 条，其余写“还有 2 个”', () => {
-  render(<SavedResults run={runOf('failed', results(7))} lang="zh-CN" />);
+  render(<SavedResults run={runOf('failed', results(7))} lang='zh-CN' />);
   expect(screen.getAllByRole('link')).toHaveLength(5);
   expect(screen.getByText('已登记 7 个结果')).toBeInTheDocument();
   expect(screen.getByText('还有 2 个')).toBeInTheDocument();

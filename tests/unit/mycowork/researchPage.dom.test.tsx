@@ -87,7 +87,8 @@ describe('OfficeResearchSlot', () => {
     render(<OfficeResearchSlot />, { wrapper: MemoryRouter });
     expect(await screen.findByText('还没有研究记录')).toBeInTheDocument();
     const hint = await screen.findByTestId('mycowork-research-arxiv-off');
-    expect(within(hint).getByRole('link')).toHaveAttribute('href', '#/office/connections');
+    expect(hint).toHaveTextContent('部署负责人');
+    expect(within(hint).getByRole('link', { name: '查看配置说明' })).toHaveAttribute('href', '#/office/connections');
   });
 
   it('"load older" follows next_cursor and appends', async () => {

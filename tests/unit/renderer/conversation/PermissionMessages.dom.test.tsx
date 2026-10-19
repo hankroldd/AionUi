@@ -7,9 +7,10 @@
 import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IMessageAcpPermission, IMessagePermission } from '@/common/chat/chatLib';
+import type { IMessageAcpPermission, IMessagePermission, TMessage } from '@/common/chat/chatLib';
 import MessageAcpPermission from '@/renderer/pages/conversation/Messages/acp/MessageAcpPermission';
 import MessagePermission from '@/renderer/pages/conversation/Messages/components/MessagePermission';
+import { MessageListProvider } from '@/renderer/pages/conversation/Messages/hooks';
 
 const { genericInvoke, acpInvoke } = vi.hoisted(() => ({
   genericInvoke: vi.fn(),
@@ -129,6 +130,37 @@ describe('permission message adapters', () => {
     });
     expect(await screen.findByTestId('message-permission-status')).toBeInTheDocument();
     unmount();
+  });
+
+  it('shows complete input only for the matching conversation and call, with an honest fallback', () => {
+    const message = makeGenericMessage();
+    const tool: TMessage = {
+      id: 'tool-input',
+      type: 'tool_call',
+      conversation_id: message.conversation_id,
+      content: {
+        call_id: message.content.call_id,
+        name: 'exec',
+        args: { command: 'officecli get /fictional/deck/slides.pptx --all' },
+      },
+    };
+    const unrelated: TMessage = {
+      ...tool,
+      id: 'other-conversation',
+      conversation_id: 'other-conversation',
+      content: { ...tool.content, args: { command: 'unrelated command' } },
+    };
+    const { unmount } = render(
+      <MessageListProvider value={[unrelated, tool]}>
+        <MessagePermission message={message} />
+      </MessageListProvider>
+    );
+    expect(screen.getByText(/officecli get \/fictional\/deck\/slides.pptx --all/)).toBeInTheDocument();
+    expect(screen.queryByText(/unrelated command/)).toBeNull();
+    unmount();
+    render(<MessagePermission message={message} />);
+    expect(screen.getByText(/完整工具参数不可用/)).toBeInTheDocument();
+    expect(screen.queryByText('npm install')).toBeNull();
   });
 
   it('keeps the ACP payload exact and defaults confirmation to allow_once', async () => {

@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IMessageAcpPermission, IMessagePermission, TMessage } from '@/common/chat/chatLib';
 import MessageAcpPermission from '@/renderer/pages/conversation/Messages/acp/MessageAcpPermission';
 import MessagePermission from '@/renderer/pages/conversation/Messages/components/MessagePermission';
+import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
 import { MessageListProvider } from '@/renderer/pages/conversation/Messages/hooks';
 
 const { genericInvoke, acpInvoke } = vi.hoisted(() => ({
@@ -132,14 +133,14 @@ describe('permission message adapters', () => {
     unmount();
   });
 
-  it('shows complete input only for the matching conversation and call, with an honest fallback', () => {
+  it.each(['', 'aionrs-'])('matches the unique %s call with concurrent same-name tools and an honest fallback', async (prefix) => {
     const message = makeGenericMessage();
     const tool: TMessage = {
       id: 'tool-input',
       type: 'tool_call',
       conversation_id: message.conversation_id,
       content: {
-        call_id: message.content.call_id,
+        call_id: `${prefix}${message.content.call_id}`,
         name: 'exec',
         args: { command: 'officecli get /fictional/deck/slides.pptx --all' },
       },
@@ -150,13 +151,20 @@ describe('permission message adapters', () => {
       conversation_id: 'other-conversation',
       content: { ...tool.content, args: { command: 'unrelated command' } },
     };
+    const concurrent: TMessage = {
+      ...tool, id: 'other-call',
+      content: { ...tool.content, call_id: `${prefix}call-other`, args: { command: 'wrong same-name command' } },
+    };
     const { unmount } = render(
-      <MessageListProvider value={[unrelated, tool]}>
-        <MessagePermission message={message} />
-      </MessageListProvider>
+      <ConversationProvider value={{ conversation_id: message.conversation_id, type: prefix ? 'aionrs' : 'codex' }}>
+        <MessageListProvider value={[unrelated, concurrent, tool]}><MessagePermission message={message} /></MessageListProvider>
+      </ConversationProvider>
     );
     expect(screen.getByText(/officecli get \/fictional\/deck\/slides.pptx --all/)).toBeInTheDocument();
-    expect(screen.queryByText(/unrelated command/)).toBeNull();
+    expect(screen.queryByText(/unrelated command|wrong same-name command/)).toBeNull();
+    fireEvent.click(screen.getByTestId('message-permission-option-proceed_once'));
+    expect(genericInvoke).toHaveBeenLastCalledWith(expect.objectContaining({ call_id: message.content.call_id }));
+    expect(await screen.findByTestId('message-permission-status')).toBeInTheDocument();
     unmount();
     render(<MessagePermission message={message} />);
     expect(screen.getByText(/完整工具参数不可用/)).toBeInTheDocument();

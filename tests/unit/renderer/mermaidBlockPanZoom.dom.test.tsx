@@ -5,7 +5,7 @@
  */
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 
 const renderMock = vi.hoisted(() => vi.fn());
@@ -130,16 +130,21 @@ describe('MermaidBlock pan/zoom', () => {
   });
 
   it('opens the zoom overlay when the static diagram is clicked', async () => {
-    render(<MermaidBlock code={'graph TD; A-->B'} />);
-    const diagram = await screen.findByTestId('mermaid-diagram');
+    // [mycowork] 先完成异步图表提交及其重置 effect，再模拟用户点击。
+    await act(async () => {
+      render(<MermaidBlock code={'graph TD; A-->B'} />);
+    });
+    const diagram = screen.getByTestId('mermaid-diagram');
     fireEvent.click(diagram);
-    // [mycowork] The overlay mounts a tick after the click; under a fully parallel DOM run the synchronous lookup raced it.
     expect(await screen.findByTestId('diagram-zoom-overlay')).toBeInTheDocument();
   });
 
   it('opens the zoom overlay on click without panning when drag-to-pan is enabled', async () => {
-    render(<MermaidBlock code={'graph TD; A-->B'} enablePanZoom />);
-    const diagram = await screen.findByTestId('mermaid-diagram');
+    // [mycowork] 先完成异步图表提交及其重置 effect，再模拟用户点击。
+    await act(async () => {
+      render(<MermaidBlock code={'graph TD; A-->B'} enablePanZoom />);
+    });
+    const diagram = screen.getByTestId('mermaid-diagram');
 
     fireEvent.pointerDown(diagram, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
     fireEvent.pointerMove(diagram, { pointerId: 1, clientX: 12, clientY: 11 });
@@ -147,7 +152,6 @@ describe('MermaidBlock pan/zoom', () => {
 
     const inner = diagram.firstElementChild as HTMLElement;
     expect(inner.style.transform).toContain('translate(0px, 0px) scale(1)');
-    // [mycowork] The overlay mounts a tick after the click; under a fully parallel DOM run the synchronous lookup raced it.
     expect(await screen.findByTestId('diagram-zoom-overlay')).toBeInTheDocument();
   });
 

@@ -11,13 +11,15 @@ import WebviewHost from '@/renderer/components/media/WebviewHost';
 import { openExternalUrl } from '@/renderer/utils/platform';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { Button, Spin } from '@arco-design/web-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { registerTabReloader } from '../../context/tabReloaderRegistry';
 // [mycowork] B4: liveness probe + copy for a watch whose process is gone (MyCowork packages/ui)
 import { isWatchAlive, previewWatchText, watchGone } from '@mycowork/ui';
 
 const WATCH_PROBE_MS = 15_000; // 两次连续失败才判断开，总延迟仍 ≤ 30 秒
+// [mycowork] 后端按文件复用进程；跨卸载等待旧清理，避免迟到 stop 关掉新查看器复用的进程。
+let pendingWatchCleanup = Promise.resolve();
 
 type DocType = 'ppt' | 'word' | 'excel';
 type OfficeWatchErrorCode =
@@ -176,26 +178,13 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
   const [status, setStatus] = useState<'starting' | 'installing'>('starting');
   const [error, setError] = useState<OfficeWatchErrorState | null>(null);
   const [retryKey, setRetryKey] = useState(0);
-  // Mirror both identities for the unmount cleanup; stop prefers the ref.
-  const file_pathRef = useRef(file_path);
-  const fileRefRef = useRef(fileRef);
-
-  // [mycowork] S10: "refresh" restarts the watch — stop the old officecli process, then let the effect below start a new
-  // one, which reads the file afresh (the watch process does not follow external writes such as an online-editor save).
-  // The stop is awaited first: a start racing the unmount's fire-and-forget stop got the old process back (stale content).
+  // [mycowork] 顶部刷新与断开重开共用下方生命周期，等待旧进程停完再读文件，不额外发一次 stop。
   useEffect(() => {
     if (!tabId) return;
-    return registerTabReloader(tabId, () => {
-      void BRIDGE[docType].stop
-        .invoke({ file_path: file_pathRef.current, file: fileRefRef.current })
-        .catch(() => {})
-        .then(() => setRetryKey((value) => value + 1));
-    });
+    return registerTabReloader(tabId, () => setRetryKey((value) => value + 1));
   }, [tabId, docType]);
 
   useEffect(() => {
-    file_pathRef.current = file_path;
-    fileRefRef.current = fileRef;
     const bridge = BRIDGE[docType];
 
     // A ChatFileRef alone is enough (explorer office tabs have no device path).
@@ -217,8 +206,12 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
       setLoading(true);
       setStatus('starting');
       setError(null);
+      setWatchUrl(null);
       try {
+        await pendingWatchCleanup;
+        if (cancelled) return;
         const result = await bridge.start.invoke({ file_path, workspace, file: fileRef });
+        if (cancelled) return;
         const errorCode = normalizeOfficeWatchErrorCode(result.error);
         if (errorCode) {
           setError({
@@ -258,16 +251,17 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
       }
     };
 
-    void start();
+    const starting = start();
 
     return () => {
       cancelled = true;
       unsubStatus();
-      // Stop the same identity we started (backend prefers `file`), so the watch
-      // session is matched and the officecli subprocess is not leaked.
-      if (fileRefRef.current || file_pathRef.current) {
-        bridge.stop.invoke({ file_path: file_pathRef.current, file: fileRefRef.current }).catch(() => {});
-      }
+      // [mycowork] start 迟到也须先结束再停；身份取本次闭包，不能在等待后读到下个文件。
+      pendingWatchCleanup = Promise.all([pendingWatchCleanup, starting])
+        .then(async () => {
+          await bridge.stop.invoke({ file_path, file: fileRef });
+        })
+        .catch(() => {});
     };
   }, [docType, fileRef, file_path, retryKey, t, workspace]);
 

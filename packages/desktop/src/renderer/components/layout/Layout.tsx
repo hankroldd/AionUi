@@ -1,4 +1,6 @@
 /**
+ * 文件：packages/desktop/src/renderer/components/layout/Layout.tsx
+ * 职责：承载会话、文件预览与项目文件树，预览期间临时让出阅读空间。
  * @license
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
@@ -27,9 +29,6 @@ import { useResizableSplit } from '@renderer/hooks/ui/useResizableSplit';
 import { useProjectPreviewRegionWidth } from '@renderer/hooks/ui/useProjectPreviewRegionWidth';
 import { useProjectPanelCollapse } from '@renderer/hooks/ui/useProjectPanelCollapse';
 
-// [mycowork] below this [content | explorer] row width the explorer is auto-collapsed once when the preview opens
-// (explorer 260 + chat 400 + preview 400 + chrome, i.e. a 1024 viewport with the sidebar open).
-const EXPLORER_AUTO_COLLAPSE_PX = 1100;
 import { dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
 import { MIN_PREVIEW_PANEL_PX } from '@renderer/pages/conversation/utils/layoutCalc';
 import { PreviewPanel } from '@renderer/pages/conversation/Preview';
@@ -185,18 +184,20 @@ const Layout: React.FC<{
   const currentProject = useCurrentProject();
   const { containerRef: mainRowRef, containerWidth: mainRowWidth } = useContainerWidth();
   const explorerActive = Boolean(currentProject) && !isMobile;
-  const { widthPx: explorerWidthPx, createDragHandle: createExplorerDragHandle } = useProjectExplorerColumnWidth(
-    mainRowWidth,
-    isPreviewOpen,
-    explorerActive
-  );
   // P3: host-level collapse (project-scoped on desktop; overlay on mobile). The
   // explorer stays mounted (width 0) on collapse, so it is not remounted.
-  const { collapsed: explorerCollapsed, setCollapsed: setExplorerCollapsed } = useProjectPanelCollapse({
+  const previewRegionActive = Boolean(currentProject) && !isMobile && isPreviewOpen;
+  const { collapsed: explorerCollapsed } = useProjectPanelCollapse({
     projectId: currentProject,
     isMobile,
     active: Boolean(currentProject),
+    temporarilyCollapsed: previewRegionActive,
   });
+  const { widthPx: explorerWidthPx, createDragHandle: createExplorerDragHandle } = useProjectExplorerColumnWidth(
+    mainRowWidth,
+    isPreviewOpen,
+    explorerActive && !explorerCollapsed
+  );
   const toggleExplorer = useCallback(() => {
     dispatchWorkspaceToggleEvent();
   }, []);
@@ -205,30 +206,10 @@ const Layout: React.FC<{
   // P4 (②B): hoist the preview region to the Layout host for project
   // conversations so it is structurally persistent (no remount on same-project
   // switches). ChatLayout renders chat only in that case (previewHosted).
-  const previewRegionActive = Boolean(currentProject) && !isMobile && isPreviewOpen;
   // 最大化：隐藏聊天区、让预览铺满它腾出的空间；左侧边栏与右侧资源管理器列均不动。
   // Maximized: hide the chat area and let the preview fill the space it vacated;
   // the left sidebar and the right explorer column are both left untouched.
   const previewMaximized = previewRegionActive && isPreviewMaximized;
-  // [mycowork] PR11 audit B5: at ~1024px a project conversation with the preview open squeezes chat + preview + explorer
-  // into three cramped columns. When the preview opens and the [content | explorer] row is narrower than
-  // EXPLORER_AUTO_COLLAPSE_PX, collapse the explorer once (not persisted; the toggle re-opens it as usual).
-  const explorerNudgedRef = useRef(false);
-  useEffect(() => {
-    if (!previewRegionActive) {
-      explorerNudgedRef.current = false;
-      return;
-    }
-    if (
-      explorerNudgedRef.current ||
-      explorerCollapsed ||
-      mainRowWidth <= 0 ||
-      mainRowWidth >= EXPLORER_AUTO_COLLAPSE_PX
-    )
-      return;
-    explorerNudgedRef.current = true;
-    setExplorerCollapsed(true);
-  }, [previewRegionActive, explorerCollapsed, mainRowWidth, setExplorerCollapsed]);
   const { widthPx: previewWidthPx, createDragHandle: createPreviewRegionDragHandle } = useProjectPreviewRegionWidth(
     mainRowWidth,
     explorerCollapsed ? 0 : explorerWidthPx,

@@ -253,6 +253,8 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
         return;
       }
 
+      // [mycowork] 更新构建后重验入口及资源，避免旧 HTML 继续引用已替换的脚本。
+      res.setHeader('Cache-Control', 'no-cache');
       // static files + SPA fallback
       await serveHandler(req, res, {
         public: opts.staticDir,

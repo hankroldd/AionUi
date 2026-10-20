@@ -1,4 +1,6 @@
 /**
+ * 文件：packages/desktop/src/renderer/hooks/ui/useProjectPanelCollapse.ts
+ * 职责：保存项目文件树偏好，预览临时收起不覆盖用户选择。
  * @license
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
@@ -50,6 +52,8 @@ type UseProjectPanelCollapseParams = {
   isMobile: boolean;
   /** True when a project host is live (project bound). Gates event handling. */
   active: boolean;
+  /** 预览暂时让出空间；不会写入项目的折叠偏好。 */
+  temporarilyCollapsed?: boolean;
 };
 
 type UseProjectPanelCollapseReturn = {
@@ -61,8 +65,14 @@ export function useProjectPanelCollapse({
   projectId,
   isMobile,
   active,
+  temporarilyCollapsed = false,
 }: UseProjectPanelCollapseParams): UseProjectPanelCollapseReturn {
-  const [collapsed, setCollapsed] = useState<boolean>(() => (isMobile ? true : readStoredCollapsed(projectId)));
+  const [preferredCollapsed, setCollapsed] = useState<boolean>(() =>
+    isMobile ? true : readStoredCollapsed(projectId)
+  );
+  const [toggledDuringPreview, setToggledDuringPreview] = useState(false);
+  const collapsed = preferredCollapsed || (temporarilyCollapsed && !toggledDuringPreview);
+  useEffect(() => setToggledDuringPreview(false), [temporarilyCollapsed, projectId, isMobile]);
 
   // Mirror ref so the event handler reads current state without re-subscribing.
   const collapsedRef = useRef(collapsed);
@@ -86,6 +96,7 @@ export function useProjectPanelCollapse({
       event.preventDefault();
       const next = !collapsedRef.current;
       setCollapsed(next);
+      if (temporarilyCollapsed) setToggledDuringPreview(true);
       if (!isMobile) {
         try {
           localStorage.setItem(collapseKey(projectId), next ? 'collapsed' : 'expanded');
@@ -96,7 +107,7 @@ export function useProjectPanelCollapse({
     };
     window.addEventListener(WORKSPACE_TOGGLE_EVENT, handleToggle);
     return () => window.removeEventListener(WORKSPACE_TOGGLE_EVENT, handleToggle);
-  }, [active, projectId, isMobile]);
+  }, [active, projectId, isMobile, temporarilyCollapsed]);
 
   // Broadcast collapse state so the mac Titlebar workspace button's icon stays in
   // sync (it listens for WORKSPACE_STATE_EVENT). Only when this host is live —

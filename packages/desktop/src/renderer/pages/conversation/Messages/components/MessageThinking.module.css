@@ -4,6 +4,10 @@
 }
 
 .header {
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  text-align: start;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -16,6 +20,11 @@
 
 .header:hover {
   color: var(--aou-7);
+}
+.header:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .headerIcon {
@@ -45,7 +54,7 @@
 }
 
 .body {
-  color: #86909c;
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.7;
   padding: 10px 14px;

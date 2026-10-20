@@ -1,4 +1,6 @@
 /**
+ * 文件：Messages/components/MessagePermission/index.tsx
+ * 职责：准确呈现当前调用的批准动作，沿用原批准守卫和回调。
  * @license
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
@@ -11,6 +13,7 @@ import { hidesAlwaysAllow } from '@/renderer/mycowork-approval-guard';
 import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PermissionRequestPanel } from './PermissionRequestPanel';
+import { toolDisplayNameKey } from '../toolDisplayName';
 import { useMessageList } from '../../hooks';
 import {
   classifyLegacyPermission,
@@ -49,7 +52,9 @@ const MessagePermission: React.FC<MessagePermissionProps> = React.memo(({ messag
   const options = (Array.isArray(content.options) ? content.options : []).filter(
     (option) => !hidesAlwaysAllow(mcpServers, command_type, action, String(option?.value))
   );
-  const displayTitle = title || description || t('messages.permissionRequest');
+  const displayNameKey = toolDisplayNameKey(tool?.content.name ?? action);
+  const displayTitle =
+    (displayNameKey ? t(displayNameKey) : undefined) || title || description || t('messages.permissionRequest');
 
   const panelOptions = useMemo<PermissionPanelOption[]>(
     () =>

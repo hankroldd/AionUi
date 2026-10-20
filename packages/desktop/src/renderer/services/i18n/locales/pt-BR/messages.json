@@ -97,5 +97,45 @@
   "requestDetails": "Detalhes da solicitação:",
   "delivery": {
     "pending": "Não lido"
+  },
+  "toolActivity": {
+    "label": "Operation details",
+    "running": "Running",
+    "failed": "An operation failed",
+    "canceled": "Canceled",
+    "pending": "Waiting to run"
+  },
+  "toolDetail": {
+    "input": "Full input",
+    "output": "Result",
+    "loading": "Loading full details…",
+    "loadFailed": "Could not load full details"
+  },
+  "operationKind": {
+    "execute": "Run a command",
+    "edit": "Edit a file",
+    "read": "Read content",
+    "fetch": "Fetch content",
+    "tool": "Tool operation"
+  },
+  "toolNames": {
+    "search": "Search sources",
+    "read": "Read file content",
+    "coverage": "Check source coverage",
+    "changes": "View version changes",
+    "manifest": "Check available sources and tools",
+    "skill_read": "Read creation guidelines",
+    "template_recommend": "Find a suitable template",
+    "office_copy_to_workspace": "Copy the file to the workspace",
+    "office_fetch_original": "Get a working copy",
+    "office_edit": "Edit the working file",
+    "office_register_output": "Save the generated file",
+    "office_read": "Read file content",
+    "office_check": "Check file content",
+    "office_calc": "Calculate spreadsheet data",
+    "memory_suggest": "Prepare a memory suggestion",
+    "research_search_arxiv": "Search research papers",
+    "ExecCommand": "Run a command",
+    "template_select": "Select the template"
   }
 }

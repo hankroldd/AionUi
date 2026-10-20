@@ -4,10 +4,11 @@
  * 边界：只替换预览承载上下文及 IPC/HTTP；路径识别、Markdown 和 Explorer payload 走真实实现。
  */
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import MarkdownView from '@/renderer/components/Markdown';
-import { conversationFilePath } from '@mycowork/ui';
+import { createPortal } from 'react-dom';
+import { ConversationFileLink, conversationFilePath } from '@mycowork/ui';
 import {
   resetCurrentProjectForTest,
   setCurrentProject,
@@ -191,4 +192,32 @@ describe('安全相对文件链接', () => {
     expect(h.browser).toHaveBeenCalledWith('https://example.test/docs');
     expect(h.project).not.toHaveBeenCalled();
   });
+});
+
+// Markdown 正文位于 Shadow DOM：文件入口必须自带样式，不能依赖外层 Arco CSS。
+it('在消息 Shadow DOM 中呈现文件类型、预览说明及受控按钮', () => {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const shadow = host.attachShadow({ mode: 'open' });
+  const open = vi.fn();
+  const mount = (disabled: boolean) =>
+    createPortal(
+      <ConversationFileLink disabled={disabled} onOpen={open} fileName='最终稿.pptx' lang='zh-CN'>
+        最终稿.pptx
+      </ConversationFileLink>,
+      shadow
+    );
+  const { rerender, unmount } = render(mount(false));
+  const card = within(shadow as unknown as HTMLElement).getByRole('button', { name: '最终稿.pptx' });
+  expect(card).toHaveAttribute('type', 'button');
+  expect(card).toHaveTextContent('PPTX · 点击预览');
+  expect(shadow.querySelector('style')?.textContent).toContain('.mcw-conversation-file-card.arco-btn');
+  fireEvent.click(card);
+  expect(open).toHaveBeenCalledTimes(1);
+  rerender(mount(true));
+  fireEvent.click(card);
+  expect(card).toBeDisabled();
+  expect(open).toHaveBeenCalledTimes(1);
+  unmount();
+  host.remove();
 });

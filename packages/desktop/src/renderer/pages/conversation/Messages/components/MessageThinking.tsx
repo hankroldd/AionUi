@@ -1,11 +1,13 @@
 /**
+ * 文件：Messages/components/MessageThinking.tsx
+ * 职责：默认折叠思考正文，保留真实状态和手动展开。
  * @license
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
  */
 
 import type { IMessageThinking } from '@/common/chat/chatLib';
-import { Spin } from '@arco-design/web-react';
+import { Button, Spin } from '@arco-design/web-react';
 import { Brain, Right } from '@icon-park/react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,20 +40,13 @@ const MessageThinking: React.FC<{ message: IMessageThinking }> = ({ message }) =
   const { content: text, status, subject } = message.content;
   const duration = message.content.duration ?? (message.content as { duration_ms?: number }).duration_ms;
   const isDone = status === 'done';
-  const [expanded, setExpanded] = useState(!isDone);
+  const [expanded, setExpanded] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(() => {
     const initialStartedAt = message.created_at ?? Date.now();
     return isDone ? 0 : Math.max(0, Math.floor((Date.now() - initialStartedAt) / 1000));
   });
   const startTimeRef = useRef<number>(message.created_at ?? Date.now());
   const bodyRef = useRef<HTMLDivElement>(null);
-
-  // Auto-collapse when status changes to done
-  useEffect(() => {
-    if (isDone) {
-      setExpanded(false);
-    }
-  }, [isDone]);
 
   // Elapsed timer for active thinking
   useEffect(() => {
@@ -79,14 +74,20 @@ const MessageThinking: React.FC<{ message: IMessageThinking }> = ({ message }) =
 
   return (
     <div className={styles.container}>
-      <div className={styles.header} onClick={() => setExpanded((v) => !v)}>
+      <Button
+        type='text'
+        htmlType='button'
+        className={styles.header}
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+      >
         <span className={styles.headerIcon}>{!isDone ? <Spin size={12} /> : <Brain theme='outline' size='14' />}</span>
         <span className={styles.summary}>{summaryText}</span>
         <span className={`${styles.arrow} ${expanded ? styles.arrowExpanded : ''}`}>
           <Right theme='outline' size='12' />
         </span>
-      </div>
-      <div ref={bodyRef} className={`${styles.body} ${!expanded ? styles.collapsed : ''}`}>
+      </Button>
+      <div ref={bodyRef} hidden={!expanded} className={`${styles.body} ${!expanded ? styles.collapsed : ''}`}>
         {text}
       </div>
     </div>

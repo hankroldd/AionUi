@@ -14,20 +14,7 @@ import { Button } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import type { TabFadeState } from '../../hooks/useTabOverflow';
 
-/**
- * 单个 tab 的最大宽度。
- *
- * 网页标题可以任意长（"某某官网 - 首页 - 欢迎光临……"），不设上限时一个 tab 就能
- * 撑满整条 tab 栏，用户完全看不出还有别的 tab。180px 够放下十几个中文字或一个可
- * 辨识的域名，同时保证预览框在最小宽度（260px）下仍能露出第二个 tab 的边缘，给出
- * "还有更多"的视觉线索。
- *
- * Maximum width of a single tab. Page titles can be arbitrarily long, and without a
- * cap one tab fills the whole strip so the user cannot tell other tabs exist. 180px
- * fits a recognizable domain or a dozen CJK characters while still leaving the edge
- * of a second tab visible at the panel's 260px minimum width — the visual cue that
- * more tabs are there.
- */
+/** 多标签限制标题宽度；单文件使用剩余空间，便于识别当前文件。 */
 const MAX_TAB_WIDTH_PX = 180;
 const BUTTON_STYLE: React.CSSProperties = { display: 'flex', padding: 0, border: 0, color: 'inherit' };
 
@@ -194,23 +181,26 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
   isMaximized,
   onToggleMaximize,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const zh = i18n?.language?.startsWith('zh');
+  const expandLabel = t('preview.expandPreview', { defaultValue: zh ? '展开预览' : 'Expand preview' });
+  const returnLabel = t('preview.returnToConversation', { defaultValue: zh ? '返回对话' : 'Return to conversation' });
   const { left: showLeftFade, right: showRightFade } = tabFadeState;
 
   return (
     <div
       className='relative flex-shrink-0 bg-bg-2'
-      style={{ minHeight: '36px', borderBottom: '1px solid var(--border-base)' }}
+      style={{ minHeight: '44px', borderBottom: '1px solid var(--border-base)' }}
     >
-      <div className='flex items-center h-36px w-full'>
+      <div className='flex items-center h-44px w-full'>
         {/* Tabs 滚动区域 / Tabs scroll area */}
         <div ref={tabsContainerRef} className='flex items-center h-full flex-1 overflow-x-auto'>
           {tabs.length > 0 ? (
             tabs.map((tab) => (
               <div
                 key={tab.id}
-                className={`flex items-center gap-6px px-10px h-full cursor-pointer transition-colors flex-shrink-0 ${tab.id === activeTabId ? 'bg-bg-1 text-t-primary' : 'text-t-secondary hover:bg-bg-3'}`}
-                style={{ maxWidth: `${MAX_TAB_WIDTH_PX}px` }}
+                className={`flex items-center gap-6px px-10px h-full min-w-0 cursor-pointer transition-colors ${tabs.length === 1 ? 'flex-1' : 'flex-shrink-0'} ${tab.id === activeTabId ? 'bg-bg-1 text-t-primary' : 'text-t-secondary hover:bg-bg-3'}`}
+                style={{ maxWidth: tabs.length === 1 ? '100%' : `${MAX_TAB_WIDTH_PX}px` }}
                 onClick={() => onSwitchTab(tab.id)}
                 onContextMenu={(e) => onContextMenu(e, tab.id)}
                 // 中键关闭 / Middle-click to close.
@@ -242,7 +232,7 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                   type='text'
                   htmlType='button'
                   className='items-center gap-4px min-w-0 flex-1 !bg-transparent'
-                  style={{ ...BUTTON_STYLE, height: '100%', fontSize: 12 }}
+                  style={{ ...BUTTON_STYLE, height: '100%', fontSize: 14 }}
                   aria-label={tab.title}
                   aria-pressed={tab.id === activeTabId}
                 >
@@ -334,17 +324,18 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                 type='text'
                 htmlType='button'
                 className='items-center justify-center rd-4px !bg-transparent hover:!bg-bg-3 transition-colors'
-                style={{ ...BUTTON_STYLE, width: 20, height: 20 }}
-                aria-label={isMaximized ? t('preview.restorePanel') : t('preview.maximizePanel')}
+                style={{ ...BUTTON_STYLE, height: 28, padding: '0 6px', gap: 4 }}
+                aria-label={isMaximized ? t('preview.restorePanel') : expandLabel}
                 aria-pressed={Boolean(isMaximized)}
                 onClick={onToggleMaximize}
-                title={isMaximized ? t('preview.restorePanel') : t('preview.maximizePanel')}
+                title={isMaximized ? t('preview.restorePanel') : expandLabel}
               >
                 {isMaximized ? (
                   <IconFullscreenExit style={{ fontSize: 14, color: iconColors.secondary }} />
                 ) : (
                   <IconFullscreen style={{ fontSize: 14, color: iconColors.secondary }} />
                 )}
+                <span>{isMaximized ? t('preview.restorePanel') : expandLabel}</span>
               </Button>
             )}
             {onClosePanel && (
@@ -352,12 +343,13 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
                 type='text'
                 htmlType='button'
                 className='items-center justify-center rd-4px !bg-transparent hover:!bg-bg-3 transition-colors'
-                style={{ ...BUTTON_STYLE, width: 20, height: 20 }}
-                aria-label={t('preview.collapsePanel')}
+                style={{ ...BUTTON_STYLE, height: 28, padding: '0 6px', gap: 4 }}
+                aria-label={returnLabel}
                 onClick={onClosePanel}
-                title={t('preview.collapsePanel')}
+                title={returnLabel}
               >
                 <IconShrink style={{ fontSize: 14, color: iconColors.secondary }} />
+                <span>{returnLabel}</span>
               </Button>
             )}
           </div>

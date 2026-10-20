@@ -1,10 +1,13 @@
 /**
+ * 文件：packages/desktop/src/renderer/pages/conversation/Preview/components/PreviewPanel/PreviewPanel.tsx
+ * 职责：组织文件预览与原有保存确认，换文件恢复阅读态。
  * @license
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
  */
 
 import { ipcBridge } from '@/common';
+import { chatFileRefKey } from '@/common/types/chatFile';
 import { downloadFileFromPath, downloadFileFromRef, downloadTextContent } from '@/renderer/utils/file/download';
 import { formatFileSize } from '@/renderer/services/FileService';
 import { CONTENT_FREE_TYPES, formatSizeAboveLimit } from '@/renderer/utils/file/previewPayload';
@@ -116,15 +119,13 @@ const PreviewPanel: React.FC = () => {
   const [inspectMode, setInspectMode] = useState(false);
   const [toolbarExtras, setToolbarExtras] = useState<PreviewToolbarExtras | null>(null);
 
-  // 切换文件时把视图模式复位为预览，避免上一个文件的 source 模式串到下一个文件（如代码文件丢失语法高亮）。
-  // 注意：单预览浏览模式下打开新文件会复用当前 tab 的 id，所以这里要监听实际显示的文件标识（路径 + 类型），
-  // 而不是 activeTabId（它不会变）。
-  // Reset view mode to preview when the displayed file changes so a previous file's source mode does not
-  // leak into the next one (e.g. a code file losing syntax highlighting). In single-preview browse mode a
-  // new file reuses the active tab's id, so we key on the file identity (path + type), not activeTabId.
+  // 单文件浏览会复用标签；项目文件只有 fileRef，切换时也必须回到阅读态。
+  const activeFileRefKey = activeTab?.metadata?.fileRef ? chatFileRefKey(activeTab.metadata.fileRef) : undefined;
   useEffect(() => {
     setViewMode('preview');
-  }, [activeTabId, activeTab?.metadata?.file_path, activeTab?.content_type]);
+    setIsSplitScreenEnabled(false);
+    setInspectMode(false);
+  }, [activeTabId, activeTab?.metadata?.file_path, activeTab?.content_type, activeFileRefKey]);
 
   // 确认对话框状态 / Confirmation dialog states
   const [closeTabConfirm, setCloseTabConfirm] = useState<CloseTabConfirmState>({ show: false, tabId: null });
@@ -1224,13 +1225,7 @@ const PreviewPanel: React.FC = () => {
           // On mobile the preview is already a full overlay, so maximizing is
           // meaningless; omitting the callback hides the button.
           onToggleMaximize={layout?.isMobile ? undefined : toggleMaximized}
-          // 只要面板里已经有任意 tab（文件或浏览器），就露出「新建浏览器 tab」的加号，
-          // 不必等用户先手动开过一次浏览器。面板本身为空时才隐藏，避免出现一个没有
-          // 上下文的孤立加号。
-          // Show the "new browser tab" plus as soon as the panel holds any tab (file or
-          // browser) instead of requiring the user to open a browser first. It stays
-          // hidden only while the panel is empty, so the plus never appears alone.
-          onNewBrowserTab={previewTabs.length > 0 ? handleNewBrowserTab : undefined}
+          onNewBrowserTab={browserTabs.length > 0 ? handleNewBrowserTab : undefined}
         />
 
         {/* 工具栏（URL / 浏览器 类型不显示工具栏，因为不需要下载/编辑等功能）

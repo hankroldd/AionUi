@@ -176,5 +176,7 @@
   "zoomIn": "Vergrößern",
   "zoomOut": "Verkleinern",
   "zoomReset": "Ansicht zurücksetzen",
-  "diagramZoomHint": "Scrollen zum Zoomen • Ziehen zum Verschieben • ESC zum Schließen"
+  "diagramZoomHint": "Scrollen zum Zoomen • Ziehen zum Verschieben • ESC zum Schließen",
+  "expandPreview": "Expand preview",
+  "returnToConversation": "Return to conversation"
 }

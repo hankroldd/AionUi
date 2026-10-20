@@ -83,3 +83,60 @@ describe('useProjectPanelCollapse (P3 host collapse)', () => {
     expect(states).toContain(true);
   });
 });
+
+describe('预览临时收起文件树', () => {
+  it('打开和退出预览保留展开偏好，同项目切会话不重新收起手动展开的文件树', () => {
+    const { result, rerender } = renderHook(
+      ({ preview, conversation }) => {
+        void conversation;
+        return useProjectPanelCollapse({
+          projectId: 'p1',
+          isMobile: false,
+          active: true,
+          temporarilyCollapsed: preview,
+        });
+      },
+      { initialProps: { preview: false, conversation: 'a' } }
+    );
+    expect(result.current.collapsed).toBe(false);
+    rerender({ preview: true, conversation: 'a' });
+    expect(result.current.collapsed).toBe(true);
+    expect(localStorage.getItem('project-panel-collapse:p1')).toBeNull();
+    fireToggle();
+    expect(result.current.collapsed).toBe(false);
+    expect(localStorage.getItem('project-panel-collapse:p1')).toBe('expanded');
+    rerender({ preview: true, conversation: 'b' });
+    expect(result.current.collapsed).toBe(false);
+    fireToggle();
+    expect(result.current.collapsed).toBe(true);
+    expect(localStorage.getItem('project-panel-collapse:p1')).toBe('collapsed');
+    rerender({ preview: false, conversation: 'b' });
+    expect(result.current.collapsed).toBe(true);
+    fireToggle();
+    rerender({ preview: true, conversation: 'b' });
+    expect(result.current.collapsed).toBe(true);
+    rerender({ preview: false, conversation: 'b' });
+    expect(result.current.collapsed).toBe(false);
+    expect(localStorage.getItem('project-panel-collapse:p1')).toBe('expanded');
+  });
+
+  it('原来已收起的项目保持收起，换项目不带入上个项目的手动展开', () => {
+    localStorage.setItem('project-panel-collapse:p1', 'collapsed');
+    const { result, rerender } = renderHook(
+      ({ id, preview }) =>
+        useProjectPanelCollapse({ projectId: id, isMobile: false, active: true, temporarilyCollapsed: preview }),
+      { initialProps: { id: 'p1', preview: true } }
+    );
+    expect(result.current.collapsed).toBe(true);
+    rerender({ id: 'p1', preview: false });
+    expect(result.current.collapsed).toBe(true);
+    rerender({ id: 'p1', preview: true });
+    fireToggle();
+    expect(result.current.collapsed).toBe(false);
+    rerender({ id: 'p2', preview: true });
+    expect(result.current.collapsed).toBe(true);
+    expect(localStorage.getItem('project-panel-collapse:p2')).toBeNull();
+    rerender({ id: 'p2', preview: false });
+    expect(result.current.collapsed).toBe(false);
+  });
+});

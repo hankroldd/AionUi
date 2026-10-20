@@ -9,13 +9,21 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { setScopeSelection } from '@mycowork/ui';
-import type { IMessagePermission } from '@/common/chat/chatLib';
+import type { IMessagePermission, TMessage } from '@/common/chat/chatLib';
 import AgentModeSelector from '@/renderer/components/agent/AgentModeSelector';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
 import MessagePermission from '@/renderer/pages/conversation/Messages/components/MessagePermission';
+import { MessageListProvider } from '@/renderer/pages/conversation/Messages/hooks';
+import { toolDisplayNameKey } from '@/renderer/pages/conversation/Messages/components/toolDisplayName';
+import zhCNMessages from '@/renderer/services/i18n/locales/zh-CN/messages.json';
+import enUSMessages from '@/renderer/services/i18n/locales/en-US/messages.json';
 import { useGuidSend, type GuidSendDeps } from '@/renderer/pages/guid/hooks/useGuidSend';
 
-const { confirmMock, createMock } = vi.hoisted(() => ({ confirmMock: vi.fn(), createMock: vi.fn() }));
+const { confirmMock, createMock, language } = vi.hoisted(() => ({
+  confirmMock: vi.fn(),
+  createMock: vi.fn(),
+  language: { current: 'zh-CN' },
+}));
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -44,8 +52,14 @@ vi.mock('@/renderer/hooks/agent/useAcpConfigOptions', () => ({
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
-    i18n: { language: 'zh-CN' },
+    t: (key: string, options?: { defaultValue?: string }) => {
+      const names = (language.current === 'zh-CN' ? zhCNMessages : enUSMessages).toolNames;
+      const toolName = key.startsWith('messages.toolNames.')
+        ? names[key.slice('messages.toolNames.'.length) as keyof typeof names]
+        : undefined;
+      return toolName ?? options?.defaultValue ?? key;
+    },
+    i18n: { language: language.current },
   }),
 }));
 vi.mock('i18next', () => ({ default: { language: 'zh-CN' } }));
@@ -55,6 +69,9 @@ vi.mock('@/renderer/utils/workspace/workspaceHistory', () => ({ updateWorkspaceT
 
 const MYCOWORK = ['mycowork_bridge'];
 const OTHER = ['github'];
+afterEach(() => {
+  language.current = 'zh-CN';
+});
 const inSession = (mcpServers: string[] | undefined, node: React.ReactNode) => (
   <ConversationProvider value={{ conversation_id: 'conv-1', type: 'aionrs', loadedMcpServers: mcpServers }}>
     {node}
@@ -248,4 +265,58 @@ describe('D115 新建任务（Aion CLI）', () => {
     setScopeSelection([]);
     expect(await send('yolo')).toBe('yolo');
   });
+});
+
+it.each([
+  ['office_copy_to_workspace', '复制文件到工作区', 'zh-CN'],
+  ['mcp__mycowork_bridge__office_copy_to_workspace', '复制文件到工作区', 'zh-CN'],
+  ['ExecCommand', '运行命令', 'zh-CN'],
+  ['office_copy_to_workspace', 'Copy the file to the workspace', 'en-US'],
+  ['mcp__mycowork_bridge__office_copy_to_workspace', 'Copy the file to the workspace', 'en-US'],
+  ['ExecCommand', 'Run a command', 'en-US'],
+])('批准标题使用真实工具 %s 的 %s 翻译，完整参数和拒绝回调保持', async (name, label, locale) => {
+  language.current = locale;
+  confirmMock.mockReset().mockResolvedValue(undefined);
+  const message = card(name, name === 'ExecCommand' ? 'exec' : 'mcp');
+  const command = 'rm -rf /fictional/example';
+  const tool: TMessage = {
+    id: 'real-tool',
+    conversation_id: message.conversation_id,
+    type: 'tool_call',
+    content: {
+      call_id: message.content.call_id,
+      name,
+      args: { command, target_relative_path: 'deck/example/file.pptx' },
+    },
+  };
+  render(
+    inSession(
+      MYCOWORK,
+      <MessageListProvider value={[tool]}>
+        <MessagePermission message={message} />
+      </MessageListProvider>
+    )
+  );
+  expect(screen.getByText(label)).toBeVisible();
+  expect(screen.getByText(/rm -rf \/fictional\/example/)).toBeVisible();
+  expect(screen.getByText(/target_relative_path/)).toBeVisible();
+  expect(optionValues()).toEqual(['proceed_once', 'cancel']);
+  fireEvent.click(screen.getByTestId('message-permission-option-cancel'));
+  await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));
+  expect(confirmMock).toHaveBeenCalledWith({
+    conversation_id: message.conversation_id,
+    call_id: message.content.call_id,
+    msg_id: message.msg_id,
+    data: { value: 'cancel' },
+    always_allow: false,
+  });
+});
+
+it('未知工具名不包装为已知动作，普通命令不推断为安全复制', () => {
+  expect(toolDisplayNameKey('unknown_write')).toBeUndefined();
+  expect(toolDisplayNameKey('mcp__other__office_copy_to_workspace')).toBeUndefined();
+  expect(toolDisplayNameKey('toString')).toBeUndefined();
+  expect(toolDisplayNameKey('ExecCommand')).toBe('messages.toolNames.ExecCommand');
+  render(inSession(MYCOWORK, <MessagePermission message={card('unknown_write', 'mcp')} />));
+  expect(screen.getByText('mcp wants to use: unknown_write')).toBeVisible();
 });

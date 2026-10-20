@@ -178,5 +178,7 @@
   "zoomIn": "Увеличить",
   "zoomOut": "Уменьшить",
   "zoomReset": "Сбросить вид",
-  "diagramZoomHint": "Колесо — масштаб • Перетаскивание — панорама • ESC — закрыть"
+  "diagramZoomHint": "Колесо — масштаб • Перетаскивание — панорама • ESC — закрыть",
+  "expandPreview": "Expand preview",
+  "returnToConversation": "Return to conversation"
 }

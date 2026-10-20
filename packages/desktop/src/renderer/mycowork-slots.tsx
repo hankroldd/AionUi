@@ -279,7 +279,9 @@ export function useMyCoworkConversationFiles(
       const tool = message.data as IMessageToolCall['content'];
       if (
         tool?.status === 'completed' &&
-        ['office_copy_to_workspace', 'office_fetch_original', 'office_register_output', 'office_edit'].includes(tool.name)
+        ['office_copy_to_workspace', 'office_fetch_original', 'office_register_output', 'office_edit'].includes(
+          tool.name
+        )
       ) {
         onFilesWritten?.();
       }
@@ -304,7 +306,7 @@ export const MyCoworkWorkspaceFileLinkSlot: React.FC<{ relativePath: string; chi
       generation.current += 1;
     };
   }, [projectId, conversationId, ownerKey]);
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const open = async (): Promise<void> => {
     if (!projectId || !conversationId || !preview) return;
     const openedAt = generation.current;
@@ -324,7 +326,12 @@ export const MyCoworkWorkspaceFileLinkSlot: React.FC<{ relativePath: string; chi
     }
   };
   return (
-    <ConversationFileLink disabled={!projectId || !conversationId || !preview} onOpen={() => void open()}>
+    <ConversationFileLink
+      disabled={!projectId || !conversationId || !preview}
+      onOpen={() => void open()}
+      fileName={relativePath.split('/').pop()}
+      lang={i18n.language}
+    >
       {children}
     </ConversationFileLink>
   );

@@ -97,7 +97,7 @@ describe('permission message adapters', () => {
     const message = makeGenericMessage();
     render(<MessagePermission message={message} />);
 
-    expect(screen.getByText('execute')).toBeInTheDocument();
+    expect(screen.getByText('messages.operationKind.execute')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('message-permission-option-proceed_once'));
 
     expect(genericInvoke).toHaveBeenCalledTimes(1);
@@ -133,48 +133,54 @@ describe('permission message adapters', () => {
     unmount();
   });
 
-  it.each(['', 'aionrs-'])('matches the unique %s call with concurrent same-name tools and an honest fallback', async (prefix) => {
-    const message = makeGenericMessage();
-    const tool: TMessage = {
-      id: 'tool-input',
-      type: 'tool_call',
-      conversation_id: message.conversation_id,
-      content: {
-        call_id: `${prefix}${message.content.call_id}`,
-        name: 'exec',
-        args: { command: 'officecli get /fictional/deck/slides.pptx --all' },
-      },
-    };
-    const unrelated: TMessage = {
-      ...tool,
-      id: 'other-conversation',
-      conversation_id: 'other-conversation',
-      content: { ...tool.content, args: { command: 'unrelated command' } },
-    };
-    const concurrent: TMessage = {
-      ...tool, id: 'other-call',
-      content: { ...tool.content, call_id: `${prefix}call-other`, args: { command: 'wrong same-name command' } },
-    };
-    const { unmount } = render(
-      <ConversationProvider value={{ conversation_id: message.conversation_id, type: prefix ? 'aionrs' : 'codex' }}>
-        <MessageListProvider value={[unrelated, concurrent, tool]}><MessagePermission message={message} /></MessageListProvider>
-      </ConversationProvider>
-    );
-    expect(screen.getByText(/officecli get \/fictional\/deck\/slides.pptx --all/)).toBeInTheDocument();
-    expect(screen.queryByText(/unrelated command|wrong same-name command/)).toBeNull();
-    fireEvent.click(screen.getByTestId('message-permission-option-proceed_once'));
-    expect(genericInvoke).toHaveBeenLastCalledWith(expect.objectContaining({ call_id: message.content.call_id }));
-    expect(await screen.findByTestId('message-permission-status')).toBeInTheDocument();
-    unmount();
-    render(<MessagePermission message={message} />);
-    expect(screen.getByText(/完整工具参数不可用/)).toBeInTheDocument();
-    expect(screen.queryByText('npm install')).toBeNull();
-  });
+  it.each(['', 'aionrs-'])(
+    'matches the unique %s call with concurrent same-name tools and an honest fallback',
+    async (prefix) => {
+      const message = makeGenericMessage();
+      const tool: TMessage = {
+        id: 'tool-input',
+        type: 'tool_call',
+        conversation_id: message.conversation_id,
+        content: {
+          call_id: `${prefix}${message.content.call_id}`,
+          name: 'exec',
+          args: { command: 'officecli get /fictional/deck/slides.pptx --all' },
+        },
+      };
+      const unrelated: TMessage = {
+        ...tool,
+        id: 'other-conversation',
+        conversation_id: 'other-conversation',
+        content: { ...tool.content, args: { command: 'unrelated command' } },
+      };
+      const concurrent: TMessage = {
+        ...tool,
+        id: 'other-call',
+        content: { ...tool.content, call_id: `${prefix}call-other`, args: { command: 'wrong same-name command' } },
+      };
+      const { unmount } = render(
+        <ConversationProvider value={{ conversation_id: message.conversation_id, type: prefix ? 'aionrs' : 'codex' }}>
+          <MessageListProvider value={[unrelated, concurrent, tool]}>
+            <MessagePermission message={message} />
+          </MessageListProvider>
+        </ConversationProvider>
+      );
+      expect(screen.getByText(/officecli get \/fictional\/deck\/slides.pptx --all/)).toBeInTheDocument();
+      expect(screen.queryByText(/unrelated command|wrong same-name command/)).toBeNull();
+      fireEvent.click(screen.getByTestId('message-permission-option-proceed_once'));
+      expect(genericInvoke).toHaveBeenLastCalledWith(expect.objectContaining({ call_id: message.content.call_id }));
+      expect(await screen.findByTestId('message-permission-status')).toBeInTheDocument();
+      unmount();
+      render(<MessagePermission message={message} />);
+      expect(screen.getByText(/完整工具参数不可用/)).toBeInTheDocument();
+      expect(screen.queryByText('npm install')).toBeNull();
+    }
+  );
 
   it('keeps the ACP payload exact and defaults confirmation to allow_once', async () => {
     render(<MessageAcpPermission message={makeAcpMessage()} />);
 
-    expect(screen.getByText('edit')).toBeInTheDocument();
+    expect(screen.getByText('messages.operationKind.edit')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('message-acp-permission-option-allow-once-id'));
 
     expect(acpInvoke).toHaveBeenCalledTimes(1);
@@ -288,7 +294,7 @@ describe('permission message adapters', () => {
     render(<MessagePermission message={message} />);
 
     expect(screen.getByText('messages.permissionRequest')).toBeInTheDocument();
-    expect(screen.getByText('tool')).toBeInTheDocument();
+    expect(screen.getByText('messages.operationKind.tool')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('message-permission-option-option_0'));
 
     expect(genericInvoke).toHaveBeenCalledWith({

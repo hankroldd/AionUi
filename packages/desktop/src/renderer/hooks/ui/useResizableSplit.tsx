@@ -1,4 +1,6 @@
 /**
+ * 文件：packages/desktop/src/renderer/hooks/ui/useResizableSplit.tsx
+ * 职责：管理分栏拖动、宽度偏好和可选收起交互。
  * @license
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
@@ -33,6 +35,8 @@ interface UseResizableSplitOptions {
   storageKey?: string;
   /** 单位：百分比或像素。默认 'ratio'（向后兼容） */
   unit?: 'ratio' | 'px';
+  /** 仅在开始拖动时取实际显示宽度，未传时沿用保存宽度。 */
+  getDragStartWidth?: (width: number) => number;
   /**
    * 收起吸附阈值（仅 px 模式；不传则关闭 collapse 语义，退化为纯 clamp）。
    * 拖拽实时宽度 < 此值时进入收起预览态：面板吸到 `collapsedWidth`，松手即收起，
@@ -56,7 +60,7 @@ interface UseResizableSplitOptions {
  */
 export const useResizableSplit = (options: UseResizableSplitOptions = {}) => {
   const { defaultWidth = 50, minWidth = 20, maxWidth = 80, storageKey, unit = 'ratio' } = options;
-  const { collapseThreshold, collapsedWidth = 0, collapsed = false, onCollapsedChange } = options;
+  const { getDragStartWidth, collapseThreshold, collapsedWidth = 0, collapsed = false, onCollapsedChange } = options;
   const isPx = unit === 'px';
   // Collapse 语义仅在 px 模式且显式给出阈值时启用；否则完全退化为原 clamp 行为。
   const collapseEnabled = isPx && typeof collapseThreshold === 'number';
@@ -123,12 +127,15 @@ export const useResizableSplit = (options: UseResizableSplitOptions = {}) => {
         const startX = event.clientX;
         // 收起态从收起宽度起拖（复刻旧 beginSiderResizeDrag 的 startWidth 语义），
         // 否则从当前面板宽度起拖。
-        const startRatio = collapseEnabled && collapsed ? collapsedWidth : splitRatio;
+        const startRatio =
+          collapseEnabled && collapsed ? collapsedWidth : (getDragStartWidth?.(splitRatio) ?? splitRatio);
         const pointerId = event.pointerId;
+        let pointerMoved = false;
         // px 模式下拖动直接换算为像素差，不再除以容器宽度。
         // 原始追踪值：上侧始终 clamp 到 maxWidth；下侧在启用 collapse 时可下探到
         // collapsedWidth（用于探测收起意图），否则沿用旧行为 clamp 到 minWidth。
         const computeRaw = (clientX: number): number => {
+          pointerMoved ||= clientX !== startX;
           const deltaX = reverse ? startX - clientX : clientX - startX;
           const base = isPx ? startRatio + deltaX : startRatio + (deltaX / containerWidth) * 100;
           const floor = collapseEnabled ? collapsedWidth : minWidth;
@@ -145,6 +152,7 @@ export const useResizableSplit = (options: UseResizableSplitOptions = {}) => {
 
         // 把一个原始追踪值应用为实时视图（拖拽中）。
         const applyLiveRatio = (raw: number) => {
+          if (getDragStartWidth && !pointerMoved) return;
           if (collapseEnabled && raw < (collapseThreshold as number)) {
             // 收起预览：不写 state（保留最后合法宽度），仅切收起态。
             if (!collapsedNow) {
@@ -208,6 +216,10 @@ export const useResizableSplit = (options: UseResizableSplitOptions = {}) => {
 
           // 松手终值：优先用真实指针位置重算；缺 clientX（blur）则用跟踪态兜底。
           const raw = e && 'clientX' in e && typeof e.clientX === 'number' ? computeRaw(e.clientX) : null;
+          if (getDragStartWidth && !pointerMoved) {
+            cleanupListeners?.();
+            return;
+          }
           const committedCollapsed =
             raw !== null ? collapseEnabled && raw < (collapseThreshold as number) : collapsedNow;
 
@@ -273,6 +285,7 @@ export const useResizableSplit = (options: UseResizableSplitOptions = {}) => {
       },
     [
       splitRatio,
+      getDragStartWidth,
       minWidth,
       maxWidth,
       setSplitRatio,

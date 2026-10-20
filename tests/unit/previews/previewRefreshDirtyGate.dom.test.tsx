@@ -227,3 +227,84 @@ describe('refreshing a tab with unsaved changes', () => {
     TIMEOUT_MS
   );
 });
+
+it(
+  '同类型项目文件复用标签时回到正文，纯文件没有浏览器加号，返回仍保护未保存稿',
+  async () => {
+    const { rerender } = render(<Harness showPanel={false} />);
+    act(() =>
+      ctx.openPreview('# 第一份正文', 'markdown', {
+        file_name: 'a.md',
+        fileRef: { kind: 'project', pe_id: 'peA', relative_path: 'deck/a.md' },
+      })
+    );
+    rerender(<Harness showPanel />);
+    const tabId = ctx.activeTabId;
+    expect(screen.queryByRole('button', { name: 'preview.browser.newTab' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'preview.openSplitScreen' }));
+    expect(screen.getByText('preview.editor')).toBeInTheDocument();
+    act(() =>
+      ctx.openPreview(
+        '# 第二份正文',
+        'markdown',
+        {
+          file_name: 'b.md',
+          fileRef: { kind: 'project', pe_id: 'peA', relative_path: 'deck/b.md' },
+        },
+        { replace: true }
+      )
+    );
+    expect(ctx.activeTabId).toBe(tabId);
+    expect(screen.queryByText('preview.editor')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '第二份正文' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'preview.source' }));
+    act(() => ctx.updateContent('# 未保存稿'));
+    fireEvent.click(screen.getByRole('button', { name: 'Return to conversation' }));
+    expect(ctx.isOpen).toBe(true);
+    expect(screen.getByText('preview.closeTabTitle')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('common.cancel'));
+    expect(ctx.activeTab?.content).toBe('# 未保存稿');
+    expect(ctx.activeTab?.isDirty).toBe(true);
+  },
+  TIMEOUT_MS
+);
+
+it(
+  '另一个项目的同名HTML复用标签时清除源码和元素检查态',
+  () => {
+    const { rerender } = render(<Harness showPanel={false} />);
+    act(() =>
+      ctx.openPreview('<h1>甲正文</h1>', 'html', {
+        file_name: 'a.html',
+        fileRef: { kind: 'project', pe_id: 'peA', relative_path: 'deck/a.html' },
+      })
+    );
+    rerender(<Harness showPanel />);
+    const tabId = ctx.activeTabId;
+    fireEvent.click(screen.getByRole('button', { name: 'preview.html.inspectElementEnable' }));
+    fireEvent.click(screen.getByRole('button', { name: 'preview.code' }));
+    expect(screen.getByRole('button', { name: 'preview.html.inspectElementDisable' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    act(() =>
+      ctx.openPreview(
+        '<h1>乙正文</h1>',
+        'html',
+        {
+          file_name: 'a.html',
+          fileRef: { kind: 'project', pe_id: 'peB', relative_path: 'deck/a.html' },
+        },
+        { replace: true }
+      )
+    );
+    expect(ctx.activeTabId).toBe(tabId);
+    expect(screen.getByRole('button', { name: 'preview.preview' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'preview.html.inspectElementEnable' })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    expect(document.querySelector('iframe, webview')).toBeInTheDocument();
+  },
+  TIMEOUT_MS
+);

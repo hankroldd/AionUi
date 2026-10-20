@@ -1,4 +1,4 @@
-/* Preview panel animation */
+/* 文件预览保持静态打开，阅读操作不依赖动画。 */
 
 @media (prefers-reduced-motion: reduce) {
   .preview-panel {
@@ -7,18 +7,7 @@
   }
 }
 
-.preview-panel {
-  animation: preview-panel-enter 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  will-change: opacity, transform;
-}
-
-@keyframes preview-panel-enter {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+/* 下载是主操作，在窄面板中也保留可见文字。 */
+.mycowork-preview-toolbar button.preview-toolbar-action > span.preview-download-label {
+  display: inline !important;
 }

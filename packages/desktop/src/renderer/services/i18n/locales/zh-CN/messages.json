@@ -98,5 +98,45 @@
   "requestDetails": "请求内容：",
   "delivery": {
     "pending": "未读"
+  },
+  "toolActivity": {
+    "label": "操作详情",
+    "running": "正在执行",
+    "failed": "有操作失败",
+    "canceled": "已取消",
+    "pending": "等待执行"
+  },
+  "toolDetail": {
+    "input": "完整参数",
+    "output": "执行结果",
+    "loading": "正在读取完整详情…",
+    "loadFailed": "完整详情读取失败"
+  },
+  "operationKind": {
+    "execute": "运行命令",
+    "edit": "修改文件",
+    "read": "读取内容",
+    "fetch": "获取内容",
+    "tool": "工具操作"
+  },
+  "toolNames": {
+    "search": "检索资料",
+    "read": "读取文件内容",
+    "coverage": "检查资料覆盖",
+    "changes": "查看版本变化",
+    "manifest": "确认可用资料与功能",
+    "skill_read": "读取制作规范",
+    "template_recommend": "查找合适模板",
+    "office_copy_to_workspace": "复制文件到工作区",
+    "office_fetch_original": "取得文件工作副本",
+    "office_edit": "修改工作文件",
+    "office_register_output": "保存生成文件",
+    "office_read": "读取文件内容",
+    "office_check": "检查文件内容",
+    "office_calc": "计算表格数据",
+    "memory_suggest": "整理待确认记忆",
+    "research_search_arxiv": "检索论文",
+    "ExecCommand": "运行命令",
+    "template_select": "确认模板选择"
   }
 }

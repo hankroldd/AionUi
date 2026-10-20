@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import React from 'react';
+import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useProjectPreviewRegionWidth } from '@/renderer/hooks/ui/useProjectPreviewRegionWidth';
 
@@ -45,4 +46,109 @@ describe('useProjectPreviewRegionWidth (P4 ordered clamp)', () => {
     const { result } = renderHook(() => useProjectPreviewRegionWidth(900, 400, true));
     expect(result.current.widthPx).toBe(MIN_PREVIEW);
   });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+it.each([false, true])('受限窗口未横向拖动（同X移动：%s），恢复宽窗仍保留原宽度', (moveAtSameX) => {
+  localStorage.setItem('chat-preview-width-px', '640');
+  vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    callback(0);
+    return 1;
+  });
+  const Harness = ({ available }: { available: number }) => {
+    const { widthPx, createDragHandle } = useProjectPreviewRegionWidth(available, 0, true);
+    return (
+      <div>
+        <output>{widthPx}</output>
+        {createDragHandle({ reverse: true })}
+      </div>
+    );
+  };
+  const { container, rerender } = render(<Harness available={940} />);
+  const handle = container.querySelector('.cursor-col-resize')!;
+  fireEvent.pointerDown(handle, { clientX: 500, button: 0, pointerType: 'mouse', pointerId: 1 });
+  if (moveAtSameX) {
+    act(() => {
+      window.dispatchEvent(new MouseEvent('pointermove', { clientX: 500, clientY: 40, buttons: 1 }));
+    });
+  }
+  act(() => {
+    window.dispatchEvent(new MouseEvent('pointerup', { clientX: 500 }));
+  });
+  expect(container.querySelector('output')?.textContent).toBe('556');
+  expect(localStorage.getItem('chat-preview-width-px')).toBe('640');
+  rerender(<Harness available={1228} />);
+  expect(container.querySelector('output')?.textContent).toBe('640');
+});
+
+it.each([640, 1200])('受限窗口从当前显示宽度起拖，不受已存 %dpx 偏好的死区影响', (storedWidth) => {
+  localStorage.setItem('chat-preview-width-px', String(storedWidth));
+  vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    callback(0);
+    return 1;
+  });
+  const Harness = ({ available }: { available: number }) => {
+    const { widthPx, createDragHandle } = useProjectPreviewRegionWidth(available, 0, true);
+    return (
+      <div>
+        <output>{widthPx}</output>
+        {createDragHandle({ reverse: true })}
+      </div>
+    );
+  };
+  const { container, rerender } = render(<Harness available={940} />);
+  expect(container.querySelector('output')?.textContent).toBe('556');
+  expect(localStorage.getItem('chat-preview-width-px')).toBe(String(storedWidth));
+
+  const handle = container.querySelector('.cursor-col-resize')!;
+  fireEvent.pointerDown(handle, { clientX: 500, button: 0, pointerType: 'mouse', pointerId: 1 });
+  act(() => {
+    window.dispatchEvent(new MouseEvent('pointermove', { clientX: 530, buttons: 1 }));
+  });
+  expect(container.querySelector('output')?.textContent).toBe('526');
+  expect(localStorage.getItem('chat-preview-width-px')).toBe(String(storedWidth));
+  act(() => {
+    window.dispatchEvent(new MouseEvent('pointerup', { clientX: 530 }));
+  });
+  expect(container.querySelector('output')?.textContent).toBe('526');
+  expect(localStorage.getItem('chat-preview-width-px')).toBe('526');
+  rerender(<Harness available={1228} />);
+  expect(container.querySelector('output')?.textContent).toBe('526');
+});
+
+it('给旧窄预览可读宽度，窄窗临时约束不覆盖偏好，恢复窗口后可继续手动调整', () => {
+  localStorage.setItem('chat-preview-width-px', '339');
+  const { result, rerender, unmount } = renderHook(
+    ({ available, explorer }) => useProjectPreviewRegionWidth(available, explorer, true),
+    { initialProps: { available: 1228, explorer: 0 } }
+  );
+  expect(result.current.widthPx).toBe(640);
+  rerender({ available: 800, explorer: 220 });
+  expect(result.current.widthPx).toBe(340);
+  expect(localStorage.getItem('chat-preview-width-px')).toBe('339');
+  rerender({ available: 1228, explorer: 0 });
+  expect(result.current.widthPx).toBe(640);
+  unmount();
+
+  const Harness = () => {
+    const { widthPx, createDragHandle } = useProjectPreviewRegionWidth(1228, 0, true);
+    return (
+      <div>
+        <output>{widthPx}</output>
+        {createDragHandle()}
+      </div>
+    );
+  };
+  const { container } = render(<Harness />);
+  const handle = container.querySelector('.cursor-col-resize')!;
+  fireEvent.pointerDown(handle, { clientX: 0, button: 0, pointerType: 'mouse', pointerId: 1 });
+  act(() => {
+    window.dispatchEvent(new MouseEvent('pointerup', { clientX: -90 }));
+  });
+  expect(container.querySelector('output')?.textContent).toBe('550');
+  expect(localStorage.getItem('chat-preview-width-px')).toBe('550');
 });

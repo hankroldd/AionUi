@@ -33,26 +33,26 @@ describe('PreviewTabs maximize button', () => {
 
   it('hides the maximize button when no toggle handler is provided (mobile)', () => {
     render(<PreviewTabs {...baseProps()} />);
-    expect(screen.queryByTitle('preview.maximizePanel')).toBeNull();
+    expect(screen.queryByTitle('preview.expandPreview')).toBeNull();
     expect(screen.queryByTitle('preview.restorePanel')).toBeNull();
   });
 
   it('shows the maximize tooltip when not maximized', () => {
     render(<PreviewTabs {...baseProps()} isMaximized={false} onToggleMaximize={vi.fn()} />);
-    expect(screen.getByRole('button', { name: 'preview.maximizePanel', pressed: false })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'preview.expandPreview', pressed: false })).toBeTruthy();
     expect(screen.queryByTitle('preview.restorePanel')).toBeNull();
   });
 
   it('shows the restore tooltip when maximized', () => {
     render(<PreviewTabs {...baseProps()} isMaximized={true} onToggleMaximize={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'preview.restorePanel', pressed: true })).toBeTruthy();
-    expect(screen.queryByTitle('preview.maximizePanel')).toBeNull();
+    expect(screen.queryByTitle('preview.expandPreview')).toBeNull();
   });
 
   it('invokes the toggle handler on click', () => {
     const onToggleMaximize = vi.fn();
     render(<PreviewTabs {...baseProps()} isMaximized={false} onToggleMaximize={onToggleMaximize} />);
-    fireEvent.click(screen.getByTitle('preview.maximizePanel'));
+    fireEvent.click(screen.getByTitle('preview.expandPreview'));
     expect(onToggleMaximize).toHaveBeenCalledTimes(1);
   });
 });
@@ -64,8 +64,8 @@ describe('PreviewTabs keyboard controls', () => {
     [0, 'file.md', 'onSwitchTab', ['t1']],
     [1, 'preview.closeTabTitle: file.md', 'onCloseTab', ['t1']],
     [2, 'preview.browser.newTab', 'onNewBrowserTab', []],
-    [3, 'preview.maximizePanel', 'onToggleMaximize', []],
-    [4, 'preview.collapsePanel', 'onClosePanel', []],
+    [3, 'preview.expandPreview', 'onToggleMaximize', []],
+    [4, 'preview.returnToConversation', 'onClosePanel', []],
   ] as const;
 
   describe.each(['{Enter}', ' '])('activation with %s', (key) => {

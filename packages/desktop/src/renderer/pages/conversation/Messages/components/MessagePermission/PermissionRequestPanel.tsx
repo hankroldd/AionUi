@@ -1,4 +1,6 @@
 /**
+ * 文件：Messages/components/MessagePermission/PermissionRequestPanel.tsx
+ * 职责：呈现批准内容和动作选项，保持原响应与重试策略。
  * @license
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
@@ -111,7 +113,7 @@ export const PermissionRequestPanel: React.FC<PermissionRequestPanelProps> = ({
         <div className={styles.heading}>
           <div className={styles.titleRow}>
             <Text className={styles.title}>{title}</Text>
-            <Text className={styles.operationBadge}>{operationKind}</Text>
+            <Text className={styles.operationBadge}>{t(`messages.operationKind.${operationKind}`)}</Text>
           </div>
           {description && <Text className={styles.description}>{description}</Text>}
         </div>

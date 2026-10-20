@@ -176,5 +176,7 @@
   "zoomIn": "拡大",
   "zoomOut": "縮小",
   "zoomReset": "表示をリセット",
-  "diagramZoomHint": "スクロールでズーム • ドラッグで移動 • ESC で閉じる"
+  "diagramZoomHint": "スクロールでズーム • ドラッグで移動 • ESC で閉じる",
+  "expandPreview": "Expand preview",
+  "returnToConversation": "Return to conversation"
 }

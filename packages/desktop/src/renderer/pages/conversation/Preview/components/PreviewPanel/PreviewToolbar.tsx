@@ -1,4 +1,6 @@
 /**
+ * 文件：packages/desktop/src/renderer/pages/conversation/Preview/components/PreviewPanel/PreviewToolbar.tsx
+ * 职责：呈现文件操作并沿用原下载、刷新与编辑回调。
  * @license
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
@@ -92,7 +94,7 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
     // [mycowork] `mycowork-preview-toolbar`: a CSS container; below ~560px the labelled buttons keep only their icon
     // (title stays as the tooltip) so a 1024-wide three-column layout does not push Download/Edit out of view
     // (MyCowork PR11 audit; rule in styles/arco-override.css).
-    <div className='mycowork-preview-toolbar flex items-center justify-between h-32px px-10px bg-bg-2 flex-shrink-0 border-b border-border-1 overflow-x-auto'>
+    <div className='mycowork-preview-toolbar flex items-center justify-between h-40px px-10px bg-bg-2 flex-shrink-0 border-b border-border-1 overflow-x-auto'>
       <div className='flex items-center justify-between gap-8px w-full' style={{ minWidth: 'max-content' }}>
         {/* 左侧：Tabs（Markdown/HTML）+ 文件名 / Left: Tabs (Markdown/HTML) + Filename */}
         <div className='flex items-center h-full gap-8px'>
@@ -213,7 +215,7 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                 <polyline points='7 10 12 15 17 10' />
                 <line x1='12' y1='15' x2='12' y2='3' />
               </svg>
-              <span>{t('common.download')}</span>
+              <span className='preview-download-label'>{t('common.download')}</span>
             </Button>
           )}
           {leftExtra}
@@ -314,7 +316,7 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                 <polyline points='7 10 12 15 17 10' />
                 <line x1='12' y1='15' x2='12' y2='3' />
               </svg>
-              <span>{t('common.download')}</span>
+              <span className='preview-download-label'>{t('common.download')}</span>
             </Button>
           )}
 

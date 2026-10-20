@@ -1,4 +1,6 @@
 /**
+ * 文件：packages/desktop/src/renderer/hooks/ui/useProjectPreviewRegionWidth.tsx
+ * 职责：约束预览宽度并保留用户拖动后的可读宽度。
  * @license
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
@@ -21,8 +23,6 @@
  *   ⇒ content = available − explorer − preview ≥ MIN_CHAT
  */
 
-import { useEffect } from 'react';
-
 import {
   MIN_CHAT_PANEL_PX,
   MIN_PREVIEW_PANEL_PX,
@@ -30,22 +30,10 @@ import {
 } from '@/renderer/pages/conversation/utils/layoutCalc';
 import { useResizableSplit } from '@/renderer/hooks/ui/useResizableSplit';
 
-const DEFAULT_PREVIEW_REGION_PX = 480;
+const DEFAULT_PREVIEW_REGION_PX = 640;
 const MAX_PREVIEW_REGION_PX = 1200;
 
-export function useProjectPreviewRegionWidth(availableWidth: number, explorerWidthPx: number, active: boolean) {
-  const {
-    splitRatio: requestedWidth,
-    setSplitRatio,
-    createDragHandle,
-  } = useResizableSplit({
-    unit: 'px',
-    defaultWidth: DEFAULT_PREVIEW_REGION_PX,
-    minWidth: MIN_PREVIEW_PANEL_PX,
-    maxWidth: MAX_PREVIEW_REGION_PX,
-    storageKey: 'chat-preview-width-px',
-  });
-
+export function useProjectPreviewRegionWidth(availableWidth: number, explorerWidthPx: number, _active: boolean) {
   // Clamp against the space left after chat's reserve and the explorer column,
   // minus the preview region's own horizontal chrome (margins + border) so the
   // occupied width (preview + chrome) never pushes the explorer past the row.
@@ -53,12 +41,16 @@ export function useProjectPreviewRegionWidth(availableWidth: number, explorerWid
     MIN_PREVIEW_PANEL_PX,
     availableWidth - MIN_CHAT_PANEL_PX - explorerWidthPx - PREVIEW_REGION_CHROME_PX
   );
+  const { splitRatio: requestedWidth, createDragHandle } = useResizableSplit({
+    unit: 'px',
+    defaultWidth: DEFAULT_PREVIEW_REGION_PX,
+    minWidth: 480,
+    maxWidth: MAX_PREVIEW_REGION_PX,
+    storageKey: 'chat-preview-width-px',
+    getDragStartWidth: (width) => Math.min(width, maxByContainer),
+  });
   const widthPx = Math.min(requestedWidth, maxByContainer);
 
-  useEffect(() => {
-    if (!active || availableWidth <= 0) return;
-    if (requestedWidth > maxByContainer) setSplitRatio(maxByContainer);
-  }, [active, availableWidth, explorerWidthPx, requestedWidth, maxByContainer, setSplitRatio]);
-
+  // 窄窗只约束本次显示，避免把用户的可读宽度永久压成最小值。
   return { widthPx, createDragHandle };
 }

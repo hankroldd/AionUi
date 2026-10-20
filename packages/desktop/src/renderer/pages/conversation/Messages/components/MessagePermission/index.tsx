@@ -7,10 +7,10 @@
  */
 
 import { ipcBridge } from '@/common';
-import type { IMessagePermission, IMessageToolCall } from '@/common/chat/chatLib';
+import type { IMessagePermission, IMessageToolCall, TMessage } from '@/common/chat/chatLib';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { hidesAlwaysAllow } from '@/renderer/mycowork-approval-guard';
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PermissionRequestPanel } from './PermissionRequestPanel';
 import { toolDisplayNameKey } from '../toolDisplayName';
@@ -25,6 +25,11 @@ type MessagePermissionProps = {
   message: IMessagePermission;
 };
 
+const toolInput = (tool?: IMessageToolCall): Record<string, unknown> | undefined =>
+  [tool?.content.input, tool?.content.args].find(
+    (input) => input && typeof input === 'object' && !Array.isArray(input) && Object.keys(input).length > 0
+  );
+
 const MessagePermission: React.FC<MessagePermissionProps> = React.memo(({ message }) => {
   const { t } = useTranslation();
   const content = message.content || ({} as IMessagePermission['content']);
@@ -32,27 +37,57 @@ const MessagePermission: React.FC<MessagePermissionProps> = React.memo(({ messag
   const messages = useMessageList();
   const conversationContext = useConversationContextSafe();
   // [mycowork] AionCore v0.2.2 BackendOutputSink 给工具 ID 加 aionrs-；批准仍使用原 ID。
-  const tool = messages.find(
-    (item): item is IMessageToolCall =>
-      item.type === 'tool_call' &&
+  const matchesTool = useCallback(
+    (item?: TMessage | null): item is IMessageToolCall =>
+      item?.type === 'tool_call' &&
       item.conversation_id === message.conversation_id &&
       Boolean(call_id) &&
       (item.content.call_id === call_id ||
-        (conversationContext?.type === 'aionrs' && item.content.call_id === `aionrs-${call_id}`))
+        (conversationContext?.type === 'aionrs' && item.content.call_id === `aionrs-${call_id}`)),
+    [call_id, conversationContext?.type, message.conversation_id]
   );
-  const input = tool?.content.input ?? tool?.content.args;
-  const detail =
-    input && Object.keys(input).length > 0
-      ? JSON.stringify(input, null, 2)
-      : t('messages.permissionInputUnavailable', {
-          defaultValue: '完整工具参数不可用，请先查看操作说明；不确定时拒绝本次操作。',
-        });
+  const tool = messages.find(matchesTool);
+  const input = toolInput(tool);
+  const requestKey = `${message.conversation_id}:${message.id}:${call_id}`;
+  const messageId = tool?.id || (conversationContext?.type === 'aionrs' && call_id ? `aionrs-${call_id}` : undefined);
+  const [hydrated, setHydrated] = useState<{ requestKey: string; tool: IMessageToolCall } | null>(null);
+  const fullTool = hydrated?.requestKey === requestKey ? hydrated.tool : undefined;
+
+  useEffect(() => {
+    if (input || !messageId || !call_id) return;
+    let cancelled = false;
+    void ipcBridge.database.getConversationMessage
+      .invoke({ conversation_id: message.conversation_id, message_id: messageId })
+      .then((candidate) => {
+        if (!cancelled && candidate?.id === messageId && matchesTool(candidate) && toolInput(candidate)) {
+          setHydrated({ requestKey, tool: candidate });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          console.warn('[MessagePermission] Failed to load tool input', {
+            conversation_id: message.conversation_id,
+            message_id: messageId,
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [call_id, input, matchesTool, message.conversation_id, messageId, requestKey]);
+
+  const displayInput = input ?? toolInput(fullTool);
+  const detail = displayInput
+    ? JSON.stringify(displayInput, null, 2)
+    : t('messages.permissionInputUnavailable', {
+        defaultValue: '完整工具参数不可用，请先查看操作说明；不确定时拒绝本次操作。',
+      });
   const mcpServers = conversationContext?.loadedMcpServers;
   // [mycowork] D115：MyCowork 会话的 mcp 类与 exec 类卡片不给“始终允许”（aionrs 按类别记住，会连带放行 Bridge 写工具或免批准 shell）
   const options = (Array.isArray(content.options) ? content.options : []).filter(
     (option) => !hidesAlwaysAllow(mcpServers, command_type, action, String(option?.value))
   );
-  const displayNameKey = toolDisplayNameKey(tool?.content.name ?? action);
+  const displayNameKey = toolDisplayNameKey(tool?.content.name ?? fullTool?.content.name ?? action);
   const displayTitle =
     (displayNameKey ? t(displayNameKey) : undefined) || title || description || t('messages.permissionRequest');
 

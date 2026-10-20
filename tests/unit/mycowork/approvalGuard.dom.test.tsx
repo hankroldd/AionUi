@@ -27,6 +27,7 @@ const { confirmMock, createMock, language } = vi.hoisted(() => ({
 
 vi.mock('@/common', () => ({
   ipcBridge: {
+    database: { getConversationMessage: { invoke: vi.fn().mockResolvedValue(null) } },
     conversation: {
       confirmation: { confirm: { invoke: confirmMock } },
       create: { invoke: (...args: unknown[]) => createMock(...args) },

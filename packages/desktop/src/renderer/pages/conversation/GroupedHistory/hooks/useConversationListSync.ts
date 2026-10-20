@@ -332,7 +332,18 @@ export const getSnapshotConversationName = (conversation_id: string): string | u
   return name ? name : undefined;
 };
 
+// [mycowork] Stream bursts must not consume every HTTP connection while a slow list is pending.
+let refreshInFlight = false;
+let refreshQueued = false;
+// [mycowork] Stream-only ids can stay absent (e.g. archived rows); real list changes still refresh them.
+const refreshedUnknownConversationIds = new Set<string>();
+
 const refreshConversations = () => {
+  if (refreshInFlight) {
+    refreshQueued = true;
+    return;
+  }
+  refreshInFlight = true;
   void ipcBridge.database.getUserConversations
     .invoke({ limit: 10000 })
     .then((result) => {
@@ -367,6 +378,13 @@ const refreshConversations = () => {
       conversation_idsState = new Set();
       projectIdByIdState = new Map();
       emitStoreChange();
+    })
+    .finally(() => {
+      refreshInFlight = false;
+      if (refreshQueued) {
+        refreshQueued = false;
+        refreshConversations();
+      }
     });
 };
 
@@ -611,7 +629,8 @@ const initializeConversationListSyncStore = () => {
       return;
     }
 
-    if (!conversation_idsState.has(conversation_id)) {
+    if (!conversation_idsState.has(conversation_id) && !refreshedUnknownConversationIds.has(conversation_id)) {
+      refreshedUnknownConversationIds.add(conversation_id);
       refreshConversations();
     }
 

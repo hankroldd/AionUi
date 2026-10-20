@@ -337,6 +337,7 @@ let refreshInFlight = false;
 let refreshQueued = false;
 // [mycowork] Stream-only ids can stay absent (e.g. archived rows); real list changes still refresh them.
 const refreshedUnknownConversationIds = new Set<string>();
+let pendingUnknownConversationIds = new Set<string>();
 
 const refreshConversations = () => {
   if (refreshInFlight) {
@@ -344,6 +345,8 @@ const refreshConversations = () => {
     return;
   }
   refreshInFlight = true;
+  const unknownIdsInThisRefresh = pendingUnknownConversationIds;
+  pendingUnknownConversationIds = new Set<string>();
   void ipcBridge.database.getUserConversations
     .invoke({ limit: 10000 })
     .then((result) => {
@@ -373,6 +376,7 @@ const refreshConversations = () => {
       emitStoreChange();
     })
     .catch((error) => {
+      for (const id of unknownIdsInThisRefresh) refreshedUnknownConversationIds.delete(id);
       console.error('[WorkspaceGroupedHistory] Failed to load conversations:', error);
       conversationsState = [];
       conversation_idsState = new Set();
@@ -631,6 +635,7 @@ const initializeConversationListSyncStore = () => {
 
     if (!conversation_idsState.has(conversation_id) && !refreshedUnknownConversationIds.has(conversation_id)) {
       refreshedUnknownConversationIds.add(conversation_id);
+      pendingUnknownConversationIds.add(conversation_id);
       refreshConversations();
     }
 

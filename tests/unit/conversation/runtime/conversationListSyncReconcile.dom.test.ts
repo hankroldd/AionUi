@@ -145,6 +145,37 @@ describe('conversation list refresh', () => {
     expect(getConversations).toHaveBeenCalledTimes(2);
   });
 
+  it('retries the same streamed id after failure without retrying successfully absent ids', async () => {
+    const failed = deferredList();
+    const recovered = deferredList();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    getConversations
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ items: [] })
+      .mockReturnValueOnce(failed.promise)
+      .mockReturnValueOnce(recovered.promise);
+    const { result } = renderHook(() => sync.useConversationListSync());
+    await act(async () => {});
+    const stream = (id: string) => events.get('responseStream')!({ conversation_id: id, type: 'content' });
+    await act(async () => stream('absent'));
+    act(() => {
+      for (let i = 0; i < 50; i++) stream('recoverable');
+    });
+    expect(getConversations).toHaveBeenCalledTimes(3);
+
+    await act(async () => failed.reject(new Error('List unavailable')));
+    act(() => {
+      for (let i = 0; i < 50; i++) stream('recoverable');
+      stream('absent');
+    });
+    expect(getConversations).toHaveBeenCalledTimes(4);
+    await act(async () => recovered.resolve({ items: [{ id: 'recoverable' }] }));
+    expect({
+      requests: getConversations.mock.calls.length,
+      ids: result.current.conversations.map(({ id }) => id),
+    }).toEqual({ requests: 4, ids: ['recoverable'] });
+  });
+
   it.each([
     ['created', 'listChanged', { conversation_id: 'new', action: 'created' }],
     ['renamed', 'listChanged', { conversation_id: 'new', action: 'updated' }],

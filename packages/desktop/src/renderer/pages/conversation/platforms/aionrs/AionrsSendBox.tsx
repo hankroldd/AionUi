@@ -13,7 +13,7 @@ import MobileActionSheet, {
   type MobileActionSheetOption,
   useAttachEntry,
 } from '@/renderer/components/chat/MobileActionSheet';
-import SendBox from '@/renderer/components/chat/SendBox';
+import SendBox, { type SendBoxSubmitHandle } from '@/renderer/components/chat/SendBox';
 import ThoughtDisplay from '@/renderer/components/chat/ThoughtDisplay';
 import FileAttachButton from '@/renderer/components/media/FileAttachButton';
 import FilePreview from '@/renderer/components/media/FilePreview';
@@ -57,7 +57,7 @@ import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
 import { useAionrsMessage } from './useAionrsMessage';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
-import { captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft, officeTaskOwner, watchTurnEnd, watchTurnEnded } from '@/renderer/mycowork-slots';
+import { MyCoworkTemplateConfirmationDialog, captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft, officeTaskOwner, watchTurnEnd, watchTurnEnded } from '@/renderer/mycowork-slots';
 import type { DraftDocument, DraftState, TaskRun } from '@mycowork/contracts';
 import { withoutYolo } from '@/renderer/mycowork-approval-guard';
 import { useSendFailure } from '@/renderer/mycowork-send-failure';
@@ -429,6 +429,7 @@ const AionrsSendBox: React.FC<{
   // replying, sending is hard-blocked with a toast instead of implicitly
   // enqueuing. The only way to queue a message while busy is the explicit
   // "add to queue" entry (handleAddToQueue below).
+  const templateSubmitRef = useRef<SendBoxSubmitHandle>(null);
   const onSendHandler = async (message: string): Promise<void | false> => {
     if (isBusy) {
       Message.warning(
@@ -829,6 +830,14 @@ const AionrsSendBox: React.FC<{
 
   return (
     <div className={`${sendBoxWidthClass} flex flex-col mt-auto mb-16px`}>
+      {!teamRuntime && !teamSendMessage && persistentDraft.enabled && (
+        <MyCoworkTemplateConfirmationDialog
+          content={content}
+          onContentChange={handleContentChange}
+          disabled={isBusy || !persistentDraft.ready || !current_model?.use_model}
+          onSubmit={(prefix) => templateSubmitRef.current?.submitWithPrefix(prefix) ?? Promise.resolve(false)}
+        />
+      )}
       {persistentDraft.enabled && <DraftStatus draft={persistentDraft} lang={i18n?.language} />}
       {sendFailure.notice}
       {persistentDraft.enabled && officeRun && (
@@ -867,6 +876,7 @@ const AionrsSendBox: React.FC<{
       <CrossSessionDisabledBanner />
       <SendBox
         data-testid='aionrs-sendbox'
+        submitRef={templateSubmitRef}
         onMobilePlusClick={isMobile ? () => setIsMobileSheetOpen(true) : undefined}
         preserveInputOnSend={persistentDraft.enabled}
         value={content}

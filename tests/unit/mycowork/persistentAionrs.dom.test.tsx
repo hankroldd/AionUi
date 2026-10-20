@@ -19,6 +19,7 @@ const { layoutState, contextState, send, accepted } = vi.hoisted(() => ({
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
+    i18n: { language: 'zh-CN' },
   }),
 }));
 

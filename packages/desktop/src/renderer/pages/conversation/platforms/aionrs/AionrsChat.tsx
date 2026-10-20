@@ -25,6 +25,7 @@ import HOC from '@renderer/utils/ui/HOC';
 import React, { useMemo } from 'react';
 import type { TeamSendBoxRuntime } from '@/renderer/pages/team/components/teamSendRuntime';
 import AionrsSendBox from './AionrsSendBox';
+import { MyCoworkTemplateConfirmationProvider } from '@/renderer/mycowork-slots';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
 
 const AionrsChat: React.FC<{
@@ -86,22 +87,24 @@ const AionrsChat: React.FC<{
 
   return (
     <ConversationProvider value={conversationValue}>
-      <ConversationArtifactProvider conversation_id={conversation_id}>
-        <div className={`${CHAT_SURFACE_CONTAINER_CLASS} flex-1 flex flex-col px-20px min-h-0`}>
-          <FlexFullContainer>
-            <MessageList className='flex-1' emptySlot={emptySlot} />
-          </FlexFullContainer>
-          <ConversationPlanBar conversation_id={conversation_id} />
-          <AionrsSendBox
-            conversation_id={conversation_id}
-            modelSelection={modelSelection}
-            session_mode={session_mode}
-            agent_name={agent_name}
-            teamSendMessage={teamSendMessage}
-            teamRuntime={teamRuntime}
-          />
-        </div>
-      </ConversationArtifactProvider>
+      <MyCoworkTemplateConfirmationProvider conversationId={conversation_id} enabled={!teamRuntime && !teamSendMessage}>
+        <ConversationArtifactProvider conversation_id={conversation_id}>
+          <div className={`${CHAT_SURFACE_CONTAINER_CLASS} flex-1 flex flex-col px-20px min-h-0`}>
+            <FlexFullContainer>
+              <MessageList className='flex-1' emptySlot={emptySlot} />
+            </FlexFullContainer>
+            <ConversationPlanBar conversation_id={conversation_id} />
+            <AionrsSendBox
+              conversation_id={conversation_id}
+              modelSelection={modelSelection}
+              session_mode={session_mode}
+              agent_name={agent_name}
+              teamSendMessage={teamSendMessage}
+              teamRuntime={teamRuntime}
+            />
+          </div>
+        </ConversationArtifactProvider>
+      </MyCoworkTemplateConfirmationProvider>
     </ConversationProvider>
   );
 };

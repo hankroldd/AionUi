@@ -51,7 +51,16 @@ import { CloseSmall, Plus, Quote } from '@icon-park/react';
 import { chatFileRefKey } from '@/common/types/chatFile';
 import type { SlashCommandItem } from '@/common/chat/slash/types';
 import { buildSkillSlashCommands, mergeSlashCommands } from '@/common/chat/slash/mergeSlashCommands';
-import React, { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useImperativeHandle,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 import { useCompositionInput } from '@renderer/hooks/chat/useCompositionInput';
@@ -230,7 +239,11 @@ function extractBtwQuestion(value: string): string | null {
   return match ? match[1] || '' : null;
 }
 
+/** [mycowork] ADR-0031：显式确认复用原组装函数，不允许替换消息或附件。 */
+export type SendBoxSubmitHandle = { submitWithPrefix: (prefix: string) => Promise<boolean> };
+
 const SendBox: React.FC<{
+  submitRef?: React.Ref<SendBoxSubmitHandle>;
   value?: string;
   onChange?: (value: string) => void;
   onSend: (message: string) => Promise<void | false>;
@@ -316,6 +329,7 @@ const SendBox: React.FC<{
   placeholder,
   value: input = '',
   onChange: setInput = constVoid,
+  submitRef,
   onFilesAdded,
   supportedExts = allSupportedExts,
   defaultMultiLine = false,
@@ -358,6 +372,7 @@ const SendBox: React.FC<{
   const conversationContext = useConversationContextSafe();
   const { t, i18n } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
+  const externalSubmitting = useRef(false);
   const [isSingleLine, setIsSingleLine] = useState(!effectiveDefaultMultiLine);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const isInputActive = isInputFocused;
@@ -1556,27 +1571,27 @@ const SendBox: React.FC<{
     [activeAtFileTokenKey, atFileMenuActiveIndex, insertSelectedAtFile, isAtFileMenuOpen, visibleAtFileMenuItems]
   );
 
-  const sendMessageHandler = () => {
-    if (isUploading) return;
-    if (enableBtw && btwQuestion !== null) {
+  const sendMessageHandler = async (confirmationPrefix?: string): Promise<boolean> => {
+    if (isUploading || (confirmationPrefix !== undefined && (disabled || sendDisabled))) return false;
+    if (confirmationPrefix === undefined && enableBtw && btwQuestion !== null) {
       const normalizedQuestion = btwQuestion.trim();
       if (!normalizedQuestion) {
         message.warning(t('conversation.sideQuestion.emptyQuestion'));
-        return;
+        return false;
       }
       if (btwCommand.isLoading) {
         message.warning(t('conversation.sideQuestion.alreadyRunning'));
-        return;
+        return false;
       }
       if (hasPendingAttachments || domSnippets.length > 0) {
         message.warning(t('conversation.sideQuestion.attachmentsNotAllowed'));
-        return;
+        return false;
       }
       historyDraftRef.current = null;
       setHistoryNavigationIndex(null);
       setInput('');
       void btwCommand.ask(normalizedQuestion);
-      return;
+      return false;
     }
 
     if (!allowSendWhileLoading && (isLoading || loading)) {
@@ -1587,10 +1602,10 @@ const SendBox: React.FC<{
         loading,
       });
       message.warning(t('messages.conversationInProgress'));
-      return;
+      return false;
     }
-    if (!input.trim() && domSnippets.length === 0) {
-      return;
+    if (!confirmationPrefix?.trim() && !input.trim() && domSnippets.length === 0) {
+      return false;
     }
     console.info('[sendbox]', {
       event: 'submit',
@@ -1621,8 +1636,10 @@ const SendBox: React.FC<{
       const snippetsHtml = domSnippets
         .map((s) => `\n\n---\nDOM Snippet (${s.tag}):\n\`\`\`html\n${s.html}\n\`\`\``)
         .join('');
-      finalMessage = input + snippetsHtml;
+      finalMessage += snippetsHtml;
     }
+
+    if (confirmationPrefix !== undefined) finalMessage = `${confirmationPrefix}\n\n${finalMessage}`;
 
     // 立即清空输入框，避免异步 onSend 完成后覆盖用户新输入
     // Clear input immediately to prevent async onSend completion from overwriting new user input
@@ -1632,19 +1649,35 @@ const SendBox: React.FC<{
       setReplyQuote(null);
     }
 
-    onSend(finalMessage)
+    return onSend(finalMessage)
       .then((result) => {
         if (preserveInputOnSend) {
           if (result !== false) { clearDomSnippets(); setReplyQuote(null); }
         } else if (result === false) {
           setInput(finalMessage);
         }
+        return result !== false;
       })
-      .catch(() => {})
+      .catch((error) => {
+        if (confirmationPrefix !== undefined) throw error;
+        return false;
+      })
       .finally(() => {
         setIsLoading(false);
       });
   };
+
+  useImperativeHandle(submitRef, () => ({
+    submitWithPrefix: async (confirmationPrefix) => {
+      if (!confirmationPrefix.trim() || externalSubmitting.current) return false;
+      externalSubmitting.current = true;
+      try {
+        return await sendMessageHandler(confirmationPrefix);
+      } finally {
+        externalSubmitting.current = false;
+      }
+    },
+  }));
 
   const stopHandler = async () => {
     if (!onStop) return;

@@ -36,6 +36,9 @@ import {
   fetchConversationContext,
   ConversationFileLink,
   useConversationWorkspace,
+  TemplateConfirmationProvider,
+  TemplateConfirmationAction,
+  TemplateConfirmationDialog,
 } from '@mycowork/ui';
 
 /** PR10消息动作注册；普通聊天保留原按钮，办公状态未读到时不绕过分支登记。 */
@@ -326,13 +329,70 @@ export const MyCoworkWorkspaceFileLinkSlot: React.FC<{ relativePath: string; chi
     }
   };
   return (
-    <ConversationFileLink
-      disabled={!projectId || !conversationId || !preview}
-      onOpen={() => void open()}
-      fileName={relativePath.split('/').pop()}
-      lang={i18n.language}
+    <>
+      <ConversationFileLink
+        disabled={!projectId || !conversationId || !preview}
+        onOpen={() => void open()}
+        fileName={relativePath.split('/').pop()}
+        lang={i18n.language}
+      >
+        {children}
+      </ConversationFileLink>
+      <TemplateConfirmationAction
+        relativePath={relativePath}
+        disabled={!projectId || !conversationId || !preview}
+        lang={i18n.language}
+      />
+    </>
+  );
+};
+
+/** ADR-0031：会话内共用一次模板读取，成功模板工具及结束事件刷新，不轮询。 */
+export const MyCoworkTemplateConfirmationProvider: React.FC<{
+  conversationId: string;
+  enabled: boolean;
+  children: React.ReactNode;
+}> = ({ conversationId, enabled, children }) => {
+  const ownerKey = useOwnerKey();
+  const projectId = useCurrentProject();
+  const activeConversationId = useCurrentConversation();
+  const [refreshKey, setRefreshKey] = useState(0);
+  const active = enabled && !!ownerKey && !!projectId && activeConversationId === conversationId;
+  useEffect(() => {
+    if (!active) return;
+    return ipcBridge.conversation.responseStream.on((message) => {
+      if (message.conversation_id !== conversationId) return;
+      if (message.type === 'finish') {
+        setRefreshKey((n) => n + 1);
+        return;
+      }
+      if (message.type !== 'tool_call') return;
+      const tool = message.data as IMessageToolCall['content'];
+      if (
+        tool?.status === 'completed' &&
+        ['template_recommend', 'template_select', 'office_copy_to_workspace'].includes(tool.name)
+      )
+        setRefreshKey((n) => n + 1);
+    });
+  }, [active, conversationId, ownerKey, projectId]);
+  return (
+    <TemplateConfirmationProvider
+      ownerKey={active ? ownerKey : undefined}
+      projectId={projectId ?? ''}
+      conversationId={conversationId}
+      refreshKey={refreshKey}
+      readContext={fetchConversationContext}
+      isCurrent={() => active && getCurrentConversation() === conversationId && getCurrentProject() === projectId}
     >
       {children}
-    </ConversationFileLink>
+    </TemplateConfirmationProvider>
   );
+};
+
+/** ADR-0031：只把原草稿与原 SendBox 的提交入口交给自有弹窗。 */
+export const MyCoworkTemplateConfirmationDialog: React.FC<
+  Omit<React.ComponentProps<typeof TemplateConfirmationDialog>, 'lang'>
+> = (props) => {
+  const { i18n: current } = useTranslation();
+  return <TemplateConfirmationDialog {...props} lang={current.language} />;
 };

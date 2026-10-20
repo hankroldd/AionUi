@@ -30,7 +30,11 @@ import { useProjectPreviewRegionWidth } from '@renderer/hooks/ui/useProjectPrevi
 import { useProjectPanelCollapse } from '@renderer/hooks/ui/useProjectPanelCollapse';
 
 import { dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
-import { MIN_PREVIEW_PANEL_PX } from '@renderer/pages/conversation/utils/layoutCalc';
+import {
+  MIN_CHAT_PANEL_PX,
+  MIN_PREVIEW_PANEL_PX,
+  PREVIEW_REGION_CHROME_PX,
+} from '@renderer/pages/conversation/utils/layoutCalc';
 import { PreviewPanel } from '@renderer/pages/conversation/Preview';
 import { LayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { NavigationHistoryProvider } from '@renderer/hooks/context/NavigationHistoryContext';
@@ -206,10 +210,13 @@ const Layout: React.FC<{
   // P4 (②B): hoist the preview region to the Layout host for project
   // conversations so it is structurally persistent (no remount on same-project
   // switches). ChatLayout renders chat only in that case (previewHosted).
-  // 最大化：隐藏聊天区、让预览铺满它腾出的空间；左侧边栏与右侧资源管理器列均不动。
-  // Maximized: hide the chat area and let the preview fill the space it vacated;
-  // the left sidebar and the right explorer column are both left untouched.
-  const previewMaximized = previewRegionActive && isPreviewMaximized;
+  // 主区不足并排时复用单区布局，不改变用户最大化或宽度偏好。
+  const previewNeedsFullWidth =
+    previewRegionActive &&
+    mainRowWidth > 0 &&
+    mainRowWidth - (explorerCollapsed ? 0 : explorerWidthPx) <
+      MIN_CHAT_PANEL_PX + MIN_PREVIEW_PANEL_PX + PREVIEW_REGION_CHROME_PX;
+  const previewMaximized = previewRegionActive && (isPreviewMaximized || previewNeedsFullWidth);
   const { widthPx: previewWidthPx, createDragHandle: createPreviewRegionDragHandle } = useProjectPreviewRegionWidth(
     mainRowWidth,
     explorerCollapsed ? 0 : explorerWidthPx,
@@ -479,7 +486,7 @@ const Layout: React.FC<{
                 explorer clamp (independent of the split → non-circular). The
                 explorer column is a sibling of the route content, above the
                 per-conversation subtree → persists across same-project switches. */}
-            <div ref={mainRowRef} className='flex flex-1 min-h-0 overflow-hidden'>
+            <div ref={mainRowRef} className='flex flex-1 min-w-0 min-h-0 overflow-hidden'>
               <ArcoLayout.Content
                 className={'bg-1 layout-content flex flex-col min-h-0 flex-1'}
                 onClick={() => {
@@ -526,7 +533,7 @@ const Layout: React.FC<{
                     // margins: any gap would expose the window's own background,
                     // which is jarring in dark mode.
                     borderLeft: '1px solid var(--bg-3)',
-                    minWidth: `${MIN_PREVIEW_PANEL_PX}px`,
+                    minWidth: previewMaximized ? 0 : `${MIN_PREVIEW_PANEL_PX}px`,
                     boxSizing: 'border-box',
                   }}
                 >
@@ -543,7 +550,7 @@ const Layout: React.FC<{
                       lineStyle: { width: '2px' },
                     })}
                   <div className='h-full w-full overflow-hidden'>
-                    <PreviewPanel />
+                    <PreviewPanel hideMaximizeToggle={previewNeedsFullWidth} />
                   </div>
                 </div>
               )}

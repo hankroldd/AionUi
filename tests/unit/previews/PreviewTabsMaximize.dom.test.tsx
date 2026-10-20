@@ -40,12 +40,17 @@ describe('PreviewTabs maximize button', () => {
   it('shows the maximize tooltip when not maximized', () => {
     render(<PreviewTabs {...baseProps()} isMaximized={false} onToggleMaximize={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'preview.expandPreview', pressed: false })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'preview.expandPreview' })).toHaveStyle({ color: 'var(--text-primary)' });
+    expect(screen.getByRole('button', { name: 'preview.returnToConversation' })).toHaveStyle({
+      color: 'var(--text-primary)',
+    });
     expect(screen.queryByTitle('preview.restorePanel')).toBeNull();
   });
 
   it('shows the restore tooltip when maximized', () => {
     render(<PreviewTabs {...baseProps()} isMaximized={true} onToggleMaximize={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'preview.restorePanel', pressed: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'preview.restorePanel' })).toHaveStyle({ color: 'var(--text-primary)' });
     expect(screen.queryByTitle('preview.expandPreview')).toBeNull();
   });
 

@@ -76,10 +76,10 @@ const Probe: React.FC = () => {
 
 // Mounted only once the tab is open: the panel returns null before some of its hooks
 // run, so rendering it across the closed → open transition changes its hook count.
-const Harness: React.FC<{ showPanel: boolean }> = ({ showPanel }) => (
+const Harness: React.FC<{ showPanel: boolean; hideMaximizeToggle?: boolean }> = ({ showPanel, hideMaximizeToggle }) => (
   <PreviewProvider>
     <Probe />
-    {showPanel ? <PreviewPanel /> : null}
+    {showPanel ? <PreviewPanel hideMaximizeToggle={hideMaximizeToggle} /> : null}
   </PreviewProvider>
 );
 
@@ -227,6 +227,37 @@ describe('refreshing a tab with unsaved changes', () => {
     TIMEOUT_MS
   );
 });
+
+it(
+  '临时单区隐藏无效展开还原，返回仍询问未保存稿，解除后恢复原最大化动作',
+  () => {
+    const { rerender } = render(<Harness showPanel={false} />);
+    act(() =>
+      ctx.openPreview('# 正文', 'markdown', {
+        file_name: 'draft.md',
+        fileRef: { kind: 'project', pe_id: 'peA', relative_path: 'draft.md' },
+      })
+    );
+    rerender(<Harness showPanel />);
+    expect(screen.getByRole('button', { name: 'Expand preview' })).toBeInTheDocument();
+    act(() => ctx.toggleMaximized());
+    expect(screen.getByRole('button', { name: 'preview.restorePanel' })).toBeInTheDocument();
+    rerender(<Harness showPanel hideMaximizeToggle />);
+    expect(screen.queryByRole('button', { name: 'Expand preview' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'preview.restorePanel' })).not.toBeInTheDocument();
+    expect(ctx.isMaximized).toBe(true);
+    act(() => ctx.updateContent('# 未保存稿'));
+    fireEvent.click(screen.getByRole('button', { name: 'Return to conversation' }));
+    expect(screen.getByText('preview.closeTabTitle')).toBeInTheDocument();
+    expect(ctx.isOpen).toBe(true);
+    fireEvent.click(screen.getByText('common.cancel'));
+    expect(ctx.activeTab?.content).toBe('# 未保存稿');
+    expect(ctx.activeTab?.isDirty).toBe(true);
+    rerender(<Harness showPanel />);
+    expect(screen.getByRole('button', { name: 'preview.restorePanel' })).toBeInTheDocument();
+  },
+  TIMEOUT_MS
+);
 
 it(
   '同类型项目文件复用标签时回到正文，纯文件没有浏览器加号，返回仍保护未保存稿',

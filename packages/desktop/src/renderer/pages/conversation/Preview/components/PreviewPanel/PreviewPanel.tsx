@@ -88,7 +88,7 @@ class SaveRefusedError extends Error {
   }
 }
 
-const PreviewPanel: React.FC = () => {
+const PreviewPanel: React.FC<{ hideMaximizeToggle?: boolean }> = ({ hideMaximizeToggle = false }) => {
   const { t, i18n } = useTranslation();
   const {
     isOpen,
@@ -1221,10 +1221,8 @@ const PreviewPanel: React.FC = () => {
           onContextMenu={handleTabContextMenu}
           onClosePanel={handleClosePanel}
           isMaximized={isMaximized}
-          // 移动端预览本就是全屏覆盖层，最大化无意义 —— 不提供回调即隐藏该按钮。
-          // On mobile the preview is already a full overlay, so maximizing is
-          // meaningless; omitting the callback hides the button.
-          onToggleMaximize={layout?.isMobile ? undefined : toggleMaximized}
+          // 单区预览无法并排还原；不提供回调即隐藏无效操作。
+          onToggleMaximize={layout?.isMobile || hideMaximizeToggle ? undefined : toggleMaximized}
           onNewBrowserTab={browserTabs.length > 0 ? handleNewBrowserTab : undefined}
         />
 

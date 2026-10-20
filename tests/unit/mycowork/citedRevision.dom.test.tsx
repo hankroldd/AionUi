@@ -71,7 +71,7 @@ describe('read tool step → "查看当时的版本"', () => {
         messages={[toolCall('mcp__mycowork_bridge__read', readResult({ revision_id: 'rev_a' }))]}
       />
     );
-    fireEvent.click(screen.getByText('View Steps · 1'));
+    fireEvent.click(screen.getByRole('button', { name: 'messages.toolActivity.label · 1', expanded: false }));
     fireEvent.click(screen.getByRole('button', { name: '查看当时的版本' }));
     expect(window.location.hash).toBe('#/office/resources/res_1/versions?revision=rev_a');
   });
@@ -85,7 +85,7 @@ describe('read tool step → "查看当时的版本"', () => {
         ].map((m, i) => ({ ...m, content: { ...m.content, call_id: `c${i}` } }))}
       />
     );
-    fireEvent.click(screen.getByText('View Steps · 2'));
+    fireEvent.click(screen.getByRole('button', { name: 'messages.toolActivity.label · 2', expanded: false }));
     expect(screen.queryByText('查看当时的版本')).toBeNull();
   });
 });

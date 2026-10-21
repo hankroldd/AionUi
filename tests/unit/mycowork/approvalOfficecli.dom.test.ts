@@ -93,4 +93,8 @@ describe('A531 officecli 批准卡', () => {
     expect(s?.target).toContain('a.pptx 第 1 页；新文字：「hi」 · 目录 …/other');
     expect(s?.impact).not.toContain('本会话目录');
   });
+  it('open/save/close 带任何额外参数：不翻', () => {
+    expect(run('officecli open "deck/c1/a.pptx" --anything')).toBeNull();
+    expect(run('officecli close "deck/c1/a.pptx" x')).toBeNull();
+  });
 });

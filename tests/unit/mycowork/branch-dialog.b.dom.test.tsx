@@ -89,6 +89,7 @@ describe('分支创建的真实UI状态机', () => {
     const s = setup();
     render(<BranchMessageButton anchor={anchor} ownerKey={ownerKey} adapter={s.adapter} lang='zh-CN' />);
     fireEvent.click(screen.getByRole('button', { name: '基于此内容新建会话' }));
+    fireEvent.click(await screen.findByRole('button', { name: /技术细节/ }));
     await screen.findByText(/入口哈希已冻结/);
     expect(screen.getByRole('button', { name: '创建会话' })).toBeDisabled();
     fireEvent.click(screen.getByLabelText('不复制文件，仅基于这条消息创建'));

@@ -190,8 +190,8 @@ describe('ONLYOFFICE 编辑页结果态', () => {
   it.each(CASES)('$name', async ({ view, has, not }) => {
     serve(view);
     render(<OfficeEditSlot />);
-    // 结果页（多为离开编辑器后自动保存）的措辞：改动已自动保存为新版本（验收 中 17）；跟踪器提示仍是“已保存为新版本。”
-    for (const t of has.map((x) => (x === '已保存为新版本。' ? '改动已自动保存为新版本' : x))) await waitFor(() => expect(body()).toHaveTextContent(t), { timeout: 3000 });
+    // 结果页（多为离开编辑器后服务端保存）的措辞：改动已保存为新版本（验收 中 17）；跟踪器提示仍是“已保存为新版本。”
+    for (const t of has.map((x) => (x === '已保存为新版本。' ? '改动已保存为新版本' : x))) await waitFor(() => expect(body()).toHaveTextContent(t), { timeout: 3000 });
     for (const t of not) expect(body()).not.toHaveTextContent(t);
   });
 });

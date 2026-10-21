@@ -1,7 +1,7 @@
 /**
- * [mycowork] PR11 验收修复（空间/版本/编辑/模板弹窗等页面，2026-10-21）：一次性 DOM 核对，放进 fork tests/unit/mycowork/ 后跑 `vitest run --project dom`（不提交到 fork）。
- * 覆盖：预览层把 {{title}}/{{subtitle}} 换成示例文字；对话预览进编辑后保存回对话；有存档副本的资料标 Secret 要写“存档库里的副本会被删除”；
- *       回收站多选后批量恢复；不存在的页面计划只有一个空态；连接页指引默认一句话。数据虚构。
+ * [mycowork] PR11 验收修复（空间/版本/编辑/模板弹窗等页面，2026-10-21）：DOM 核对（fork tests/unit/mycowork/，`vitest run --project dom`）。
+ * 覆盖：预览层把 {{title}}/{{subtitle}} 换成示例文字；对话预览进编辑后保存回对话；标 Secret 确认框按重读到的 storage 与 source_id 分情况提示；
+ *       回收站多选后批量恢复与批量永久删除；不存在的页面计划只有一个空态；连接页指引默认一句话。数据虚构。
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
@@ -55,14 +55,14 @@ describe('编辑后回到来源对话', () => {
 });
 
 describe('空间标为 Secret', () => {
-  const item = (over: object) => ({
-    resource_id: 'res_1',
-    file_name: '进过存档库.md',
-    source_id: 'kb_1', // 当前挂在普通库，但有存档副本（storage=both）
-    origin: 'knowledge_base',
+  const item = (id: string, name: string, over: object) => ({
+    resource_id: id,
+    file_name: name,
+    source_id: null,
+    origin: 'imports',
     purpose: 'working',
-    state: 'ready',
-    storage: 'both',
+    state: 'stored',
+    storage: 'bridge',
     tag_ids: [],
     secret: false,
     can_mark_secret: true,
@@ -70,28 +70,56 @@ describe('空间标为 Secret', () => {
     revision_count: 1,
     ...over,
   });
-  it('有存档副本时确认框写“存档库里的副本会被删除”，不看当前挂在哪', async () => {
-    const items = [item({}), item({ resource_id: 'res_2', file_name: '只在本地.md', storage: 'bridge', source_id: null })];
+  // 列表里的 storage 可能过期：确认框以打开时重读的元数据为准
+  const meta: Record<string, string> = { res_a: 'weknora', res_b: 'weknora', res_c: 'bridge', res_d: 'weknora' };
+  const items = [
+    item('res_a', '只在存档库.md', { storage: 'bridge' }), // 列表过期，元数据说有上游链接
+    item('res_b', '挂在知识库.md', { source_id: 'kb_1', state: 'ready', storage: 'weknora' }),
+    item('res_c', '只在本地.md', {}),
+    item('res_d', '元数据读不到.md', { storage: 'both' }),
+  ];
+  const confirmText = async (name: string) => {
+    fireEvent.click(screen.getByRole('button', { name: `更多操作 ${name}` }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: '标为 Secret' }));
+    const dialog = await screen.findByText(/不会进入任何 AI 上下文/);
+    const text = dialog.closest('.arco-modal')?.textContent ?? '';
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+    await waitFor(() => expect(screen.queryByText(/不会进入任何 AI 上下文/)).toBeNull());
+    return text;
+  };
+  it('有上游链接才说“已被解析过一次”；存档副本写“如有”；挂知识库的补“条目不会随之删除”', async () => {
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockImplementation(async (url: string) => {
       if (url === '/bridge/v1/scopes') return reply(200, { sources: [], projects: [] });
-      if (url.startsWith('/bridge/v1/resources?')) return reply(200, { page: 1, page_size: 50, total: 2, items });
+      if (url.startsWith('/bridge/v1/resources?')) return reply(200, { page: 1, page_size: 50, total: 4, items });
       if (url === '/bridge/v1/tags') return reply(200, { tags: [] });
       if (url === '/bridge/v1/saved-views') return reply(200, { views: [] });
       if (url === '/bridge/v1/collections') return reply(200, { collections: [] });
+      const m = /\/resources\/(res_\w)\/metadata$/.exec(url);
+      if (m?.[1] === 'res_d') return reply(500, {});
+      if (m)
+        return reply(200, {
+          resource_id: m[1],
+          metadata_revision: 1,
+          current_revision_id: null,
+          tag_ids: [],
+          secret: false,
+          storage: meta[m[1] as string],
+        });
       return reply(404, {});
     });
     render(<ResourcesPage lang='zh-CN' />);
-    await screen.findByText('进过存档库.md');
-    fireEvent.click(screen.getByRole('button', { name: '更多操作 进过存档库.md' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: '标为 Secret' }));
-    expect(await screen.findByText(/存档库里的副本会被删除/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '取消' }));
-    await waitFor(() => expect(screen.queryByText(/存档库里的副本会被删除/)).toBeNull());
-    fireEvent.click(screen.getByRole('button', { name: '更多操作 只在本地.md' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: '标为 Secret' }));
-    await screen.findByText(/不会进入任何 AI 上下文/);
-    expect(screen.queryByText(/存档库里的副本会被删除/)).toBeNull();
+    await screen.findByText('只在存档库.md');
+    const a = await confirmText('只在存档库.md');
+    expect(a).toContain('存档库里如有副本会被删除');
+    expect(a).not.toContain('知识库里的条目不会随之删除');
+    const b = await confirmText('挂在知识库.md');
+    expect(b).toContain('存档库里如有副本会被删除');
+    expect(b).toContain('知识库里的条目不会随之删除');
+    const c = await confirmText('只在本地.md');
+    expect(c).not.toContain('已被解析过');
+    const d = await confirmText('元数据读不到.md'); // 读不到就用列表值（both）
+    expect(d).toContain('存档库里如有副本会被删除');
   });
 });
 
@@ -123,6 +151,31 @@ describe('回收站多选', () => {
       .filter(([u]) => String(u).endsWith('/untrash'))
       .map(([, init]) => JSON.parse(String(init?.body)).expected_metadata_revision);
     expect(bodies).toEqual([3, 5]);
+  });
+});
+
+describe('回收站批量永久删除', () => {
+  it('“永久删除所选”带着勾选的两项进两步确认框；翻页前“全选本页”可勾全部', async () => {
+    const row = (id: string) => ({
+      resource_id: id,
+      file_name: `虚构${id}.md`,
+      trashed_at: '2026-10-02T00:00:00Z',
+      metadata_revision: 1,
+      impact: { publications: 0, memory_items: 0, collections: 0, plans: 0 },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockImplementation(async (url: string) =>
+      url.startsWith('/bridge/v1/trash?')
+        ? reply(200, { items: [row('a'), row('b')], page: 1, page_size: 50, total: 2 })
+        : reply(404, {})
+    );
+    render(<TrashPage lang='zh-CN' onBack={vi.fn()} />);
+    await screen.findByText('虚构a.md');
+    fireEvent.click(screen.getByRole('checkbox', { name: '选择 虚构a.md' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '全选本页' }));
+    expect(screen.getByText('已选 2 项')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '永久删除所选' }));
+    expect(await screen.findByText('永久删除这 2 项资料？')).toBeInTheDocument();
   });
 });
 

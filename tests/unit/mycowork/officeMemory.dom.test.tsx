@@ -41,7 +41,9 @@ function bridge(opts: { actStatus?: number } = {}) {
     if (url.startsWith('/bridge/v1/memory-items?')) {
       const items = url.includes('status=rejected')
         ? []
-        : url.includes('status=active')
+        : url.includes('status=disabled')
+          ? [mem({ memory_id: 'mem_4', text: '停用的记忆', status: 'disabled', sources: { resource_ids: [] } })]
+          : url.includes('status=active')
           ? [
               mem({
                 memory_id: 'mem_2',
@@ -116,6 +118,17 @@ describe('OfficeMemorySlot', () => {
     fireEvent.click(screen.getByRole('button', { name: '停用' }));
     await waitFor(() => expect(calls('POST', '/memory-items/mem_2/actions')).toHaveLength(1));
     expect(bodyOf('POST', '/memory-items/mem_2/actions').action).toBe('disable');
+  });
+
+  it('已停用条目可“重新启用”（accept，合同允许 disabled → accept → active）', async () => {
+    bridge();
+    render(<OfficeMemorySlot />);
+    await screen.findByText('先写结论');
+    fireEvent.click(screen.getByRole('button', { name: '已停用' }));
+    expect(await screen.findByText('停用的记忆')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '重新启用' }));
+    await waitFor(() => expect(calls('POST', '/memory-items/mem_4/actions')).toHaveLength(1));
+    expect(bodyOf('POST', '/memory-items/mem_4/actions')).toEqual({ action: 'accept', expected_revision: 2 });
   });
 
   it('a 409 on an action reloads and says so', async () => {

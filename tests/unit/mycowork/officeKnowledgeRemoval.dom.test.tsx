@@ -271,12 +271,12 @@ describe('space: remove from knowledge base', () => {
     render(<OfficeResourcesSlot />);
     await menu('存档里的.md');
     fireEvent.click(screen.getAllByRole('menuitem', { name: '标为 Secret' }).at(-1)!);
-    expect(await screen.findByText(/存档库里的副本会被删除/, undefined, LONG)).toBeInTheDocument();
+    expect(await screen.findByText(/存档库里如有副本会被删除/, undefined, LONG)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '取消' }));
-    await waitFor(() => expect(screen.queryByText(/存档库里的副本会被删除/)).toBeNull(), LONG);
+    await waitFor(() => expect(screen.queryByText(/存档库里如有副本会被删除/)).toBeNull(), LONG);
     await menu('只在本机.md');
     fireEvent.click(screen.getAllByRole('menuitem', { name: '标为 Secret' }).at(-1)!);
     await screen.findByText(/把“只在本机.md”标为 Secret？/, undefined, LONG);
-    expect(screen.queryByText(/存档库里的副本会被删除/)).toBeNull();
+    expect(screen.queryByText(/存档库里如有副本会被删除/)).toBeNull();
   });
 });

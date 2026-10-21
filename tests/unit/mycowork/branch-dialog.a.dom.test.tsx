@@ -18,6 +18,7 @@ describe('分支创建的真实UI状态机', () => {
   it('消息分支POST固定源计划并申请独立快照，后续令牌和绑定用返回计划及真实会话ID', async () => {
     const s = setup();
     mount(s.adapter);
+    fireEvent.click(await screen.findByRole('button', { name: /技术细节/ })); // 技能明细默认折叠
     await screen.findByText(/入口哈希已冻结/);
     expect(s.calls).toHaveLength(0);
     await create();
@@ -122,6 +123,7 @@ describe('分支创建的真实UI状态机', () => {
   it('无原会话计划时明确创建空范围；缺Skill正文仅名称，不添加假哈希', async () => {
     const s = setup({ context: false, skills: [{ skill_id: 'missing-skill' }] });
     mount(s.adapter);
+    fireEvent.click(await screen.findByRole('button', { name: /技术细节/ }));
     await screen.findByText(/仅名称，未冻结正文/);
     await create();
     await waitFor(() => expect(s.adapter.openConversation).toHaveBeenCalledOnce());

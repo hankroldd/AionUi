@@ -1,6 +1,6 @@
 {
-  "pageTitle": "AionUi - Sign In",
-  "brand": "AionUi",
+  "pageTitle": "Office Workbench - Sign In",
+  "brand": "Office Workbench",
   "subtitle": "Welcome back, please sign in to your account",
   "username": "Username",
   "usernamePlaceholder": "Enter your username",
@@ -13,7 +13,7 @@
   "showPassword": "Show password",
   "hidePassword": "Hide password",
   "languageToggle": "Change language",
-  "footerPrimary": "Transform your command-line AI",
+  "footerPrimary": "Your personal AI office workbench",
   "footerSecondary": "Modern & Efficient",
   "errors": {
     "empty": "Please enter username and password",

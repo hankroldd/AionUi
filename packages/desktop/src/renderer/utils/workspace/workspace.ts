@@ -13,6 +13,10 @@
 export const isRawWorkspaceId = (name: string | undefined): boolean =>
   !!name && /^ws_[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(name);
 
+/** [mycowork] 名字是工作区内部 ID 时换成 fallback（A534）。 */
+export const displayConversationName = (name: string | undefined, fallback: string): string | undefined =>
+  isRawWorkspaceId(name) ? fallback : name;
+
 const splitPathSegments = (targetPath: string): string[] => targetPath.split(/[\\/]+/).filter(Boolean);
 
 /**

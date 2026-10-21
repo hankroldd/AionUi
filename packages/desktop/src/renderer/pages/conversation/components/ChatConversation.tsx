@@ -18,6 +18,7 @@ import { Button, Dropdown, Menu, Message, Tooltip, Typography } from '@arco-desi
 import { History } from '@icon-park/react';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { displayConversationName } from '@/renderer/utils/workspace/workspace';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import { emitter } from '../../../utils/emitter';
@@ -49,6 +50,7 @@ const configErrorMessageKey = (error: unknown) => {
 };
 
 const _AssociatedConversation: React.FC<{ conversation_id: string }> = ({ conversation_id }) => {
+  const { t } = useTranslation();
   const { data } = useSWR(['getAssociateConversation', conversation_id], () =>
     ipcBridge.conversation.getAssociateConversation.invoke({ conversation_id })
   );
@@ -71,7 +73,9 @@ const _AssociatedConversation: React.FC<{ conversation_id: string }> = ({ conver
           {list.map((conversation) => {
             return (
               <Menu.Item key={conversation.id}>
-                <Typography.Ellipsis className={'max-w-300px'}>{conversation.name}</Typography.Ellipsis>
+                <Typography.Ellipsis className={'max-w-300px'}>
+                  {displayConversationName(conversation.name, t('conversation.unnamed'))}
+                </Typography.Ellipsis>
               </Menu.Item>
             );
           })}
@@ -438,7 +442,7 @@ const ChatConversation: React.FC<{
 
   return (
     <ChatLayout
-      title={conversation?.name}
+      title={displayConversationName(conversation?.name, t('conversation.unnamed'))}
       {...chatLayoutProps}
       headerExtra={headerExtraNode}
       siderTitle={sliderTitle}

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { displayConversationName } from '@/renderer/utils/workspace/workspace';
 import { ipcBridge } from '@/common';
 import type { IMessageSearchItem } from '@/common/types/team/database';
 import AionModal from '@/renderer/components/base/AionModal';
@@ -400,7 +401,8 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
                     <div className='conversation-search-modal__result-title-row'>
                       <ConversationAgentMark conversation={item.conversation} />
                       <div className='conversation-search-modal__result-title text-15px font-600 text-t-primary truncate'>
-                        {item.conversation.name || t('conversation.historySearch.untitled')}
+                        {displayConversationName(item.conversation.name, t('conversation.unnamed')) ||
+                          t('conversation.historySearch.untitled')}
                       </div>
                     </div>
                   </div>

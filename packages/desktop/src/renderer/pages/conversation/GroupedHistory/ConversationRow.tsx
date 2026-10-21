@@ -32,7 +32,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { ConversationRowProps } from './types';
 import { isConversationPinned } from './utils/groupingHelpers';
-import { isRawWorkspaceId } from '@/renderer/utils/workspace/workspace';
+import { displayConversationName } from '@/renderer/utils/workspace/workspace';
 
 const ConversationRow: React.FC<ConversationRowProps> = (props) => {
   const {
@@ -70,7 +70,7 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
   const { info: assistantInfo } = usePresetAssistantInfo(conversation);
   const isPinned = isConversationPinned(conversation);
   // [mycowork] A532：没有标题、名字是工作区内部 ID 时显示“未命名对话”
-  const rowName = isRawWorkspaceId(conversation.name) ? t('conversation.unnamed') : conversation.name;
+  const rowName = displayConversationName(conversation.name, t('conversation.unnamed'));
   // Fork-lineage badge: present only on forked conversations (extra.fork is
   // server-minted by the fork API). Parent name resolves from the loaded
   // sidebar list; a deleted/unloaded parent degrades to the generic tip.

@@ -153,7 +153,7 @@ describe('scope strip for the explicit empty plan (A197)', () => {
       reply(200, context({ groups: [], explicit_empty: true, policy: { strict: false, web: 'off' } }))
     );
     render(<ConversationScopeSlot conversation_id='conv-e' />);
-    expect(await screen.findByText(/未选资料（本轮不引用任何资料）/)).toBeInTheDocument();
+    expect(await screen.findByText(/本次不引用资料（已明确不选）/)).toBeInTheDocument();
     expect(screen.queryByText(/当前不可检索/)).toBeNull();
     expect(screen.getByRole('button', { name: '更改范围' })).toBeInTheDocument(); // the user can still open the picker
   });

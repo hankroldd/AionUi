@@ -62,8 +62,8 @@ const CONTEXT = {
   withheld: 1,
   superseded: false,
 };
-const SUMMARY =
-  '项目A资料（整库） + 产品库（整库）；不联网搜索；来源库状态（发送时）：就绪 8 · 处理中 1 · 不可用 2；发送时有 1 份资料还在处理中（处理完后本轮可能读到）'; // D145 文案 + W4-9 ③
+const SUMMARY = '项目A资料（整库） + 产品库（整库）；不联网搜索'; // 默认只有来源与联网状态（分层展示）
+const COUNTS = '来源库状态（发送时）：就绪 8 · 处理中 1 · 不可用 2'; // D145 文案，收进“详情”
 
 const emit = (m: StreamMessage) => act(() => streamListeners.forEach((fn) => fn(m)));
 
@@ -84,10 +84,19 @@ describe('ConversationScopeSlot', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('shows sources, web policy and searchable/processing/unavailable counts', async () => {
+  it('shows sources and web policy by default; counts, exclusions and processing/unavailable alerts are layered', async () => {
     fetchMock.mockResolvedValue(reply(200, CONTEXT));
     render(<ConversationScopeSlot conversation_id='conv 1' />);
     expect(await screen.findByText(SUMMARY)).toBeInTheDocument();
+    // 异常醒目：处理中 / 不可用 各自单独成行（W4-9 ③），不藏进详情
+    expect(screen.getByText('发送时有 1 份资料还在处理中（处理完后本轮可能读到）')).toHaveAttribute('role', 'alert');
+    expect(screen.getByText('发送时有 2 份资料不可用，本轮读不到它们')).toHaveAttribute('role', 'alert');
+    expect(screen.queryByText(COUNTS)).toBeNull();
+    const details = screen.getByRole('button', { name: '详情（已用资料 1）' });
+    expect(details).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(details);
+    expect(screen.getByText(COUNTS)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '收起详情' })).toHaveAttribute('aria-expanded', 'true');
     expect(fetchMock).toHaveBeenCalledWith(
       '/bridge/v1/conversations/conv%201/context',
       expect.objectContaining({ credentials: 'same-origin' })
@@ -104,6 +113,7 @@ describe('ConversationScopeSlot', () => {
     render(<ConversationScopeSlot conversation_id='conv-1' />);
     const strip = await screen.findByTestId('mycowork-scope-strip');
     await waitFor(() => expect(strip).toHaveTextContent(`项目A资料（本轮已选 ${member_count} 份）`));
+    fireEvent.click(screen.getByRole('button', { name: /详情/ }));
     expect(strip).toHaveTextContent('来源库状态（发送时）：就绪 3 · 处理中 1 · 不可用 0');
     expect(strip).not.toHaveTextContent('AI 可引用 3');
   });
@@ -111,14 +121,14 @@ describe('ConversationScopeSlot', () => {
   it('says "plain chat only" when the conversation has no plan (404)', async () => {
     fetchMock.mockResolvedValue(reply(404, { error: { code: 'NOT_FOUND', message: 'x' } }));
     render(<ConversationScopeSlot conversation_id='conv-1' />);
-    expect(await screen.findByText('未选择资料：仅普通对话')).toBeInTheDocument();
-    expect(screen.queryByText(/查看本轮使用资料/)).toBeNull();
+    expect(await screen.findByText('本次不引用资料：仅普通对话')).toBeInTheDocument();
+    expect(screen.queryByText(/详情/)).toBeNull();
   });
 
   it('lists the used sources with source name and read count, and the withheld count', async () => {
     fetchMock.mockResolvedValue(reply(200, CONTEXT));
     render(<ConversationScopeSlot conversation_id='conv-1' />);
-    fireEvent.click(await screen.findByRole('button', { name: '查看本轮使用资料（1）' }));
+    fireEvent.click(await screen.findByRole('button', { name: '详情（已用资料 1）' }));
     expect(screen.getByText('产品手册.md')).toBeInTheDocument();
     expect(screen.getByText(/产品库 · 读取 2 次/)).toBeInTheDocument();
     expect(screen.getByText('另有 1 项因授权撤销不再列出')).toBeInTheDocument();
@@ -143,7 +153,7 @@ describe('ConversationScopeSlot', () => {
     expect(
       await screen.findByText('资料服务暂不可用，请稍后重试；手头的文件仍可打开和编辑，只是暂时不能语义检索')
     ).toBeInTheDocument();
-    expect(screen.queryByText('未选择资料：仅普通对话')).toBeNull();
+    expect(screen.queryByText('本次不引用资料：仅普通对话')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '刷新' }));
     expect(await screen.findByText(SUMMARY)).toBeInTheDocument();
   });
@@ -162,7 +172,8 @@ describe('ConversationScopeSlot', () => {
     };
     fetchMock.mockResolvedValue(reply(200, empty));
     render(<ConversationScopeSlot conversation_id='conv-1' />);
-    expect(await screen.findByText(/所选资料当前不可检索；可联网补充公开资料/)).toBeInTheDocument();
+    expect(await screen.findByText(/可联网补充公开资料/)).toBeInTheDocument();
+    expect(screen.getByText('所选资料当前不可检索')).toHaveAttribute('role', 'alert');
   });
 
   it('shows the superseded notice without a change action, and the hand-off summary of a narrowed conversation', async () => {

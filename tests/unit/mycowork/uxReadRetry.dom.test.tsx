@@ -43,7 +43,7 @@ beforeEach(() => {
   streamListeners.clear();
   // 范围条里的记忆建议徽标（R058）另读 /memory-items，这里统一回空，不占用本文件对 fetchMock 的计数与顺序
   vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
-    String(url).includes('/memory-items') ? Promise.resolve(reply(200, { items: [], total: 0 })) : fetchMock(url, init),
+    String(url).includes('/memory-items') ? Promise.resolve(reply(200, { items: [], total: 0 })) : fetchMock(url, init)
   );
   readRetry.delays = [0, 0];
 });
@@ -249,7 +249,7 @@ describe('保留旧内容只对暂时连不上生效', () => {
     expect(screen.queryByRole('button', { name: '更改范围' })).toBeNull();
     fetchMock.mockResolvedValue(reply(404, { error: { code: 'NOT_FOUND', message: 'x' } }));
     fireEvent.click(screen.getByRole('button', { name: '刷新' }));
-    await screen.findByText('未选择资料：仅普通对话');
+    await screen.findByText('本次不引用资料：仅普通对话');
   });
 });
 

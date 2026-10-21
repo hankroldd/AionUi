@@ -52,7 +52,7 @@ let signal: AbortSignal | undefined;
 let complete: ((value: ReturnType<typeof reply>) => void) | undefined;
 
 async function openPreview() {
-  fireEvent.click(await screen.findByRole('button', { name: '查看本轮使用资料（1）' }));
+  fireEvent.click(await screen.findByRole('button', { name: '详情（已用资料 1）' }));
   const trigger = screen.getByRole('button', { name: fileName });
   fireEvent.click(trigger);
   return trigger;

@@ -181,6 +181,12 @@ it('仍等待批准的轮次恢复真实运行信号，不把 idle 旧快照当�
   fixture.task = endedTask({ status: 'waiting_approval', runtime: fixture.runtime });
   await mount();
   await waitFor(() => expect(count('/bridge/v1/tasks/run-native')).toBe(1));
+  await act(async () =>
+    completedListeners.forEach((callback) => {
+      callback({ conversation_id: 'other-conversation', turn_id: 'old-host-turn' });
+      callback({ conversation_id: fixture.conversation, turn_id: 'other-turn' });
+    })
+  );
   expect(screen.queryByRole('button', { name: 'Mark this turn complete' })).toBeNull();
   expect(count('/bridge/v1/tasks')).toBe(0);
 });
@@ -314,4 +320,40 @@ it('更换登录账号后旧账号的迟到任务不显示', async () => {
   await act(async () => release!());
   expect(screen.queryByText('Turn marked complete')).toBeNull();
   expect(screen.queryByTestId('mycowork-task-completion')).toBeNull();
+});
+
+it.each(['read', 'lookup'])('审查复现：结束事件先于恢复 %s 响应到达时仍显示完成入口', async (step) => {
+  let release: (() => void) | undefined;
+  fixture.runtime = {
+    ...idle(),
+    state: 'waiting_confirmation',
+    turn_id: 'old-host-turn',
+    has_task: true,
+    is_processing: true,
+    can_send_message: false,
+    pending_confirmations: 1,
+  };
+  fixture.task = endedTask({ status: 'waiting_approval', runtime: fixture.runtime });
+  const stale = structuredClone(fixture.task);
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (path === (step === 'read' ? '/bridge/v1/tasks/run-native' : latestPath()))
+      return new Promise<Response>((resolve) => {
+        release = () => resolve(reply(200, stale));
+      });
+    if (path === '/bridge/v1/tasks/run-native') return reply(200, stale);
+    return fixtureFetch(path, init);
+  });
+  await mount();
+  await waitFor(() => expect(release).toBeDefined());
+  fixture.runtime = idle();
+  fixture.task = { ...fixture.task, runtime: fixture.runtime };
+  await act(async () =>
+    completedListeners.forEach((callback) =>
+      callback({ conversation_id: fixture.conversation, turn_id: 'old-host-turn' })
+    )
+  );
+  await act(async () => release!());
+  await waitFor(() => expect(completedListeners.size).toBeGreaterThan(0));
+  expect(screen.queryByRole('button', { name: 'Mark this turn complete' })).toBeInTheDocument();
+  expect(fixture.requests.some(({ path }) => path.endsWith('/turn-end') || path.endsWith('/accept'))).toBe(false);
 });

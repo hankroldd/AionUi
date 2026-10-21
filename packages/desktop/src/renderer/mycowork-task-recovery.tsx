@@ -8,7 +8,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@arco-design/web-react';
 import type { TaskRun } from '@mycowork/contracts';
 import { lookupOfficeTask, readOfficeTask } from '@mycowork/ui';
+import { wsEmitter } from '@/common/adapter/httpBridge';
 import { officeTaskRuntime } from './mycowork-task-send';
+
+const turnCompleted = wsEmitter<Record<string, unknown>>('turn.completed');
 
 /** 只恢复本人已确认办公会话的状态；invalidate 在新提交开始时使旧读取失效。 */
 export function useOfficeTaskRecovery(options: {
@@ -24,10 +27,16 @@ export function useOfficeTaskRecovery(options: {
   const request = useRef(0);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState(false);
+  const [observedEnds, setObservedEnds] = useState<{
+    ownerKey: string;
+    conversationId: string;
+    turns: Set<string>;
+  } | null>(null);
   const { conversationId, ownerKey, enabled, lang } = options;
   const invalidate = useCallback(() => {
     request.current += 1;
     setError(false);
+    setObservedEnds(null);
     current.current.onRecovered(null, false);
   }, []);
 
@@ -44,6 +53,16 @@ export function useOfficeTaskRecovery(options: {
       current.current.ownerKey === ownerKey &&
       current.current.isCurrent();
     const owner = { ownerKey, isCurrent };
+    // 查回 run 前先接住结束事件，避免旧 HTTP 快照抹掉已观察到的同轮结束。
+    const turns = new Set<string>();
+    const unsubscribe = turnCompleted.on((raw) => {
+      const conversation = raw.conversation_id ?? raw.session_id ?? raw.sessionId;
+      const turn = raw.turn_id ?? raw.turnId;
+      if (!isCurrent() || conversation !== conversationId || typeof turn !== 'string' || !turn || turns.has(turn))
+        return;
+      turns.add(turn);
+      setObservedEnds({ ownerKey, conversationId, turns: new Set(turns) });
+    });
     void (async () => {
       try {
         const found = await lookupOfficeTask(owner, { conversationId });
@@ -62,12 +81,20 @@ export function useOfficeTaskRecovery(options: {
     })();
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [conversationId, ownerKey, enabled, attempt]);
 
   const zh = lang?.startsWith('zh');
   return {
     invalidate,
+    hasObservedEnd: (turnId: string | undefined) =>
+      Boolean(
+        turnId &&
+        observedEnds?.ownerKey === ownerKey &&
+        observedEnds.conversationId === conversationId &&
+        observedEnds.turns.has(turnId)
+      ),
     notice:
       error && enabled && ownerKey ? (
         <div role='alert'>

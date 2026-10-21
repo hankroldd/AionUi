@@ -853,7 +853,7 @@ const AionrsSendBox: React.FC<{
         <TaskCompletion
           key={officeRun.run_id}
           run={officeRun}
-          turnEnded={turnEnded}
+          turnEnded={turnEnded || taskRecovery.hasObservedEnd(officeRun.turn_id)}
           lang={i18n?.language}
           onAccept={async (runId) => setOfficeRun(await acceptOfficeTask(officeTaskOwner(persistentDraft), runId))}
         />

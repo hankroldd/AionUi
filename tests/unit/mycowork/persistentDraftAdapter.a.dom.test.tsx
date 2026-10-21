@@ -198,13 +198,12 @@ describe('真实持久草稿与原生适配', () => {
     await waitFor(() => expect(screen.getByLabelText('首页输入')).toHaveValue(sourceState.content));
     await waitFor(() => expect(screen.getByRole('button', { name: '发送门禁' })).toBeEnabled());
     expect(screen.getByText(/虚构报告.txt/)).toHaveTextContent('model-a');
-    expect(getScope()).toMatchObject({
-      projectId: 'project-a',
-      carriedPlanId: 'plan-a',
-      items: [{ resource_ids: [] }],
-    });
+    // A535：旧草稿里的严格收缩来源标记不再恢复，也不再写回
+    expect(getScope()).toMatchObject({ projectId: 'project-a', items: [{ resource_ids: [] }] });
+    expect(getScope().carriedPlanId).toBeUndefined();
     fireEvent.change(screen.getByLabelText('首页输入'), { target: { value: '继续输入' } });
     await waitFor(() => expect(writes.some((value) => value.state.content === '继续输入')).toBe(true));
+    expect(writes.every((value) => value.state.scope?.carriedPlanId === undefined)).toBe(true);
     expect(JSON.stringify(writes)).not.toContain('never-persist');
   });
   it('对话中刚严格收缩带来的新计划不被旧草稿的范围覆盖', async () => {
@@ -219,6 +218,25 @@ describe('真实持久草稿与原生适配', () => {
     await waitFor(() => expect(screen.getByLabelText('首页输入')).toHaveValue(sourceState.content));
     expect(getScope()).toMatchObject({ carriedPlanId: 'plan-new', items: [{ source_id: 'src-keep' }] });
     resetAccountScopedState(); // 换账号：上一个账号收缩带来的计划不能留给下一个账号
+    expect(getScope().carriedPlanId).toBeUndefined();
+  });
+  it('A535：严格收缩来源标记不写进草稿，离开首页即清，之后的新会话不再带着它', async () => {
+    docs.set('guid', doc('guid'));
+    restoreScope({
+      items: [{ source_id: 'src-keep', name: '保留库' }],
+      views: [],
+      origin: 'turn',
+      carriedPlanId: 'plan-new',
+    });
+    const first = render(<GuidHarness />);
+    await waitFor(() => expect(screen.getByLabelText('首页输入')).toHaveValue(sourceState.content));
+    fireEvent.change(screen.getByLabelText('首页输入'), { target: { value: '收缩后输入' } });
+    await waitFor(() => expect(writes.some((value) => value.state.content === '收缩后输入')).toBe(true));
+    expect(writes.every((value) => value.state.scope?.carriedPlanId === undefined)).toBe(true);
+    first.unmount();
+    expect(getScope().carriedPlanId).toBeUndefined();
+    render(<GuidHarness />);
+    await waitFor(() => expect(screen.getByLabelText('首页输入')).toBeInTheDocument());
     expect(getScope().carriedPlanId).toBeUndefined();
   });
   it('明确路由提问和目录优先，已保存范围不覆盖明确项目意图', async () => {

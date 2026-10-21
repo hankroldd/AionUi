@@ -191,7 +191,7 @@ export function useGuidPersistentDraft(options: GuidOptions) {
     );
     // A strict narrowing in a conversation (MyCowork D19) just carried a new plan here; the older draft must not undo it (R008)
     if (!nav?.mycoworkScopeDraft && !nav?.mycoworkProjectId && !getScope().carriedPlanId && state.scope)
-      restoreScope(state.scope);
+      restoreScope((({ carriedPlanId: _carried, ...rest }) => rest)(state.scope as Record<string, unknown>)); // 旧草稿里的来源标记不恢复（A535）
     // R036：从能力中心回来（同账号）只在这一次恢复后只读核对资料范围；不发送（navigation-intent §9）
     if (isCapabilityReturn(nav, latest.current.ownerKey)) void recheckReturnedScope(i18n.language);
     setRestoredChoices(nav?.selectedAssistantId || nav?.resetAssistant ? undefined : state.choices);
@@ -322,10 +322,8 @@ export function useConversationPersistentDraft(
     onRestore,
   });
   const attempt = useRef<string | undefined>(undefined);
-  const clearSource = (handoff: InitialHandoff, taskAccepted = false) =>
-    owner.ownerKey
-      ? settleInitialSource({ ...owner, ownerKey: owner.ownerKey }, handoff.source, taskAccepted)
-      : Promise.resolve();
+  const clearSource = (handoff: InitialHandoff, taskAccepted = false) => owner.ownerKey
+    ? settleInitialSource({ ...owner, ownerKey: owner.ownerKey }, handoff.source, taskAccepted) : Promise.resolve();
   const initial = async (send: (state: DraftState, saved: DraftDocument) => Promise<TaskRun | void>) => {
     if (!draft.ready || !enabled || !owner.isCurrent() || attempt.current === conversationId) return;
     const key = `${storagePrefix}${conversationId}`;

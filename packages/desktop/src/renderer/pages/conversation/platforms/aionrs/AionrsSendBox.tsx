@@ -13,7 +13,7 @@ import MobileActionSheet, {
   type MobileActionSheetOption,
   useAttachEntry,
 } from '@/renderer/components/chat/MobileActionSheet';
-import { RESEND_EVENT, type ResendDetail } from '@/renderer/mycowork-resend';
+import { RESEND_EVENT, userMessageText, type ResendDetail } from '@/renderer/mycowork-resend';
 import { useMessageList } from '@/renderer/pages/conversation/Messages/hooks';
 import SendBox, { type SendBoxSubmitHandle } from '@/renderer/components/chat/SendBox';
 import ThoughtDisplay from '@/renderer/components/chat/ThoughtDisplay';
@@ -446,19 +446,30 @@ const AionrsSendBox: React.FC<{
   const messageList = useMessageList();
   const lastUserText = useMemo((): string => {
     const last = messageList.findLast((m) => m.type === 'text' && m.position === 'right');
-    return last?.type === 'text' && typeof last.content.content === 'string' ? last.content.content : '';
+    return last?.type === 'text' && typeof last.content.content === 'string' ? userMessageText(last.content.content) : '';
   }, [messageList]);
-  const resendLast = useCallback((): void => {
-    if (lastUserText) void templateSubmitRef.current?.submitWithPrefix(lastUserText);
-  }, [lastUserText]);
+  // 输入框有草稿/附件/引用时不发（原样重发不拼接它们），提示先清空
+  const resendBlocked = Boolean(content.trim() || uploadFile.length || atPath.length || selectedSessions.length);
+  const resendText = useCallback(
+    (text: string): void => {
+      if (!text) return;
+      if (resendBlocked) {
+        Message.warning(t('conversation.resendNeedEmpty'));
+        return;
+      }
+      void templateSubmitRef.current?.sendExact(text);
+    },
+    [resendBlocked, t]
+  );
+  const resendLast = useCallback((): void => resendText(lastUserText), [resendText, lastUserText]);
   useEffect(() => {
     const on = (e: Event) => {
       const d = (e as CustomEvent<ResendDetail>).detail;
-      if (d?.conversationId === conversation_id && d.text) void templateSubmitRef.current?.submitWithPrefix(d.text);
+      if (d?.conversationId === conversation_id) resendText(d.text);
     };
     window.addEventListener(RESEND_EVENT, on);
     return () => window.removeEventListener(RESEND_EVENT, on);
-  }, [conversation_id]);
+  }, [conversation_id, resendText]);
   const onSendHandler = async (message: string): Promise<void | false> => {
     if (isBusy) {
       Message.warning(
@@ -875,6 +886,7 @@ const AionrsSendBox: React.FC<{
           run={officeRun}
           turnEnded={turnEnded || taskRecovery.hasObservedEnd(officeRun.turn_id)}
           onResend={lastUserText ? resendLast : undefined}
+          resendBlocked={resendBlocked}
           lang={i18n?.language}
           onAccept={(runId) => acceptOfficeRun(officeTaskOwner(persistentDraft), runId, () => conversationIdRef.current === conversation_id, setOfficeRun)}
         />

@@ -240,7 +240,11 @@ function extractBtwQuestion(value: string): string | null {
 }
 
 /** [mycowork] ADR-0031：显式确认复用原组装函数，不允许替换消息或附件。 */
-export type SendBoxSubmitHandle = { submitWithPrefix: (prefix: string) => Promise<boolean> };
+export type SendBoxSubmitHandle = {
+  submitWithPrefix: (prefix: string) => Promise<boolean>;
+  /** [mycowork] 原样发送给定文本：不拼接输入框、附件、引用与 DOM 片段，也不清空它们（调用方保证输入框为空） */
+  sendExact: (text: string) => Promise<boolean>;
+};
 
 const SendBox: React.FC<{
   submitRef?: React.Ref<SendBoxSubmitHandle>;
@@ -1270,15 +1274,7 @@ const SendBox: React.FC<{
         setCaretPosition(nextCaret);
       });
     },
-    [
-      activeAtSessionQuery,
-      getTextareaElement,
-      input,
-      onSelectedSessionsChange,
-      onSessionNamesChange,
-      selectedSessions,
-      setInput,
-    ]
+    [activeAtSessionQuery, getTextareaElement, input, onSelectedSessionsChange, onSessionNamesChange, selectedSessions, setInput]
   );
 
   // Deleting a `@@` token must retract the reference. Same shape as the file
@@ -1328,16 +1324,7 @@ const SendBox: React.FC<{
         setCaretPosition(nextCaret);
       });
     },
-    [
-      canMentionSessions,
-      caretPosition,
-      getTextareaElement,
-      input,
-      onSelectedSessionsChange,
-      onSessionNamesChange,
-      selectedSessions,
-      setInput,
-    ]
+    [canMentionSessions, caretPosition, getTextareaElement, input, onSelectedSessionsChange, onSessionNamesChange, selectedSessions, setInput]
   );
 
   useAddEventListener(
@@ -1669,10 +1656,7 @@ const SendBox: React.FC<{
     return onSend(finalMessage)
       .then((result) => {
         if (preserveInputOnSend) {
-          if (result !== false) {
-            clearDomSnippets();
-            setReplyQuote(null);
-          }
+          if (result !== false) { clearDomSnippets(); setReplyQuote(null); }
         } else if (result === false) {
           setInput(finalMessage);
         }
@@ -1693,6 +1677,18 @@ const SendBox: React.FC<{
       externalSubmitting.current = true;
       try {
         return await sendMessageHandler(confirmationPrefix);
+      } finally {
+        externalSubmitting.current = false;
+      }
+    },
+    sendExact: async (text) => {
+      if (!text.trim() || externalSubmitting.current || isUploading || disabled || sendDisabled) return false;
+      if (input.trim() || domSnippets.length > 0 || replyQuote) return false;
+      externalSubmitting.current = true;
+      try {
+        return (await onSend(text)) !== false;
+      } catch {
+        return false;
       } finally {
         externalSubmitting.current = false;
       }

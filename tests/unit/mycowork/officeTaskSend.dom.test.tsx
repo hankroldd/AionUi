@@ -26,6 +26,7 @@ import AionrsSendBox from '@/renderer/pages/conversation/platforms/aionrs/Aionrs
 import { resetConversationRuntimeViewStoreForTest } from '@/renderer/pages/conversation/runtime/conversationRuntimeViewStore';
 import { resetConversationCommandQueueBackgroundRunnerForTest } from '@/renderer/pages/conversation/platforms/useConversationCommandQueue';
 import { captureOfficeDraftState } from '@/renderer/mycowork-task-send';
+import { RESEND_EVENT } from '@/renderer/mycowork-resend';
 
 vi.hoisted(() => {
   vi.stubGlobal('electronAPI', undefined);
@@ -286,6 +287,23 @@ it('办公队列入口不显示，快捷键与发送拒绝都保留输入且不�
   expect(document.body).toHaveTextContent('模型服务请求过多'); // R068：分型原因随提示给出
   expect(input).toHaveValue('保留的虚构办公输入');
   expect(ipcCount('conversation.sendMessage')).toBe(0);
+});
+it('重新发送：输入框有草稿时不发并保留草稿；清空后只发原消息，不拼接草稿', async () => {
+  const input = await mountConversation();
+  const resend = () =>
+    window.dispatchEvent(
+      new CustomEvent(RESEND_EVENT, { detail: { conversationId: fixture.conversation, text: '虚构原消息' } })
+    );
+  fireEvent.change(input, { target: { value: '没发出去的草稿' } });
+  resend();
+  await new Promise((r) => setTimeout(r, 50));
+  expect(count('/bridge/v1/tasks')).toBe(0);
+  expect(input).toHaveValue('没发出去的草稿');
+  fireEvent.change(input, { target: { value: '' } });
+  resend();
+  await waitFor(() => expect(count('/bridge/v1/tasks')).toBe(1));
+  const sent = JSON.parse(String(fixture.requests.find((r) => r.path === '/bridge/v1/tasks')?.init?.body));
+  expect(sent.delivery_content).toBe('虚构原消息');
 });
 it('普通对话与Team继续原native或Team发送，不进入任务接口', async () => {
   fixture.scene = false;

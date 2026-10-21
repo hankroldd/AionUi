@@ -31,6 +31,7 @@ vi.mock('react-i18next', () => ({
     i18n: { language: 'zh-CN', t: (k: string) => (k === 'common.close' ? '关闭' : k) },
   }),
 }));
+vi.mock('@/renderer/hooks/context/ThemeContext', () => ({ useThemeContext: () => ({ theme: 'light' }) }));
 vi.mock('i18next', () => ({ default: { t: (k: string) => (k === 'common.close' ? '关闭' : k) } }));
 
 const electron = (window as { electronAPI?: unknown }).electronAPI; // 测试环境默认模拟桌面端；WebUI 用例临时去掉
@@ -57,12 +58,14 @@ describe('D306 WebUI 不提供服务器目录入口', () => {
 describe('文件区与 @ 候选隐藏内部路径', () => {
   it('点目录/点文件与他会话 deck/<哈希> 隐藏，本会话与非哈希目录保留', () => {
     const cid = 'c1ac6fe4';
-    expect(isInternalPath('.claude/settings.json', cid)).toBe(true);
-    expect(isInternalPath('.aionrs.toml', cid)).toBe(true);
-    expect(isInternalPath('deck/b723c644/汇报.pptx', cid)).toBe(true);
-    expect(isInternalPath(`deck/${cid}/汇报.pptx`, cid)).toBe(false);
-    expect(isInternalPath('deck/e2e-2026/汇报.pptx', cid)).toBe(false);
-    expect(isInternalPath('原件/预算.xlsx', cid)).toBe(false);
+    expect(isInternalPath('.claude/settings.json', cid, true)).toBe(true);
+    expect(isInternalPath('.aionrs.toml', cid, true)).toBe(true);
+    expect(isInternalPath('deck/b723c644/汇报.pptx', cid, true)).toBe(true);
+    expect(isInternalPath(`deck/${cid}/汇报.pptx`, cid, true)).toBe(false);
+    expect(isInternalPath('deck/e2e-2026/汇报.pptx', cid, true)).toBe(false);
+    expect(isInternalPath('原件/预算.xlsx', cid, true)).toBe(false);
+    expect(isInternalPath('deck/20261021/a.pptx', cid, true)).toBe(false); // 纯数字目录是日期，不是会话哈希
+    expect(isInternalPath('.claude/settings.json', cid, false)).toBe(false); // 非 MyCowork 会话不过滤
   });
   it('树节点递归过滤', () => {
     const n = (path: string, children?: unknown[]) => ({
@@ -73,7 +76,8 @@ describe('文件区与 @ 候选隐藏内部路径', () => {
     });
     const out = hideInternalNodes(
       [n('.claude'), n('deck', [n('deck/aaaaaaaa'), n('deck/c1ac6fe4')]), n('原件')] as never,
-      'c1ac6fe4'
+      'c1ac6fe4',
+      true
     );
     expect(out.map((x) => x.title)).toEqual(['deck', '原件']);
     expect(out[0].children?.map((x) => x.title)).toEqual(['deck/c1ac6fe4']);
@@ -147,6 +151,15 @@ describe('停止后“重新发送本轮”', () => {
     fireEvent.click(screen.getByText('重新发送本轮'));
     expect(onResend).toHaveBeenCalledTimes(1);
   });
+  it('输入框有草稿（resendBlocked）时按钮禁用并提示先清空，点击不触发', () => {
+    const onResend = vi.fn();
+    render(<TaskCompletion run={run} lang='zh-CN' onAccept={vi.fn()} onResend={onResend} resendBlocked />);
+    const button = screen.getByText('重新发送本轮').closest('button')!;
+    expect(button).toBeDisabled();
+    expect(button.getAttribute('title')).toContain('先清空输入框');
+    fireEvent.click(button);
+    expect(onResend).not.toHaveBeenCalled();
+  });
   it('未确认停止或没有回调：不出现', () => {
     render(
       <TaskCompletion
@@ -160,6 +173,27 @@ describe('停止后“重新发送本轮”', () => {
     cleanup();
     render(<TaskCompletion run={run} lang='zh-CN' onAccept={vi.fn()} />);
     expect(screen.queryByText('重新发送本轮')).toBeNull();
+  });
+});
+
+describe('D306 WebUI 下 showOpen 返回空', () => {
+  it('blockedWebShowOpen 返回 undefined（目录/文件选择一律取消），并已注册为 WebUI 的处理器', async () => {
+    const { blockedWebShowOpen } = await import('@/renderer/components/workspace/mycoworkShowOpen');
+    expect(await blockedWebShowOpen({ properties: ['openDirectory'] })).toBeUndefined();
+    expect(await blockedWebShowOpen({ properties: ['openFile'] })).toBeUndefined();
+    const reg = vi.fn();
+    vi.doMock('@/common/adapter/ipcBridge', () => ({ registerWebShowOpenHandler: reg }));
+    const electron = (window as { electronAPI?: unknown }).electronAPI;
+    delete (window as { electronAPI?: unknown }).electronAPI;
+    try {
+      vi.resetModules();
+      await import('@/renderer/components/workspace/registerWebFsPicker');
+      expect(reg).toHaveBeenCalledTimes(1);
+      expect(reg.mock.calls[0][0].name).toBe('blockedWebShowOpen');
+    } finally {
+      (window as { electronAPI?: unknown }).electronAPI = electron;
+      vi.doUnmock('@/common/adapter/ipcBridge');
+    }
   });
 });
 
@@ -190,5 +224,8 @@ describe('Microcompact 系统提示不显示', () => {
       <MessageTips message={tip('Microcompact: cleared 6 tool results (~14982 tokens freed)')} />
     );
     expect(container.textContent).toBe('');
+    cleanup();
+    render(<MessageTips message={tip('另一个提示')} />); // 对照：普通提示照常显示
+    expect(document.body.textContent).toContain('另一个提示');
   });
 });

@@ -1,6 +1,7 @@
 {
   "unnamed": "未命名对话",
   "forkedFrom": "分叉自另一个对话，之前的内容已带入",
+  "resendNeedEmpty": "请先清空输入框和附件，再重新发送",
   "resend": "重新发送",
   "welcome": {
     "title": "Hi，今天有什么安排？",

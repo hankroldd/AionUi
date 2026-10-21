@@ -14,7 +14,7 @@ import { useLocalFilePreview } from '@/renderer/pages/conversation/Preview/hooks
 import { iconColors } from '@/renderer/styles/colors';
 import { Alert, Message, Tooltip } from '@arco-design/web-react';
 import { Copy, Refresh } from '@icon-park/react';
-import { RESEND_EVENT } from '@/renderer/mycowork-resend';
+import { RESEND_EVENT, userMessageText } from '@/renderer/mycowork-resend';
 import classNames from 'classnames';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -243,7 +243,10 @@ const MessageText: React.FC<{
           onClick={() =>
             window.dispatchEvent(
               new CustomEvent(RESEND_EVENT, {
-                detail: { conversationId: conversationContext.conversation_id, text: renderedText },
+                detail: {
+                  conversationId: conversationContext.conversation_id,
+                  text: userMessageText(String(message.content.content)),
+                },
               })
             )
           }

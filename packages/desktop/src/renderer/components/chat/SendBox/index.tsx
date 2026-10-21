@@ -1270,7 +1270,15 @@ const SendBox: React.FC<{
         setCaretPosition(nextCaret);
       });
     },
-    [activeAtSessionQuery, getTextareaElement, input, onSelectedSessionsChange, onSessionNamesChange, selectedSessions, setInput]
+    [
+      activeAtSessionQuery,
+      getTextareaElement,
+      input,
+      onSelectedSessionsChange,
+      onSessionNamesChange,
+      selectedSessions,
+      setInput,
+    ]
   );
 
   // Deleting a `@@` token must retract the reference. Same shape as the file
@@ -1320,7 +1328,16 @@ const SendBox: React.FC<{
         setCaretPosition(nextCaret);
       });
     },
-    [canMentionSessions, caretPosition, getTextareaElement, input, onSelectedSessionsChange, onSessionNamesChange, selectedSessions, setInput]
+    [
+      canMentionSessions,
+      caretPosition,
+      getTextareaElement,
+      input,
+      onSelectedSessionsChange,
+      onSessionNamesChange,
+      selectedSessions,
+      setInput,
+    ]
   );
 
   useAddEventListener(
@@ -1652,7 +1669,10 @@ const SendBox: React.FC<{
     return onSend(finalMessage)
       .then((result) => {
         if (preserveInputOnSend) {
-          if (result !== false) { clearDomSnippets(); setReplyQuote(null); }
+          if (result !== false) {
+            clearDomSnippets();
+            setReplyQuote(null);
+          }
         } else if (result === false) {
           setInput(finalMessage);
         }
@@ -1816,6 +1836,7 @@ const SendBox: React.FC<{
       className='bg-animate sendbox-stop-button'
       icon={<div className='mx-auto size-12px bg-6'></div>}
       onClick={stopHandler}
+      aria-label={t('common.stop')}
     ></Button>
   );
 

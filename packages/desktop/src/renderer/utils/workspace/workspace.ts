@@ -9,6 +9,10 @@
  * 工作空间工具函数
  */
 
+/** [mycowork] 工作区内部 ID（ws_<uuid>）不是给人看的名字（A532）。 */
+export const isRawWorkspaceId = (name: string | undefined): boolean =>
+  !!name && /^ws_[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(name);
+
 const splitPathSegments = (targetPath: string): string[] => targetPath.split(/[\\/]+/).filter(Boolean);
 
 /**
@@ -31,7 +35,8 @@ export const getWorkspaceDisplayName = (
     return t ? t('conversation.workspace.temporarySpace') : 'Temporary Session';
   }
   const parts = splitPathSegments(workspacePath);
-  return parts[parts.length - 1] || workspacePath;
+  const last = parts[parts.length - 1] || workspacePath;
+  return isRawWorkspaceId(last) ? (t ? t('conversation.workspace.unnamed') : 'Untitled project') : last;
 };
 
 /**

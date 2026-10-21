@@ -17,7 +17,7 @@ import CssThemeModal from './CssThemeModal.tsx';
 import { BUILTIN_THEMES, DEFAULT_THEME_ID } from './presets.ts';
 import { BACKGROUND_BLOCK_START, injectBackgroundCssBlock } from './backgroundUtils.ts';
 import { resolveExtensionAssetUrl } from '@renderer/utils/platform.ts';
-import { LIGHT_THEME_ID, SYSTEM_THEME_ID } from '@/common/theme/constants';
+import { DARK_THEME_ID, LIGHT_THEME_ID, SYSTEM_THEME_ID } from '@/common/theme/constants';
 
 interface ThemePreviewPalette {
   appBg: string;
@@ -268,7 +268,14 @@ const CssThemeSettings: React.FC = () => {
       created_at: 0,
       updated_at: 0,
     };
-    const arr = [...themes];
+    // [mycowork] A532：内置浅色/深色卡片名走本地化（上游写死 Light/Dark）
+    const arr = themes.map((th) =>
+      th.id === LIGHT_THEME_ID
+        ? { ...th, name: t('settings.cssTheme.lightName') }
+        : th.id === DARK_THEME_ID
+          ? { ...th, name: t('settings.cssTheme.darkName') }
+          : th
+    );
     arr.splice(Math.min(2, arr.length), 0, systemCard);
     return arr;
   }, [themes, t]);

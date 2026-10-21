@@ -118,6 +118,7 @@ import {
   showInstallationIntegrityModal,
 } from './components/layout/InstallationIntegrityDialog';
 import { createRuntimeInstallationReconciler } from './services/runtime/runtimeInstallationReconciler';
+import { startMycoworkA11y } from './mycowork-a11y';
 
 // Arco ships several locales that predate its newer components: sections such
 // as Form, ColorPicker and the Calendar month/year formats are missing there.
@@ -488,6 +489,7 @@ const BackendStartupFailureDialog: React.FC<{ failure: BackendStartupFailureInfo
 
 void registerPwa();
 
+startMycoworkA11y(); // [mycowork] 上游开关与弹窗关闭按钮补读屏名称（A532）
 const root = createRoot(document.getElementById('root')!);
 root.render(
   <BackendStartupGate

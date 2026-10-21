@@ -13,7 +13,8 @@ import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useLocalFilePreview } from '@/renderer/pages/conversation/Preview/hooks/useLocalFilePreview';
 import { iconColors } from '@/renderer/styles/colors';
 import { Alert, Message, Tooltip } from '@arco-design/web-react';
-import { Copy } from '@icon-park/react';
+import { Copy, Refresh } from '@icon-park/react';
+import { RESEND_EVENT } from '@/renderer/mycowork-resend';
 import classNames from 'classnames';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -197,13 +198,15 @@ const MessageText: React.FC<{
 
   const copyButton = (
     <Tooltip content={t('common.copy', { defaultValue: 'Copy' })}>
-      <div
-        className='p-4px rd-4px cursor-pointer hover:bg-3 transition-colors opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto'
+      <button
+        type='button'
+        aria-label={t('common.copy', { defaultValue: 'Copy' })}
+        className='p-4px rd-4px cursor-pointer hover:bg-3 transition-colors opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto bg-transparent b-none'
         onClick={handleCopy}
         style={{ lineHeight: 0 }}
       >
         <Copy theme='outline' size='16' fill={iconColors.secondary} />
-      </div>
+      </button>
     </Tooltip>
   );
 
@@ -216,16 +219,41 @@ const MessageText: React.FC<{
   });
   const forkButton = showForkButton ? (
     <Tooltip content={t('messages.fork.action')}>
-      <div
-        className='p-4px rd-4px cursor-pointer hover:bg-3 transition-colors opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto'
+      <button
+        type='button'
+        aria-label={t('messages.fork.action')}
+        className='p-4px rd-4px cursor-pointer hover:bg-3 transition-colors opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto bg-transparent b-none'
         onClick={() => void forkConversation(message.msg_id ?? message.id)}
         style={{ lineHeight: 0 }}
         data-testid='message-fork-button'
       >
         <ForkBranchIcon size={16} fill={iconColors.secondary} />
-      </div>
+      </button>
     </Tooltip>
   ) : null;
+
+  // [mycowork] A532：用户消息悬停加“重新发送”——原样再发一次（不编辑、不重新生成），由对话输入框走现有发送链路。
+  const resendButton =
+    isUserMessage && conversationContext?.type === 'aionrs' && conversationContext.conversation_id ? (
+      <Tooltip content={t('conversation.resend')}>
+        <button
+          type='button'
+          aria-label={t('conversation.resend')}
+          className='p-4px rd-4px cursor-pointer hover:bg-3 transition-colors opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto bg-transparent b-none'
+          onClick={() =>
+            window.dispatchEvent(
+              new CustomEvent(RESEND_EVENT, {
+                detail: { conversationId: conversationContext.conversation_id, text: renderedText },
+              })
+            )
+          }
+          style={{ lineHeight: 0 }}
+          data-testid='message-resend-button'
+        >
+          <Refresh theme='outline' size='16' fill={iconColors.secondary} />
+        </button>
+      </Tooltip>
+    ) : null;
 
   const cronMeta = message.content.cronMeta;
   const displaySenderName = senderName === 'team_system' ? t('team.systemNotice.sender') : senderName;
@@ -362,6 +390,7 @@ const MessageText: React.FC<{
           >
             {copyButton}
             {forkButton}
+            {resendButton}
             {message.created_at && (
               <span className='text-12px text-t-secondary opacity-0 group-hover:opacity-100 transition-opacity select-none'>
                 {formatMessageTime(message.created_at)}

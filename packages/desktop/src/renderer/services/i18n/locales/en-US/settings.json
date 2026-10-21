@@ -296,6 +296,8 @@
   "delete_preset_confirm": "Are you sure you want to delete this preset?",
   "cssTheme": {
     "selectOrCustomize": "Select or customize a theme",
+    "lightName": "Light",
+    "darkName": "Dark",
     "followSystem": "Follow System",
     "addManually": "Add Theme",
     "default": "Default",
@@ -384,7 +386,7 @@
   "pleaseEnterApiKey": "Please enter API Key",
   "pleaseEnterBaseUrl": "Please enter Base URL",
   "pleaseSelectProvider": "Please select a model provider",
-  "multiApiKeyTip": "💡 To add multiple API Keys for auto-rotation, configure in platform edit later",
+  "multiApiKeyTip": "To add multiple API Keys for auto-rotation, configure in platform edit later",
   "multiApiKeyEditTip": "Support multiple API Keys, one per line, system will auto-rotate",
   "apiKeyPlaceholder": "Enter API Key(s), one per line for multiple keys",
   "editApiKey": "Edit API Keys",

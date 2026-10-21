@@ -243,24 +243,36 @@ const AionrsConversationPanel: React.FC<{ conversation: AionrsConversation; slid
     />
   );
 
+  const chat = (
+    <AionrsChat
+      conversation_id={conversation.id}
+      workspace={conversation.extra.workspace}
+      emptySlot={emptySlot}
+      modelSelection={modelSelection}
+      session_mode={conversation.extra?.session_mode}
+      cron_job_id={cronJobId}
+      loadedSkills={(conversation.extra as { skills?: string[] } | undefined)?.skills}
+      loadedMcpServers={(conversation.extra as { mcp_servers?: string[] } | undefined)?.mcp_servers}
+      loadedMcpStatuses={(conversation.extra as { mcp_statuses?: IConversationMcpStatus[] } | undefined)?.mcp_statuses}
+      agent_name={presetAssistantInfo?.name}
+      assistantId={aionrsAssistantId}
+      forkCapability={conversation.fork_capability}
+    />
+  );
+
   return (
     <ChatLayout {...chatLayoutProps} conversation_id={conversation.id}>
-      <AionrsChat
-        conversation_id={conversation.id}
-        workspace={conversation.extra.workspace}
-        emptySlot={emptySlot}
-        modelSelection={modelSelection}
-        session_mode={conversation.extra?.session_mode}
-        cron_job_id={cronJobId}
-        loadedSkills={(conversation.extra as { skills?: string[] } | undefined)?.skills}
-        loadedMcpServers={(conversation.extra as { mcp_servers?: string[] } | undefined)?.mcp_servers}
-        loadedMcpStatuses={
-          (conversation.extra as { mcp_statuses?: IConversationMcpStatus[] } | undefined)?.mcp_statuses
-        }
-        agent_name={presetAssistantInfo?.name}
-        assistantId={aionrsAssistantId}
-        forkCapability={conversation.fork_capability}
-      />
+      {/* [mycowork] A532：分叉出来的新对话顶部补一行“分叉自”提示（不做确认框） */}
+      {(conversation.extra as { fork?: unknown } | undefined)?.fork ? (
+        <div className='flex flex-col flex-1 min-h-0'>
+          <div className='px-20px py-4px text-12px text-t-secondary' data-testid='conversation-fork-note'>
+            {t('conversation.forkedFrom')}
+          </div>
+          {chat}
+        </div>
+      ) : (
+        chat
+      )}
     </ChatLayout>
   );
 };

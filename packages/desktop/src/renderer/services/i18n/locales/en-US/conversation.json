@@ -1,4 +1,7 @@
 {
+  "unnamed": "Untitled conversation",
+  "forkedFrom": "Forked from another conversation; earlier content was carried over",
+  "resend": "Resend",
   "welcome": {
     "title": "Hi, what's your plan for today?",
     "placeholder": "Send a message, upload files, open a folder, create a scheduled task, or type / for commands...",
@@ -368,6 +371,7 @@
     "search.empty": "The search result is empty",
     "addFile": "Add File",
     "refresh": "Refresh",
+    "unnamed": "Untitled project",
     "temporarySpace": "Temporary Space",
     "dragOverlayTitle": "Drop to import",
     "dragOverlayDesc": "Drag files or folders here to copy them into this project.",

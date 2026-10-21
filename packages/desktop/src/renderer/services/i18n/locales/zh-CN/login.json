@@ -1,6 +1,6 @@
 {
-  "pageTitle": "AionUi - 登录",
-  "brand": "AionUi",
+  "pageTitle": "办公工作台 - 登录",
+  "brand": "办公工作台",
   "subtitle": "欢迎回来，请登录您的账户",
   "username": "用户名",
   "usernamePlaceholder": "请输入用户名",
@@ -13,7 +13,7 @@
   "showPassword": "显示密码",
   "hidePassword": "隐藏密码",
   "languageToggle": "切换语言",
-  "footerPrimary": "命令行 AI 的现代化体验",
+  "footerPrimary": "个人 AI 办公工作台",
   "footerSecondary": "高效且优雅",
   "errors": {
     "empty": "请输入用户名和密码",

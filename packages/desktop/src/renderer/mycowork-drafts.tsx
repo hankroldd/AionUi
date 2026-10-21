@@ -8,6 +8,7 @@ import i18n from 'i18next';
 import type { DraftChoices, DraftDocument, DraftState, TaskRun } from '@mycowork/contracts';
 import {
   adoptStoredDraft,
+  clearCarriedPlan,
   DraftStatus,
   getScope,
   isCapabilityReturn,
@@ -201,7 +202,8 @@ export function useGuidPersistentDraft(options: GuidOptions) {
       files: options.input.files,
       sessions: [],
       workspace: options.input.dir,
-      scope: { ...scope },
+      // A532：严格收缩的“来源标记”只服务紧接着的一次发送，不写进草稿（否则之后任何新会话都会带着它）
+      scope: (({ carriedPlanId: _carried, ...rest }) => rest)(scope),
       choices: Object.fromEntries(
         Object.entries({ ...options.choices, ...restoredChoices }).filter(([, value]) => value !== '')
       ),
@@ -209,6 +211,8 @@ export function useGuidPersistentDraft(options: GuidOptions) {
     [options.input.input, options.input.files, options.input.dir, options.choices, restoredChoices, scope]
   );
   const draft = usePersistentDraft({ ownerKey: owner.ownerKey, inputLocation: 'guid', state, onRestore });
+  // 离开首页即丢弃未发送的来源标记
+  useEffect(() => () => clearCarriedPlan(), []);
   useEffect(() => {
     if (draft.ready && !draft.saved) consumedNavigation.current = true;
   }, [draft.ready, draft.saved]);
@@ -318,8 +322,10 @@ export function useConversationPersistentDraft(
     onRestore,
   });
   const attempt = useRef<string | undefined>(undefined);
-  const clearSource = (handoff: InitialHandoff, taskAccepted = false) => owner.ownerKey
-    ? settleInitialSource({ ...owner, ownerKey: owner.ownerKey }, handoff.source, taskAccepted) : Promise.resolve();
+  const clearSource = (handoff: InitialHandoff, taskAccepted = false) =>
+    owner.ownerKey
+      ? settleInitialSource({ ...owner, ownerKey: owner.ownerKey }, handoff.source, taskAccepted)
+      : Promise.resolve();
   const initial = async (send: (state: DraftState, saved: DraftDocument) => Promise<TaskRun | void>) => {
     if (!draft.ready || !enabled || !owner.isCurrent() || attempt.current === conversationId) return;
     const key = `${storagePrefix}${conversationId}`;

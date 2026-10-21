@@ -95,7 +95,7 @@
   "askDeclined": "已跳过",
   "askOther": "其它",
   "askOtherPlaceholder": "输入你的回答",
-  "requestDetails": "请求内容：",
+  "requestDetails": "请求详情",
   "delivery": {
     "pending": "未读"
   },

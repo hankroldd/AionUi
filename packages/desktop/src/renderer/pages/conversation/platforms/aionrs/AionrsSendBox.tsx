@@ -13,6 +13,8 @@ import MobileActionSheet, {
   type MobileActionSheetOption,
   useAttachEntry,
 } from '@/renderer/components/chat/MobileActionSheet';
+import { RESEND_EVENT, type ResendDetail } from '@/renderer/mycowork-resend';
+import { useMessageList } from '@/renderer/pages/conversation/Messages/hooks';
 import SendBox, { type SendBoxSubmitHandle } from '@/renderer/components/chat/SendBox';
 import ThoughtDisplay from '@/renderer/components/chat/ThoughtDisplay';
 import FileAttachButton from '@/renderer/components/media/FileAttachButton';
@@ -440,6 +442,23 @@ const AionrsSendBox: React.FC<{
   // enqueuing. The only way to queue a message while busy is the explicit
   // "add to queue" entry (handleAddToQueue below).
   const templateSubmitRef = useRef<SendBoxSubmitHandle>(null);
+  // [mycowork] A532：“重新发送本轮”——把本会话最后一条用户文本原样走现有发送链路再发一次（不编辑、不重新生成）
+  const messageList = useMessageList();
+  const lastUserText = useMemo((): string => {
+    const last = messageList.findLast((m) => m.type === 'text' && m.position === 'right');
+    return last?.type === 'text' && typeof last.content.content === 'string' ? last.content.content : '';
+  }, [messageList]);
+  const resendLast = useCallback((): void => {
+    if (lastUserText) void templateSubmitRef.current?.submitWithPrefix(lastUserText);
+  }, [lastUserText]);
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<ResendDetail>).detail;
+      if (d?.conversationId === conversation_id && d.text) void templateSubmitRef.current?.submitWithPrefix(d.text);
+    };
+    window.addEventListener(RESEND_EVENT, on);
+    return () => window.removeEventListener(RESEND_EVENT, on);
+  }, [conversation_id]);
   const onSendHandler = async (message: string): Promise<void | false> => {
     if (isBusy) {
       Message.warning(
@@ -855,6 +874,7 @@ const AionrsSendBox: React.FC<{
           key={officeRun.run_id}
           run={officeRun}
           turnEnded={turnEnded || taskRecovery.hasObservedEnd(officeRun.turn_id)}
+          onResend={lastUserText ? resendLast : undefined}
           lang={i18n?.language}
           onAccept={(runId) => acceptOfficeRun(officeTaskOwner(persistentDraft), runId, () => conversationIdRef.current === conversation_id, setOfficeRun)}
         />
@@ -1001,7 +1021,8 @@ const AionrsSendBox: React.FC<{
         onSend={onSendHandler}
         slash_commands={slash_commands}
         onSlashBuiltinCommand={onSlashBuiltinCommand}
-        onAddToDraft={handleAddToQueue}
+        // 办公任务不支持队列发送时不显示常驻灰色按钮（A532）
+        onAddToDraft={officeQueueBlocked === true ? undefined : handleAddToQueue}
         addToDraftDisabled={queueUnavailable || !canQueueCurrentDraft || !persistentDraft.ready}
           addToDraftTooltip={
             queueUnavailable

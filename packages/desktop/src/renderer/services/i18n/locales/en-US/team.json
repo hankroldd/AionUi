@@ -1,4 +1,6 @@
 {
+  "pageNotFound": "Page not found",
+  "backHome": "Back to home",
   "sider": {
     "title": "Teams",
     "createTeam": "New Team",

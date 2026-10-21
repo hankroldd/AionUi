@@ -196,7 +196,7 @@ describe('MyCowork icon rail', () => {
     expect(more).toHaveAttribute('aria-expanded', 'false');
     expect(document.activeElement).toBe(more);
   });
-  it('More has only the three requested routes, with keyboard escape returning focus', async () => {
+  it('More has only the requested routes, with keyboard escape returning focus', async () => {
     mount();
     const trigger = screen.getByRole('button', { name: '更多' });
     fireEvent.click(trigger);
@@ -208,6 +208,8 @@ describe('MyCowork icon rail', () => {
       '首次设置',
       '办公定时（未开放执行）',
       '研究记录',
+      '连接与数据源',
+      '运行与维护',
     ]);
     const first = screen.getByRole('menuitem', { name: '知识管理（预留）' });
     first.focus();

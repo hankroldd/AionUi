@@ -140,6 +140,7 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
         icon={plusIcon}
         onClick={openFileSelector}
         data-testid='aionrs-attach-folder-btn'
+        aria-label={t('common.addAttachment')}
       />
     );
   }
@@ -318,6 +319,7 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
           loading={uploading}
           disabled={uploading}
           data-testid='aionrs-attach-folder-btn'
+          aria-label={t('common.addAttachment')}
         />
       </Trigger>
       <input

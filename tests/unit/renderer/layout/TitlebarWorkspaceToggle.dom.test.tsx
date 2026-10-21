@@ -66,7 +66,7 @@ describe('Titlebar workspace toggle', () => {
     render(<Titlebar workspaceAvailable />);
 
     const report = screen.getByRole('button', { name: 'conversation.welcome.quickActionFeedback' });
-    const workspace = screen.getByRole('button', { name: 'common.expandMore' });
+    const workspace = screen.getByRole('button', { name: 'common.expandWorkspace' });
 
     expect(report.nextElementSibling).toBe(workspace);
     expect(workspace.nextElementSibling).toBe(screen.getByTestId('window-controls'));
@@ -81,7 +81,7 @@ describe('Titlebar workspace toggle', () => {
     render(<Titlebar workspaceAvailable />);
 
     const report = screen.getByRole('button', { name: 'conversation.welcome.quickActionFeedback' });
-    const workspace = screen.getByRole('button', { name: 'common.expandMore' });
+    const workspace = screen.getByRole('button', { name: 'common.expandWorkspace' });
 
     expect(report.nextElementSibling).toBe(workspace);
     expect(screen.queryByTestId('window-controls')).not.toBeInTheDocument();
@@ -100,7 +100,7 @@ describe('Titlebar workspace toggle', () => {
   it('omits the workspace toggle when no workspace is available', () => {
     render(<Titlebar workspaceAvailable={false} />);
 
-    expect(screen.queryByRole('button', { name: 'common.expandMore' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'common.expandWorkspace' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'common.collapse' })).not.toBeInTheDocument();
   });
   it('keeps the navigation drawer available on mobile settings pages', () => {
@@ -108,7 +108,7 @@ describe('Titlebar workspace toggle', () => {
     sidebar.path = '/settings/agent';
     sidebar.toggle = vi.fn();
     render(<Titlebar workspaceAvailable={false} />);
-    fireEvent.click(screen.getByRole('button', { name: 'common.expandMore' }));
+    fireEvent.click(screen.getByRole('button', { name: 'common.expandSidebar' }));
     expect(sidebar.toggle).toHaveBeenCalledWith(false);
   });
 
@@ -135,7 +135,7 @@ describe('Titlebar workspace toggle', () => {
       sidebar.collapsed = true;
       sidebar.toggle = vi.fn();
       render(<Titlebar workspaceAvailable={false} />);
-      fireEvent.click(screen.getByRole('button', { name: 'common.expandMore' }));
+      fireEvent.click(screen.getByRole('button', { name: 'common.expandSidebar' }));
       expect(sidebar.toggle).toHaveBeenCalledWith(false);
       expect(screen.queryByTestId('conversation-search')).toBeNull();
     }

@@ -271,11 +271,11 @@ it('后续办公发送真实任务ACK进入原runtime UI，受理后清输入而
   expect(ipcCount('conversation.sendMessage')).toBe(0);
   expect(fixture.task?.turn_id).toBe('host-task-turn');
 });
-it('办公队列入口明确禁用，快捷键与发送拒绝都保留输入且不绕过任务接口', async () => {
+it('办公队列入口不显示，快捷键与发送拒绝都保留输入且不绕过任务接口', async () => {
   const input = await mountConversation();
   fireEvent.change(input, { target: { value: '保留的虚构办公输入' } });
-  const queue = await screen.findByRole('button', { name: /Office tasks do not support queued sending/ });
-  expect(queue).toBeDisabled();
+  // A532：办公任务不支持队列发送时不再显示常驻灰色按钮
+  await waitFor(() => expect(screen.queryByTestId('sendbox-add-to-draft-btn')).toBeNull());
   fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', ctrlKey: true });
   expect(input).toHaveValue('保留的虚构办公输入');
   expect(count('/bridge/v1/tasks')).toBe(0);

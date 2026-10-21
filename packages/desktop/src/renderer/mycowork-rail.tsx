@@ -268,6 +268,8 @@ function MoreItems(props: { lang: string; close: () => void; onNavigate: (route:
         [text.setup, '/office/setup'],
         [text.schedules, '/office/schedules'],
         [text.research, '/office/research'],
+        [text.connections, '/office/connections'],
+        [text.maintenance, '/office/maintenance'],
       ].map(([label, route]) => (
         <Button
           type='text'
@@ -336,11 +338,15 @@ export default function MyCoworkRail({ mobile = false }: { mobile?: boolean }): 
     /^\/office\/trash\/?$/.test(pathname);
   const scheduled = pathname.startsWith('/scheduled');
   const memory = pathname.startsWith('/office/memory');
-  const more = pathname.startsWith('/office/knowledge') || pathname.startsWith('/office/imports') ||
+  const more =
+    pathname.startsWith('/office/knowledge') ||
+    pathname.startsWith('/office/imports') ||
     pathname.startsWith('/office/capabilities') ||
     pathname.startsWith('/office/setup') ||
     pathname.startsWith('/office/schedules') ||
-    pathname.startsWith('/office/research');
+    pathname.startsWith('/office/research') ||
+    pathname.startsWith('/office/connections') ||
+    pathname.startsWith('/office/maintenance');
   const home = !space && !scheduled && !memory && !more && !pathname.startsWith('/settings');
   const entries = [
     { label: text.home, route: '/guid', active: home, Icon: Home },

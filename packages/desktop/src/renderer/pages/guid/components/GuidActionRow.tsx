@@ -576,6 +576,7 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
                 loading={uploading}
                 disabled={uploading}
                 data-testid='file-upload-btn'
+                aria-label={t('common.addAttachment')}
                 onClick={() => setIsSheetOpen(true)}
               />
               {files.length > 0 && (
@@ -598,6 +599,7 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
                   loading={uploading}
                   disabled={uploading}
                   data-testid='file-upload-btn'
+                  aria-label={t('common.addAttachment')}
                 />
                 {files.length > 0 && (
                   <Tooltip
@@ -663,6 +665,7 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
           icon={<ArrowUp theme='filled' size='14' fill='white' strokeWidth={5} />}
           onClick={onSend}
           data-testid='guid-send-btn'
+          aria-label={t('common.send')}
         />
       </div>
     </div>

@@ -32,6 +32,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { ConversationRowProps } from './types';
 import { isConversationPinned } from './utils/groupingHelpers';
+import { isRawWorkspaceId } from '@/renderer/utils/workspace/workspace';
 
 const ConversationRow: React.FC<ConversationRowProps> = (props) => {
   const {
@@ -68,6 +69,8 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
   const { t } = useTranslation();
   const { info: assistantInfo } = usePresetAssistantInfo(conversation);
   const isPinned = isConversationPinned(conversation);
+  // [mycowork] A532：没有标题、名字是工作区内部 ID 时显示“未命名对话”
+  const rowName = isRawWorkspaceId(conversation.name) ? t('conversation.unnamed') : conversation.name;
   // Fork-lineage badge: present only on forked conversations (extra.fork is
   // server-minted by the fork API). Parent name resolves from the loaded
   // sidebar list; a deleted/unloaded parent degrades to the generic tip.
@@ -77,7 +80,7 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
     : undefined;
   const cronStatus = getJobStatus(conversation.id);
   const siderTooltipProps = getSiderTooltipProps(tooltipEnabled);
-  const inlineNameTooltipEnabled = !collapsed && !isMobile && !!conversation.name;
+  const inlineNameTooltipEnabled = !collapsed && !isMobile && !!rowName;
 
   const renderLeadingIcon = () => {
     if (cronStatus !== 'none') {
@@ -164,7 +167,7 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
     <Tooltip
       key={conversation.id}
       {...siderTooltipProps}
-      content={conversation.name || t('conversation.welcome.newConversation')}
+      content={rowName || t('conversation.welcome.newConversation')}
       position='right'
     >
       <div
@@ -224,7 +227,7 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
         </span>
         <FlexFullContainer className='h-24px min-w-0 flex-1 collapsed-hidden'>
           <Tooltip
-            content={conversation.name}
+            content={rowName}
             disabled={!inlineNameTooltipEnabled}
             trigger='hover'
             popupVisible={inlineNameTooltipEnabled ? undefined : false}
@@ -233,7 +236,7 @@ const ConversationRow: React.FC<ConversationRowProps> = (props) => {
             position='top'
           >
             <div className='chat-history__item-name overflow-hidden text-ellipsis flex items-center gap-4px w-full text-14px font-[500] lh-24px whitespace-nowrap min-w-0 text-t-primary'>
-              <span className='block overflow-hidden text-ellipsis whitespace-nowrap min-w-0'>{conversation.name}</span>
+              <span className='block overflow-hidden text-ellipsis whitespace-nowrap min-w-0'>{rowName}</span>
               {forkLineage && (
                 <Tooltip
                   content={

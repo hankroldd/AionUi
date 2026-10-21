@@ -1,4 +1,6 @@
 {
+  "pageNotFound": "页面不存在",
+  "backHome": "返回首页",
   "sider": {
     "title": "团队",
     "createTeam": "新建团队",

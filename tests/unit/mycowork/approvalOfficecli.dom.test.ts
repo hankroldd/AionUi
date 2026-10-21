@@ -64,4 +64,8 @@ describe('A531 officecli 批准卡', () => {
     expect(approvalSummary('mcp__mycowork_bridge_memory_suggest', { text: 'x' }, 'zh')?.action).toBe('建议记一条记忆');
     expect(approvalSummary('office_edit', {}, 'zh')).toBeNull();
   });
+  it('cd 目标相对路径或含 .. 时不翻译', () => {
+    expect(run('cd ../x && officecli get "deck/c1/a.pptx" "/" --json')).toBeNull();
+    expect(run('cd work && officecli get "deck/c1/a.pptx" "/" --json')).toBeNull();
+  });
 });

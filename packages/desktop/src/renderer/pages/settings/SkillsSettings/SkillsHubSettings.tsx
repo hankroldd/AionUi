@@ -13,6 +13,7 @@ import SettingsPageHeader from '../components/SettingsPageHeader';
 import TalkToButlerButton from '@/renderer/components/base/TalkToButlerButton';
 import { AionSearchInput } from '@/renderer/components/base';
 import { formatDateTime } from '@/renderer/services/i18n/format';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import { buildSkillImportNotice, getSkillImportErrorMessage } from './skillImportMessages';
 
 // Skill 信息类型 / Skill info type
@@ -1005,7 +1006,7 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
             <TalkToButlerButton
               label={t('settings.skillsHub.addSkill', { defaultValue: 'Add Skill' })}
               chatLabel={t('settings.talkToButler.addViaChat', { defaultValue: 'Add via chat' })}
-              onManual={handleManualImport}
+              onManual={isElectronDesktop() ? handleManualImport : undefined}
               manualLabel={t('settings.skillsHub.manualImport', { defaultValue: 'Import Skills' })}
               prompt={t('settings.talkToButler.prompt.addSkill', {
                 defaultValue: 'Help me import a skill and attach it to an assistant.',

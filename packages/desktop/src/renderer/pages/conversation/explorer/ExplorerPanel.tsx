@@ -41,6 +41,8 @@ import { openProject, reveal, select, setExpandedKeys } from './explorerStore';
 import { initExplorerRuntime } from './monitorTransport';
 import { useExplorerView } from './useExplorerView';
 import { collapseToVisibleRoot, filterVisibleTree } from './search/visibleTree';
+import { hideInternalNodes } from './search/internalPaths';
+import { useCurrentConversation } from './currentConversationStore';
 import type { DirRef } from './explorerModel';
 
 export type ExplorerPanelProps = {
@@ -116,8 +118,9 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   onTransfer,
 }) => {
   const view = useExplorerView();
+  const conversationId = useCurrentConversation();
   const treeData = collapseToVisibleRoot(
-    filterVisibleTree(view.treeData, visibleRoots),
+    filterVisibleTree(hideInternalNodes(view.treeData, conversationId), visibleRoots),
     visibleRoots,
     visibleRootLabel
   );

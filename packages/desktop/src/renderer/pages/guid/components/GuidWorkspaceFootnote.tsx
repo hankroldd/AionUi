@@ -7,6 +7,7 @@
 import { ipcBridge } from '@/common';
 import { addRecentWorkspace, getRecentWorkspaces } from '@/renderer/components/workspace';
 import { AionInlineSearchInput } from '@/renderer/components/base';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import { Tooltip } from '@arco-design/web-react';
 import { Close, Down } from '@icon-park/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -184,10 +185,12 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
 
           {filteredRecent.length > 0 && <div className={styles.wsDropdownSep} />}
 
-          <div className={`${styles.wsDropdownItem} ${styles.wsDropdownItemAccent}`} onClick={handleBrowseWorkspace}>
-            <PlusIcon />
-            <span>{t('team.create.chooseDifferentFolder')}</span>
-          </div>
+          {isElectronDesktop() && (
+            <div className={`${styles.wsDropdownItem} ${styles.wsDropdownItemAccent}`} onClick={handleBrowseWorkspace}>
+              <PlusIcon />
+              <span>{t('team.create.chooseDifferentFolder')}</span>
+            </div>
+          )}
 
           <>
             <div className={styles.wsDropdownSep} />
@@ -253,7 +256,8 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
           </Tooltip>
           {dropdownEl}
         </>
-      ) : (
+      ) : !isElectronDesktop() ? null : (
+        // D306：WebUI 下不提供服务器目录浏览，工作目录只由 Bridge 会话决定。
         <>
           <button
             ref={triggerRef as React.RefObject<HTMLButtonElement>}

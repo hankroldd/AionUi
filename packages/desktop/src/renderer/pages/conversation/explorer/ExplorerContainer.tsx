@@ -70,6 +70,7 @@ import { SearchPanel } from './search/SearchPanel';
 import type { SearchHit } from './search/searchModel';
 import { ScmPanel } from '../SourceControl/ScmPanel';
 import { rediscoverRepos, refreshAllRepos } from '../SourceControl/scmStore';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 
 export type ExplorerContainerProps = {
   /** Owning project id — scopes the store's fact cache + localStorage UI state. */
@@ -579,16 +580,19 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
               不能包裹 Dropdown（会取到非 DOM 节点而崩），这里包的是普通 Button，安全。
               Note: an Arco Tooltip must not wrap a Dropdown (it would resolve a
               non-DOM node and crash); wrapping a plain Button like this is safe. */}
-          <Tooltip content={t('conversation.explorer.addFolder')} mini position='br'>
-            <Button
-              type='text'
-              size='small'
-              className='flex items-center justify-center'
-              icon={<FolderPlus theme='outline' size='16' />}
-              aria-label={t('conversation.explorer.addFolder')}
-              onClick={handleAddFolder}
-            />
-          </Tooltip>
+          {/* D306：WebUI 下“添加文件夹”会浏览服务器目录，不渲染。 */}
+          {isElectronDesktop() && (
+            <Tooltip content={t('conversation.explorer.addFolder')} mini position='br'>
+              <Button
+                type='text'
+                size='small'
+                className='flex items-center justify-center'
+                icon={<FolderPlus theme='outline' size='16' />}
+                aria-label={t('conversation.explorer.addFolder')}
+                onClick={handleAddFolder}
+              />
+            </Tooltip>
+          )}
           {workspacePath && <WorkspaceOpenButton workspacePath={workspacePath} isTemporary={false} />}
           <Tooltip
             content={

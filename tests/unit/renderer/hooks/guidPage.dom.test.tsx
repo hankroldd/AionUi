@@ -230,6 +230,7 @@ vi.mock('@/renderer/hooks/system/useSpeechInput', () => ({
 }));
 
 vi.mock('@/renderer/utils/platform', () => ({
+  isElectronDesktop: () => true,
   openExternalUrl: vi.fn(),
   resolveExtensionAssetUrl: vi.fn(),
   resolveBackendAssetUrl: vi.fn((path: string) => path),

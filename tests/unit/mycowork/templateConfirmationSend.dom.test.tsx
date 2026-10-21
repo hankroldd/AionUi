@@ -188,7 +188,7 @@ async function open() {
   render(<Tree />);
   await waitFor(() => expect(screen.getByTestId('sendbox-input')).toHaveValue(original().content));
   fireEvent.click(await screen.findByRole('button', { name: '使用此模板' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: '确认并继续' })).not.toBeDisabled());
+  await waitFor(() => expect(screen.getByRole('button', { name: '使用并继续制作' })).not.toBeDisabled());
 }
 
 it('一次原任务发送保留quote/DOM/附件/会话引用，原草稿只存raw content，ACK后结算', async () => {
@@ -196,7 +196,7 @@ it('一次原任务发送保留quote/DOM/附件/会话引用，原草稿只存ra
   fireEvent.click(screen.getByRole('button', { name: '加入引用和DOM' }));
   const supplement = '请参考 @@原会话名称 生成材料，使用黑字';
   fireEvent.change(screen.getByRole('textbox', { name: '补充要求（可选）' }), { target: { value: supplement } });
-  fireEvent.click(screen.getByRole('button', { name: '确认并继续' }));
+  fireEvent.click(screen.getByRole('button', { name: '使用并继续制作' }));
   await waitFor(() => expect(count('/bridge/v1/tasks')).toBe(1));
   const body = JSON.parse(String(fixture.requests.find((r) => r.path === '/bridge/v1/tasks')?.init?.body));
   expect(body.delivery_content).toContain('请使用这个模板');
@@ -212,7 +212,7 @@ it('一次原任务发送保留quote/DOM/附件/会话引用，原草稿只存ra
 it('没有额外补充可纯点击发送，不给草稿填确认语句', async () => {
   await open();
   fireEvent.change(screen.getByRole('textbox', { name: '补充要求（可选）' }), { target: { value: '' } });
-  fireEvent.click(screen.getByRole('button', { name: '确认并继续' }));
+  fireEvent.click(screen.getByRole('button', { name: '使用并继续制作' }));
   await waitFor(() => expect(count('/bridge/v1/tasks')).toBe(1));
   expect(submitted?.content).toBe('');
   const body = JSON.parse(String(fixture.requests.find((r) => r.path === '/bridge/v1/tasks')?.init?.body));
@@ -223,7 +223,7 @@ it.each(['明确拒绝', 'unknown'])('%s仍保留原输入附件，不自动重�
   if (kind === 'unknown') unknown = true;
   else fixture.rejectTask = true;
   await open();
-  fireEvent.click(screen.getByRole('button', { name: '确认并继续' }));
+  fireEvent.click(screen.getByRole('button', { name: '使用并继续制作' }));
   await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent('发送未确认'));
   expect(count('/bridge/v1/tasks')).toBe(1);
   expect(fixture.docs.get(`conversation:${fixture.conversation}`)?.state).toMatchObject(original());

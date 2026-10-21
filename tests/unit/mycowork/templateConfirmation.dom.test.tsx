@@ -24,6 +24,7 @@ import {
 type Stream = { conversation_id: string; type: string; data?: { name: string; status: string } };
 const h = vi.hoisted(() => ({
   fetch: vi.fn(),
+  preview: vi.fn(),
   submit: vi.fn(),
   owner: { current: 'owner-a' as string | undefined },
   stream: new Set<(message: Stream) => void>(),
@@ -91,7 +92,7 @@ const open = async () => {
   fireEvent.click(await screen.findByRole('button', { name: '使用此模板' }));
   return screen.getByRole('dialog');
 };
-const confirm = () => fireEvent.click(screen.getByRole('button', { name: '确认并继续' }));
+const confirm = () => fireEvent.click(screen.getByRole('button', { name: '使用并继续制作' }));
 const stream = (name?: string, status = 'completed', conversation_id = 'c1') =>
   act(async () => {
     h.stream.forEach((fn) =>
@@ -107,7 +108,12 @@ beforeEach(() => {
   h.stream.clear();
   h.fetch.mockReset().mockResolvedValue(response(context()));
   h.submit.mockReset().mockResolvedValue(true);
-  vi.stubGlobal('fetch', h.fetch);
+  h.preview.mockReset().mockResolvedValue({ ok: true, status: 200, text: async () => '<p>代表性正文页</p>' });
+  // 预览请求单独记数，不计入会话上下文的读取次数
+  vi.stubGlobal('IntersectionObserver', undefined); // 无观察器时预览挂载即请求
+  vi.stubGlobal('fetch', (url: unknown, init?: unknown) =>
+    String(url).includes('/assets/') ? h.preview(url, init) : h.fetch(url, init)
+  );
 });
 afterEach(() => {
   cleanup();
@@ -151,7 +157,7 @@ describe('会话模板点击确认', () => {
     fireEvent.click(screen.getByRole('radio', { name: '换个样式' }));
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter', code: 'Enter' });
     expect(h.submit).not.toHaveBeenCalled();
-    confirm();
+    fireEvent.click(screen.getByRole('button', { name: '查看其他样式' }));
     await waitFor(() => expect(h.submit).toHaveBeenCalledTimes(1));
     expect(h.submit.mock.calls[0][0]).toContain('重新推荐并展示新模板后再由我确认');
     expect(h.fetch.mock.calls.every(([url]) => String(url).endsWith('/context'))).toBe(true);
@@ -239,7 +245,7 @@ describe('会话模板点击确认', () => {
   it('读取失败或忙时不发送，失败显示原输入', async () => {
     const view = render(<Harness initial='保留原输入' disabled />);
     await open();
-    expect(screen.getByRole('button', { name: '确认并继续' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '使用并继续制作' })).toBeDisabled();
     confirm();
     expect(h.fetch).toHaveBeenCalledTimes(1);
     view.rerender(<Harness initial='保留原输入' />);
@@ -316,6 +322,56 @@ describe('会话模板点击确认', () => {
     expect(await fetchConversationContext('c1')).not.toBeNull();
     h.fetch.mockResolvedValue(response(context({ ...preview, theme: { ...preview.theme, version: 0 } })));
     await expect(fetchConversationContext('c1')).rejects.toThrow('invalid context response');
+  });
+});
+
+describe('模板确认弹窗的正文页预览', () => {
+  it('按主题 asset_id 与 version 请求预览并在隔离 iframe 渲染，不泄露内部编号', async () => {
+    render(<Harness />);
+    const dialog = await open();
+    const frame = await within(dialog).findByTitle('暖色活动的预览');
+    expect(h.preview.mock.calls[0][0]).toBe('/bridge/v1/assets/private-asset-id/preview?version=2');
+    expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
+    expect(frame.getAttribute('srcdoc')).toContain('代表性正文页');
+    expect(dialog.textContent).not.toMatch(/private-/);
+  });
+  it.each([
+    { name: 'ASSET_CHANGED', res: { ok: false, status: 409, json: async () => ({ error: { code: 'ASSET_CHANGED' } }) }, note: '预览暂不可用' },
+    { name: '服务错误', res: { ok: false, status: 500, json: async () => ({ error: { code: 'INTERNAL' } }) }, note: '预览加载失败' },
+  ])('预览$name时显示说明，仍可确认，且可关闭查看当前模板', async ({ res, note }) => {
+    h.preview.mockResolvedValue(res);
+    render(<Harness initial='先保留' />);
+    const dialog = await open();
+    expect(await within(dialog).findByTestId('asset-preview-msg')).toHaveTextContent(note);
+    confirm();
+    await waitFor(() => expect(h.submit).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+  it('查看当前模板关闭弹窗，补充保留在草稿里，预览未成为必点步骤', async () => {
+    render(<Harness initial='补充甲' />);
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: '查看当前模板' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByTestId('draft')).toHaveTextContent('补充甲');
+    expect(h.submit).not.toHaveBeenCalled();
+  });
+  it('主按钮文案随选项切换：使用并继续制作 / 查看其他样式', async () => {
+    render(<Harness />);
+    await open();
+    expect(screen.getByRole('button', { name: '使用并继续制作' })).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: '换个样式' }));
+    expect(screen.getByRole('button', { name: '查看其他样式' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: '使用并继续制作' })).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: '采用这个模板' }));
+    expect(screen.getByRole('button', { name: '使用并继续制作' })).toBeVisible();
+  });
+  it('弹窗带 mcw-modal，宽度不超过视口，Esc 取消', async () => {
+    render(<Harness />);
+    const dialog = await open();
+    expect(dialog.closest('.mcw-modal')).not.toBeNull();
+    expect((dialog.closest('.mcw-modal') as HTMLElement).style.maxWidth).toBe('calc(100vw - 32px)');
+    fireEvent.keyDown(within(dialog).getByRole('textbox'), { key: 'Escape', code: 'Escape', keyCode: 27 });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });
 

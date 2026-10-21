@@ -170,6 +170,8 @@ describe('ScopeStrip Secret count (D116)', () => {
       );
       const { unmount } = render(<ScopeStrip conversationId='c1' lang='zh-CN' />);
       await screen.findByText(/青禾库/);
+      const details = screen.queryByRole('button', { name: /详情/ }); // D299：排除数收进“详情”
+      if (details) fireEvent.click(details);
       expect(screen.queryByText(/已排除 Secret 1 项/) !== null).toBe(expected);
       unmount();
     }
@@ -202,6 +204,8 @@ describe('ScopeStrip Secret count (D116)', () => {
       );
       const { unmount } = render(<ScopeStrip conversationId='c1' lang='zh-CN' />);
       await screen.findByText(/青禾库/);
+      const details = screen.queryByRole('button', { name: /详情/ });
+      if (details) fireEvent.click(details);
       expect(screen.queryByText(/已排除 2 份模板样例/) !== null).toBe(expected);
       unmount();
     }

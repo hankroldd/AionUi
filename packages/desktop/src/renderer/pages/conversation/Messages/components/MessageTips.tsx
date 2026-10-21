@@ -68,6 +68,9 @@ const MessageTips: React.FC<{ message: IMessageTips }> = ({ message }) => {
   const localizedTipBody = resolveAgentTipBody(content, code, params, t);
   const { json, data } = useFormatContent(localizedTipBody);
 
+  // [mycowork] 上游上下文整理提示（英文 + token 数）不承担功能，不显示（D308，A532）。
+  if (/^Microcompact:/i.test(content)) return null;
+
   const displayContent = json ? '' : localizedTipBody;
   // The report chip stays hidden for errors that opt out via
   // feedback_recommended=false (user-environment problems the team can't fix),

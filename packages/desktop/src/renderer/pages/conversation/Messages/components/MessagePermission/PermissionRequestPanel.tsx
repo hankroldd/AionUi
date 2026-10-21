@@ -41,7 +41,6 @@ export const PermissionRequestPanel: React.FC<PermissionRequestPanelProps> = ({
   description,
   operationKind,
   detail,
-  detailLabelKey,
   options,
   onConfirm,
 }) => {
@@ -119,12 +118,13 @@ export const PermissionRequestPanel: React.FC<PermissionRequestPanelProps> = ({
         </div>
 
         {detail && (
-          <div className={styles.detailBlock}>
-            <Text className={styles.detailLabel}>{t(detailLabelKey || 'messages.command')}</Text>
+          // [mycowork] A532：原始入参默认收起，DOM 保留全文（自动化脚本靠它判断白名单）。
+          <details className={styles.detailBlock} data-testid={`${testIdPrefix}-detail`}>
+            <summary className={styles.detailLabel}>{t('messages.requestDetails')}</summary>
             <code className={styles.detail} dir='auto'>
               {detail}
             </code>
-          </div>
+          </details>
         )}
 
         {!hasResponded && (

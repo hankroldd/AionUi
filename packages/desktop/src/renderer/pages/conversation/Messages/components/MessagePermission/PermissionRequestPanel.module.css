@@ -64,9 +64,8 @@
 }
 
 .detailBlock {
-  display: flex;
+  display: block;
   min-width: 0;
-  align-items: baseline;
   gap: 8px;
   padding: 7px 9px;
   border: 1px solid var(--color-border-2);
@@ -75,7 +74,7 @@
 }
 
 .detailLabel {
-  flex: 0 0 auto;
+  cursor: pointer;
   color: var(--color-text-2);
   font-size: 11px;
 }

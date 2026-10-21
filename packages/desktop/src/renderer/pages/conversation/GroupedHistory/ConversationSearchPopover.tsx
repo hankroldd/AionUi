@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { isHiddenSearchItem } from '@/renderer/mycowork-hidden-messages';
 import { displayConversationName } from '@/renderer/utils/workspace/workspace';
 import { ipcBridge } from '@/common';
 import type { IMessageSearchItem } from '@/common/types/team/database';
@@ -196,7 +197,8 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
           page_size: PAGE_SIZE,
         });
 
-        setItems((prev) => (append ? [...prev, ...result.items] : result.items));
+        const visible = result.items.filter((item) => !isHiddenSearchItem(item)); // [mycowork] A551
+        setItems((prev) => (append ? [...prev, ...visible] : visible));
         setPage(pageToLoad);
         setHasMore(result.has_more);
       } catch (error) {

@@ -187,6 +187,7 @@ const SortableAssistantCard: React.FC<SortableAssistantCardProps> = ({
       >
         <Switch
           size='small'
+          aria-label={assistant.name_i18n?.[localeKey] || assistant.name}
           data-testid={`switch-enabled-${assistant.id}`}
           checked={assistant.enabled !== false}
           onChange={(checked) => {

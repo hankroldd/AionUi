@@ -637,7 +637,7 @@
       }
     }
   },
-  "notFound": "会话不存在或已被删除",
+  "notFound": "找不到这个会话，可能已删除",
   "explorer": {
     "addFolder": "添加文件夹到项目",
     "refreshFiles": "刷新文件",

@@ -229,3 +229,14 @@ describe('Microcompact 系统提示不显示', () => {
     expect(document.body.textContent).toContain('另一个提示');
   });
 });
+
+describe('检索结果隐藏整理提示与推理（A551）', () => {
+  it('Microcompact 与 thinking 项被判为隐藏，普通文本保留', async () => {
+    const { isHiddenSearchItem } = await import('@/renderer/mycowork-hidden-messages');
+    expect(isHiddenSearchItem({ message_type: 'tips', preview_text: 'Microcompact: cleared 6 tool results' })).toBe(
+      true
+    );
+    expect(isHiddenSearchItem({ message_type: 'thinking', preview_text: 'Let me think about it' })).toBe(true);
+    expect(isHiddenSearchItem({ message_type: 'text', preview_text: '周报草稿' })).toBe(false);
+  });
+});

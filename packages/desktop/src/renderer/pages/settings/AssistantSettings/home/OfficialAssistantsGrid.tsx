@@ -137,6 +137,7 @@ const OfficialAssistantsGrid: React.FC<OfficialAssistantsGridProps> = ({
                 <span onClick={(e) => e.stopPropagation()}>
                   <Switch
                     size='small'
+                    aria-label={assistant.name_i18n?.[localeKey] || assistant.name}
                     data-testid={`switch-enabled-${assistant.id}`}
                     checked={enabled}
                     onChange={(checked) => onToggleEnabled(assistant, checked)}

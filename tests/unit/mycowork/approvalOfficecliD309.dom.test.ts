@@ -37,7 +37,7 @@ describe('D309 batch 含 remove', () => {
     ]);
     expect(s?.action).toBe('修改并删除页/对象');
     expect(s?.target).toContain('删除：第 3 页（整页）、第 4 页（整页）');
-    expect(s?.impact).toContain('**会删除 2 处内容**');
+    expect(s?.impact).toContain('会删除 2 处内容（不可恢复）');
   });
   it('只有 remove；超过 5 个写“等 N 处”', () => {
     expect(b([{ command: 'remove', path: '/slide[2]' }])?.impact).toContain('会删除 1 处');

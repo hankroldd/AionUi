@@ -96,6 +96,13 @@ describe('MyAssistantCard', () => {
     expect(screen.getByTestId('runtime-card-1')).toBeInTheDocument();
   });
 
+  it('开关带助手名称，两个助手的开关名称不同（A551）', () => {
+    renderCard(makeAssistant({ id: 'a-1', name: '甲助手' }));
+    renderCard(makeAssistant({ id: 'a-2', name: '乙助手' }));
+    expect(screen.getByTestId('switch-enabled-a-1').getAttribute('aria-label')).toBe('甲助手');
+    expect(screen.getByTestId('switch-enabled-a-2').getAttribute('aria-label')).toBe('乙助手');
+  });
+
   it('prefers the localized name when available', () => {
     renderCard(makeAssistant({ id: 'card-1', name: 'Fallback', name_i18n: { 'en-US': 'Localized Name' } }));
     expect(screen.getByText('Localized Name')).toBeInTheDocument();

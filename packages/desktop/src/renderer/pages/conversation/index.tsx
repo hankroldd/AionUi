@@ -96,7 +96,7 @@ const ChatConversationIndex: React.FC = () => {
   useEffect(() => {
     if (!id || isLoading || data || notFoundHandledIdRef.current === id) return;
     notFoundHandledIdRef.current = id;
-    Message.warning(t('conversation.notFound'));
+    Message.warning({ content: t('conversation.notFound'), duration: 5000 }); // [mycowork] A551：多留几秒，别一闪而过
     navigate('/', { replace: true });
   }, [id, isLoading, data, navigate, t]);
 

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { isMicrocompactText } from '@/renderer/mycowork-hidden-messages';
 import type { IMessageTips } from '@/common/chat/chatLib';
 import { Collapse, Tag } from '@arco-design/web-react';
 import { Attention, CheckOne, Info } from '@icon-park/react';
@@ -69,7 +70,7 @@ const MessageTips: React.FC<{ message: IMessageTips }> = ({ message }) => {
   const { json, data } = useFormatContent(localizedTipBody);
 
   // [mycowork] 上游上下文整理提示（英文 + token 数）不承担功能，不显示（D315，A532）。
-  if (/^Microcompact:/i.test(content)) return null;
+  if (isMicrocompactText(content)) return null;
 
   const displayContent = json ? '' : localizedTipBody;
   // The report chip stays hidden for errors that opt out via

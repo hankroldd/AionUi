@@ -10,6 +10,7 @@ import { ipcBridge } from '@/common';
 import type { IMessagePermission, IMessageToolCall, TMessage } from '@/common/chat/chatLib';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { hidesAlwaysAllow } from '@/renderer/mycowork-approval-guard';
+import { approvalSummary } from '@mycowork/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PermissionRequestPanel } from './PermissionRequestPanel';
@@ -31,7 +32,7 @@ const toolInput = (tool?: IMessageToolCall): Record<string, unknown> | undefined
   );
 
 const MessagePermission: React.FC<MessagePermissionProps> = React.memo(({ message }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const content = message.content || ({} as IMessagePermission['content']);
   const { description, title, action, call_id, command_type } = content;
   const messages = useMessageList();
@@ -90,6 +91,13 @@ const MessagePermission: React.FC<MessagePermissionProps> = React.memo(({ messag
   const displayNameKey = toolDisplayNameKey(tool?.content.name ?? fullTool?.content.name ?? action);
   const displayTitle =
     (displayNameKey ? t(displayNameKey) : undefined) || title || description || t('messages.permissionRequest');
+  // [mycowork] D302：Bridge 写工具把技术入参翻成“动作 · 对象 · 影响”；未知工具/入参不合法时沿用上游 description，“请求详情”仍是原 JSON
+  const summary = approvalSummary(
+    tool?.content.name ?? fullTool?.content.name ?? action,
+    displayInput,
+    i18n?.language?.startsWith('zh') ? 'zh' : 'en'
+  );
+  const shownDescription = summary ? [summary.action, summary.target, summary.impact].join(' · ') : description;
 
   const panelOptions = useMemo<PermissionPanelOption[]>(
     () =>
@@ -126,7 +134,7 @@ const MessagePermission: React.FC<MessagePermissionProps> = React.memo(({ messag
       requestKey={`${message.id}:${call_id}`}
       testIdPrefix='message-permission'
       title={displayTitle}
-      description={description && description !== displayTitle ? description : undefined}
+      description={shownDescription && shownDescription !== displayTitle ? shownDescription : undefined}
       operationKind={normalizePermissionOperationKind(action)}
       detail={detail}
       detailLabelKey='messages.requestDetails'

@@ -1,15 +1,17 @@
 /**
  * 文件：tests/unit/mycowork/officeWatchLifecycle.dom.test.tsx
- * 职责：用迟到的后端 start/stop 验证重复打开、重开、切文件与卸载的预览生命周期。
+ * 职责：用迟到的后端 start/stop 验证重复打开、重开、切文件与卸载的预览生命周期；
+ *       并区分“预览连接断开、文件仍在”与“文件不存在”，重开后回到同一文件同一位置（A528）。
  * 边界：渲染真实查看器，只替换后端、平台与 Webview 边界；虚构文件，不启动进程。
- * 关联：PR11 重复打开预览修复；navigation-intent.md §2。
+ * 关联：PR11 重复打开预览修复（A524）；A528；navigation-intent.md §2。
  */
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { BackendHttpError } from '@/common/adapter/httpBridge';
 import PptViewer from '@/renderer/pages/conversation/Preview/components/viewers/PptViewer';
 
-const { start, stop, preview, translation, platform } = vi.hoisted(() => {
+const { start, stop, preview, translation, platform, fs } = vi.hoisted(() => {
   const startMock = vi.fn(async () => ({ url: 'http://127.0.0.1:51234/' }));
   const stopMock = vi.fn(async () => undefined);
   return {
@@ -18,9 +20,13 @@ const { start, stop, preview, translation, platform } = vi.hoisted(() => {
     preview: { start: { invoke: startMock }, stop: { invoke: stopMock }, status: { on: () => () => {} } },
     translation: { t: (key: string) => key },
     platform: { electron: true },
+    fs: {
+      getFileMetadata: { invoke: vi.fn() },
+      getContentMetadata: { invoke: vi.fn() },
+    },
   };
 });
-vi.mock('@/common', () => ({ ipcBridge: { pptPreview: preview, wordPreview: preview, excelPreview: preview } }));
+vi.mock('@/common', () => ({ ipcBridge: { pptPreview: preview, wordPreview: preview, excelPreview: preview, fs } }));
 vi.mock('react-i18next', () => ({ useTranslation: () => translation }));
 vi.mock('@/renderer/utils/platform', () => ({
   isElectronDesktop: () => platform.electron,
@@ -45,6 +51,20 @@ const flush = () =>
     await Promise.resolve();
   });
 
+const notFound = () =>
+  new BackendHttpError({ method: 'POST', path: '/api/fs/metadata', status: 404, body: { code: 'FILE_NOT_FOUND' } });
+const frame = () => document.querySelector<HTMLIFrameElement>('iframe[title="PPT Preview"]');
+// 网页模式：等 iframe 出现，设好阅读位置，再让两次探活失败。
+async function disconnectAt(scrollY: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  Object.defineProperty(frame()!.contentWindow!, 'scrollY', { value: scrollY, configurable: true });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(15_000);
+  });
+}
+
 describe('Office 预览生命周期', () => {
   beforeEach(() => {
     start.mockReset().mockResolvedValue({ url: 'http://127.0.0.1:51234/' });
@@ -57,6 +77,8 @@ describe('Office 预览生命周期', () => {
         })
     );
     vi.stubGlobal('fetch', fetchMock);
+    fs.getFileMetadata.invoke.mockReset().mockResolvedValue({ name: 'demo.pptx' });
+    fs.getContentMetadata.invoke.mockReset().mockResolvedValue({ name: 'demo.pptx' });
   });
   afterEach(async () => {
     cleanup();
@@ -144,5 +166,53 @@ describe('Office 预览生命周期', () => {
     stopped.release();
     await waitFor(() => expect(start).toHaveBeenCalledTimes(2));
     await screen.findByTestId('watch');
+  });
+
+  // ---- A528：断开后的两种状态与恢复位置 ----
+
+  it('预览连接断开但文件仍在：说明文件还在，保留同一文件并提供重开', async () => {
+    platform.electron = false;
+    vi.useFakeTimers();
+    render(<PptViewer file_path='/fixture/demo.pptx' />);
+    await disconnectAt(1200);
+    expect(fs.getFileMetadata.invoke).toHaveBeenCalledWith({ path: '/fixture/demo.pptx', workspace: undefined });
+    expect(screen.getByRole('alert').textContent).toMatch(/connection lost.*file is still there/i);
+    expect(screen.getByRole('button', { name: 'Reopen preview' })).toBeTruthy();
+  });
+
+  it('断开后文件已不存在：显示文件不存在，不提供重开', async () => {
+    platform.electron = false;
+    vi.useFakeTimers();
+    fs.getContentMetadata.invoke.mockRejectedValue(notFound());
+    const file = { kind: 'project' as const, pe_id: 'fixture-pe', relative_path: 'deck/gone.pptx' };
+    render(<PptViewer fileRef={file} />);
+    await disconnectAt(0);
+    expect(fs.getContentMetadata.invoke).toHaveBeenCalledWith({ file });
+    expect(screen.getByRole('alert').textContent).toMatch(/file not found/i);
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('重开时后端回文件不存在：同样显示文件不存在，不提供重试', async () => {
+    start.mockRejectedValueOnce(notFound());
+    render(<PptViewer file_path='/fixture/deleted.pptx' />);
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/file not found/i));
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('重新打开后回到同一文件、同一阅读位置', async () => {
+    platform.electron = false;
+    vi.useFakeTimers();
+    render(<PptViewer file_path='/fixture/demo.pptx' />);
+    await disconnectAt(1200);
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen preview' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(start).toHaveBeenLastCalledWith({ file_path: '/fixture/demo.pptx', workspace: undefined, file: undefined });
+    const win = frame()!.contentWindow!;
+    const scrollTo = vi.fn();
+    win.scrollTo = scrollTo as typeof win.scrollTo;
+    fireEvent.load(frame()!);
+    expect(scrollTo).toHaveBeenCalledWith(0, 1200);
   });
 });

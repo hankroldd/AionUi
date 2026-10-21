@@ -5,17 +5,24 @@
  */
 
 import { ipcBridge } from '@/common';
-import type { ChatFileRef } from '@/common/types/chatFile';
+import { chatFileRefKey, type ChatFileRef } from '@/common/types/chatFile';
 import { getBaseUrl, isBackendHttpError } from '@/common/adapter/httpBridge';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
 import { openExternalUrl } from '@/renderer/utils/platform';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { Button, Spin } from '@arco-design/web-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { registerTabReloader } from '../../context/tabReloaderRegistry';
-// [mycowork] B4: liveness probe + copy for a watch whose process is gone (MyCowork packages/ui)
-import { isWatchAlive, previewWatchText, watchGone } from '@mycowork/ui';
+// [mycowork] B4/A528: liveness probe, disconnect/missing copy and reading-position helpers (MyCowork packages/ui)
+import {
+  frameScrollY,
+  isWatchAlive,
+  previewWatchText,
+  restoreFrameScroll,
+  watchGone,
+  watchLostError,
+} from '@mycowork/ui';
 
 const WATCH_PROBE_MS = 15_000; // 两次连续失败才判断开，总延迟仍 ≤ 30 秒
 // [mycowork] 后端按文件复用进程；跨卸载等待旧清理，避免迟到 stop 关掉新查看器复用的进程。
@@ -96,6 +103,20 @@ interface OfficeWatchErrorState {
   message: string;
   // [mycowork] the watch process is gone (its /events stream no longer answers): offer "reopen", no install hint
   gone?: boolean;
+  missing?: boolean; // [mycowork] A528：文件不在或无权查看，重开无意义，不给按钮
+}
+
+// [mycowork] A528：后端对不存在/无权查看的文件回 404/403，其余失败不能断定文件状态。断开后只读查一次元数据，
+// 区分“预览服务停了、文件还在”与“文件不在”；查不出返回 undefined，不猜。
+const isMissingFileError = (err: unknown) => isBackendHttpError(err) && (err.status === 404 || err.status === 403);
+async function fileStillThere(fileRef?: ChatFileRef, file_path?: string, workspace?: string) {
+  try {
+    if (fileRef) await ipcBridge.fs.getContentMetadata.invoke({ file: fileRef });
+    else await ipcBridge.fs.getFileMetadata.invoke({ path: file_path ?? '', workspace });
+    return true;
+  } catch (err) {
+    return isMissingFileError(err) ? false : undefined;
+  }
 }
 
 export function resolveOfficeWatchUrl(url: string, docType: DocType): string {
@@ -178,6 +199,13 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
   const [status, setStatus] = useState<'starting' | 'installing'>('starting');
   const [error, setError] = useState<OfficeWatchErrorState | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  // [mycowork] A528：断开时记下的阅读位置，重开同一文件加载后恢复；换文件即作废。
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const resumeScrollY = useRef<number | null>(null);
+  const fileKey = fileRef ? chatFileRefKey(fileRef) : file_path;
+  useEffect(() => {
+    resumeScrollY.current = null;
+  }, [docType, fileKey]);
   // [mycowork] 顶部刷新与断开重开共用下方生命周期，等待旧进程停完再读文件，不额外发一次 stop。
   useEffect(() => {
     if (!tabId) return;
@@ -244,6 +272,11 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
             setLoading(false);
             return;
           }
+          if (isMissingFileError(err)) {
+            setError(watchLostError(false, i18n?.language));
+            setLoading(false);
+            return;
+          }
           const msg = err instanceof Error ? err.message : t(keys.startFailed);
           setError({ message: msg });
           setLoading(false);
@@ -263,7 +296,7 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
         })
         .catch(() => {});
     };
-  }, [docType, fileRef, file_path, retryKey, t, workspace]);
+  }, [docType, fileRef, file_path, retryKey, t, workspace, i18n?.language]);
 
   // [mycowork] B4: on web the proxy answers with the SPA's HTML once the officecli watch process is gone (after a page
   // reload or a long idle), and the iframe only logs an EventSource error. Probe the stream once the URL is known and
@@ -271,19 +304,24 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
   useEffect(() => {
     if (!watchUrl || isElectronDesktop()) return;
     let stopped = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
     const misses = { n: 0 }; // 连续两次探活失败才算断开，一次网络抖动不打扰
     const probe = async () => {
       const gone = watchGone(await isWatchAlive(watchUrl), misses);
       if (stopped || !gone) return;
-      setError({ message: previewWatchText(i18n?.language).gone, gone: true });
+      clearInterval(timer); // 判定断开后不再探活，也不重复查文件
+      resumeScrollY.current = frameScrollY(frameRef.current);
+      const kept = await fileStillThere(fileRef, file_path, workspace);
+      if (stopped) return;
+      setError(watchLostError(kept, i18n?.language));
     };
     void probe();
-    const timer = setInterval(() => void probe(), WATCH_PROBE_MS);
+    timer = setInterval(() => void probe(), WATCH_PROBE_MS);
     return () => {
       stopped = true;
       clearInterval(timer);
     };
-  }, [watchUrl, i18n?.language]);
+  }, [watchUrl, i18n?.language, fileRef, file_path, workspace]);
 
   if (loading) {
     return (
@@ -307,8 +345,10 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
     return (
       <div className='h-full w-full flex items-center justify-center bg-bg-1' data-testid='office-watch-error'>
         <div className='text-center max-w-400px'>
-          <div className={`text-16px mb-8px ${error.gone ? 'text-t-primary' : 'text-danger'}`}>{error.message}</div>
-          {!error.code && !error.gone && (
+          <div role='alert' className={`text-16px mb-8px ${error.gone ? 'text-t-primary' : 'text-danger'}`}>
+            {error.message}
+          </div>
+          {!error.code && !error.gone && !error.missing && (
             <div className='text-12px text-t-secondary mb-12px'>{t(keys.installHint)}</div>
           )}
           {showServerInstallGuide && (
@@ -346,7 +386,15 @@ const OfficeWatchViewer: React.FC<OfficeWatchViewerProps> = ({ docType, tabId, f
   if (isElectronDesktop()) {
     return <WebviewHost url={watchUrl} className='bg-bg-1' />;
   }
-  return <iframe src={watchUrl} className='w-full h-full border-0 bg-bg-1' title={IFRAME_TITLE[docType]} />;
+  return (
+    <iframe
+      ref={frameRef}
+      src={watchUrl}
+      onLoad={() => restoreFrameScroll(frameRef.current, resumeScrollY)}
+      className='w-full h-full border-0 bg-bg-1'
+      title={IFRAME_TITLE[docType]}
+    />
+  );
 };
 
 export default OfficeWatchViewer;

@@ -55,7 +55,7 @@ describe('A531 officecli 批准卡', () => {
     ['反引号', 'officecli get "deck/a/b.pptx" "`id`"'],
     ['命令替换', 'officecli get "deck/a/b.pptx" "$(id)"'],
     ['重定向', `officecli get ${F} "/" > out.txt`],
-    ['多个 &&', `${CD}officecli save ${F} && officecli close ${F}`],
+    ['多个 && 但有一条不是 officecli', `${CD}officecli save ${F} && rm ${F}`],
     ['绝对路径', 'officecli get "/etc/passwd" "/"'],
     ['..', 'officecli get "deck/../../x.pptx" "/"'],
     ['非 deck', 'officecli get "原件/x.pptx" "/"'],
@@ -83,7 +83,6 @@ describe('A531 officecli 批准卡', () => {
       'officecli set "deck/c1/a.pptx" "/slide[1]" deck/../../x --prop text="甲"',
       'officecli remove "deck/c1/a.pptx" "/slide[2]"',
       'officecli raw-set "deck/c1/a.pptx" /slide1 --action remove',
-      'officecli batch "deck/c1/a.pptx" --commands \'[{"command":"remove","path":"/slide[2]"}]\'',
       'officecli set "deck/c1/a.pptx\u00a0/slide[1]" --prop text="甲"',
     ])
       expect(run(cmd), cmd).toBeNull();

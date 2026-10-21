@@ -29,7 +29,9 @@ const h = vi.hoisted(() => ({
   project: vi.fn(),
   search: vi.fn(),
   remount: vi.fn(),
-  stream: new Set<(message: { conversation_id: string; type: string; data?: { name: string; status: string } }) => void>(),
+  stream: new Set<
+    (message: { conversation_id: string; type: string; data?: { name: string; status: string } }) => void
+  >(),
 }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'zh-CN' } }) }));
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({
@@ -43,7 +45,9 @@ vi.mock('@/common', () => ({
     shell: { checkToolInstalled: { invoke: async () => false } },
     conversation: {
       responseStream: {
-        on: (fn: (message: { conversation_id: string; type: string; data?: { name: string; status: string } }) => void) => {
+        on: (
+          fn: (message: { conversation_id: string; type: string; data?: { name: string; status: string } }) => void
+        ) => {
           h.stream.add(fn);
           return () => h.stream.delete(fn);
         },
@@ -166,17 +170,22 @@ describe('本次对话文件入口', () => {
   });
 
   it.each(['office_copy_to_workspace', 'office_fetch_original', 'office_register_output', 'office_edit'])(
-    '%s 成功后从原刷新端口重新读取当前文件树，不必等待下一轮', async (name) => {
+    '%s 成功后从原刷新端口重新读取当前文件树，不必等待下一轮',
+    async (name) => {
       h.fetch.mockResolvedValue(response(workspace('c1')));
       h.remount.mockImplementation(async (refs: Array<{ pe_id: string; relative_path: string }>) => ({
         snapshots: refs.map((target) => ({
-          target, entries: target.relative_path === 'deck/c1' ? [file('copied-template.pptx')] : snapshots[refToKey(target)] ?? [],
+          target,
+          entries:
+            target.relative_path === 'deck/c1' ? [file('copied-template.pptx')] : (snapshots[refToKey(target)] ?? []),
         })),
       }));
       mount();
       await screen.findByText('report-current.pptx');
       expect(screen.queryByText('copied-template.pptx')).toBeNull();
-      await act(async () => h.stream.forEach((fn) => fn({ conversation_id: 'c1', type: 'tool_call', data: { name, status: 'completed' } })));
+      await act(async () =>
+        h.stream.forEach((fn) => fn({ conversation_id: 'c1', type: 'tool_call', data: { name, status: 'completed' } }))
+      );
       expect(await screen.findByText('copied-template.pptx')).toBeVisible();
       expect(h.remount).toHaveBeenCalledWith(expect.arrayContaining([{ pe_id: 'work', relative_path: 'deck/c1' }]));
       expect(h.remount.mock.calls[0][0].every((ref: { pe_id: string }) => ref.pe_id === 'work')).toBe(true);
@@ -188,17 +197,33 @@ describe('本次对话文件入口', () => {
     let exists = false;
     const subscribe = vi.fn(async (refs: Array<{ pe_id: string; relative_path: string }>) => {
       if (!exists && refs.some((ref) => ref.relative_path === 'deck/c1')) throw new Error('directory not created yet');
-      return { snapshots: refs.map((target) => ({
-        target, entries: target.relative_path === 'deck/c1' ? [file('copied-after-create.pptx')] : snapshots[refToKey(target)] ?? [],
-      })) };
+      return {
+        snapshots: refs.map((target) => ({
+          target,
+          entries:
+            target.relative_path === 'deck/c1'
+              ? [file('copied-after-create.pptx')]
+              : (snapshots[refToKey(target)] ?? []),
+        })),
+      };
     });
     configureExplorerStore({ subscribe, remount: h.remount, unsubscribe: () => {} });
     mount();
-    await waitFor(() => expect(subscribe.mock.calls.some(([refs]) => refs.some((ref) => ref.relative_path === 'deck/c1'))).toBe(true));
+    await waitFor(() =>
+      expect(subscribe.mock.calls.some(([refs]) => refs.some((ref) => ref.relative_path === 'deck/c1'))).toBe(true)
+    );
     await act(async () => {}); // 让失败订阅退出 current，复现真实首次创建目录的状态。
     expect(screen.queryByText('copied-after-create.pptx')).toBeNull();
     exists = true;
-    await act(async () => h.stream.forEach((fn) => fn({ conversation_id: 'c1', type: 'tool_call', data: { name: 'office_copy_to_workspace', status: 'completed' } })));
+    await act(async () =>
+      h.stream.forEach((fn) =>
+        fn({
+          conversation_id: 'c1',
+          type: 'tool_call',
+          data: { name: 'office_copy_to_workspace', status: 'completed' },
+        })
+      )
+    );
     expect(await screen.findByText('copied-after-create.pptx')).toBeVisible();
     expect(h.project).toHaveBeenCalledTimes(2);
   });
@@ -212,8 +237,10 @@ describe('本次对话文件入口', () => {
         ['c2', 'office_copy_to_workspace', 'completed'],
         ['c1', 'office_copy_to_workspace', 'running'],
         ['c1', 'office_copy_to_workspace', 'error'],
-        ['c1', 'read', 'completed'], ['c1', 'search', 'completed'],
-      ]) h.stream.forEach((fn) => fn({ conversation_id, type: 'tool_call', data: { name, status } }));
+        ['c1', 'read', 'completed'],
+        ['c1', 'search', 'completed'],
+      ])
+        h.stream.forEach((fn) => fn({ conversation_id, type: 'tool_call', data: { name, status } }));
     });
     expect(h.remount).not.toHaveBeenCalled();
     expect(screen.getByText('report-current.pptx')).toBeVisible();
@@ -280,5 +307,27 @@ describe('本次对话文件入口', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'report' } });
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(h.search).not.toHaveBeenCalled();
+  });
+});
+
+describe('仅本次对话的根节点展示', () => {
+  it('根节点显示“本次对话文件”，不暴露项目根、deck 与会话 id，内容仍在', async () => {
+    h.fetch.mockResolvedValue(response(workspace('c1')));
+    mount();
+    expect(await screen.findByText('report-current.pptx')).toBeVisible();
+    expect(screen.getByText('本次对话文件')).toBeVisible();
+    expect(screen.queryByText('deck')).toBeNull();
+    expect(screen.queryByText('c1')).toBeNull();
+    expect(screen.queryByText('project')).toBeNull();
+  });
+
+  it('显示全部时恢复原项目树与真实目录名', async () => {
+    h.fetch.mockResolvedValue(response(workspace('c1')));
+    mount();
+    await screen.findByText('report-current.pptx');
+    fireEvent.click(screen.getByRole('button', { name: '显示全部' }));
+    expect(await screen.findByText('other.txt')).toBeVisible();
+    expect(screen.getByText('deck')).toBeVisible();
+    expect(screen.queryByText('本次对话文件')).toBeNull();
   });
 });

@@ -109,10 +109,14 @@ beforeEach(() => {
   h.fetch.mockReset().mockResolvedValue(response(context()));
   h.submit.mockReset().mockResolvedValue(true);
   h.preview.mockReset().mockResolvedValue({ ok: true, status: 200, text: async () => '<p>代表性正文页</p>' });
-  // 预览请求单独记数，不计入会话上下文的读取次数
+  // 预览请求单独记数；文件卡片的“交付文件”角色查询（output-resource）也不计入会话上下文的读取次数
   vi.stubGlobal('IntersectionObserver', undefined); // 无观察器时预览挂载即请求
   vi.stubGlobal('fetch', (url: unknown, init?: unknown) =>
-    String(url).includes('/assets/') ? h.preview(url, init) : h.fetch(url, init)
+    String(url).includes('/assets/')
+      ? h.preview(url, init)
+      : String(url).includes('/output-resource')
+        ? Promise.resolve(response({}, 404))
+        : h.fetch(url, init)
   );
 });
 afterEach(() => {
@@ -336,8 +340,16 @@ describe('模板确认弹窗的正文页预览', () => {
     expect(dialog.textContent).not.toMatch(/private-/);
   });
   it.each([
-    { name: 'ASSET_CHANGED', res: { ok: false, status: 409, json: async () => ({ error: { code: 'ASSET_CHANGED' } }) }, note: '预览暂不可用' },
-    { name: '服务错误', res: { ok: false, status: 500, json: async () => ({ error: { code: 'INTERNAL' } }) }, note: '预览加载失败' },
+    {
+      name: 'ASSET_CHANGED',
+      res: { ok: false, status: 409, json: async () => ({ error: { code: 'ASSET_CHANGED' } }) },
+      note: '预览暂不可用',
+    },
+    {
+      name: '服务错误',
+      res: { ok: false, status: 500, json: async () => ({ error: { code: 'INTERNAL' } }) },
+      note: '预览加载失败',
+    },
   ])('预览$name时显示说明，仍可确认，且可关闭查看当前模板', async ({ res, note }) => {
     h.preview.mockResolvedValue(res);
     render(<Harness initial='先保留' />);

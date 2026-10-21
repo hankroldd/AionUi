@@ -321,6 +321,17 @@ describe('仅本次对话的根节点展示', () => {
     expect(screen.queryByText('project')).toBeNull();
   });
 
+  it('折叠根节点右键重命名预填真实目录名，而不是展示标签“本次对话文件”', async () => {
+    h.fetch.mockResolvedValue(response(workspace('c1')));
+    mount();
+    await screen.findByText('report-current.pptx');
+    fireEvent.contextMenu(screen.getByText('本次对话文件'));
+    fireEvent.click(await screen.findByText('conversation.explorer.contextMenu.rename'));
+    const input = (await screen.findByRole('dialog')).querySelector('input') as HTMLInputElement;
+    expect(input.value).toBe('c1');
+    expect(input.value).not.toBe('本次对话文件');
+  });
+
   it('显示全部时恢复原项目树与真实目录名', async () => {
     h.fetch.mockResolvedValue(response(workspace('c1')));
     mount();

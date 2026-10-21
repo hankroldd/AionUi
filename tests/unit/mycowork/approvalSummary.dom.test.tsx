@@ -107,7 +107,9 @@ describe('D302 批准卡摘要', () => {
   });
 
   it('英文文案；其余三个工具各有摘要', () => {
-    expect(approvalSummary('office_fetch_original', { resource_id: 'x' }, 'en')?.impact).toBe('Read-only');
+    expect(approvalSummary('office_fetch_original', { resource_id: 'x' }, 'en')?.impact).toBe(
+      'Only reads the original and adds one copy in the workspace'
+    );
     expect(approvalSummary('office_copy_to_workspace', { relative_path: 'a.docx' }, 'zh')?.impact).toBe(
       '只复制，原件不变'
     );

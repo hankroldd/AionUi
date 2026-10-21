@@ -4,15 +4,12 @@
  * Each AionUi insertion point is a 1–2 line call into this file; components and Bridge calls
  * live in MyCowork packages/ui (resolved via the `@mycowork/ui` build alias). Ledger: MyCowork upstream/PATCHES.md.
  */
-import React, { useEffect, useRef, useState } from 'react';
-import { Message } from '@arco-design/web-react';
+import React, { useEffect, useState } from 'react';
 import { getCurrentProject, useCurrentProject } from '@/renderer/pages/conversation/explorer/currentProjectStore';
 import {
   getCurrentConversation,
   useCurrentConversation,
 } from '@/renderer/pages/conversation/explorer/currentConversationStore';
-import { useOptionalPreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
-import { classifyPreviewError, previewErrorToI18nKey } from '@/renderer/utils/previewError';
 import i18n from 'i18next';
 import useSWR from 'swr';
 import { useTranslation } from 'react-i18next';
@@ -34,10 +31,8 @@ import {
   prepareScopedSession,
   BranchMessageButton,
   fetchConversationContext,
-  ConversationFileLink,
   useConversationWorkspace,
   TemplateConfirmationProvider,
-  TemplateConfirmationAction,
   TemplateConfirmationDialog,
 } from '@mycowork/ui';
 
@@ -300,61 +295,7 @@ export function useMyCoworkConversationFiles(
   return useConversationWorkspace(ownerKey, projectId, conversationId, turns);
 }
 
-/** Open an explicit workspace-relative link with the exact same payload gate as the Explorer. */
-export const MyCoworkWorkspaceFileLinkSlot: React.FC<{ relativePath: string; children?: React.ReactNode }> = ({
-  relativePath,
-  children,
-}) => {
-  const projectId = useCurrentProject();
-  const conversationId = useCurrentConversation();
-  const preview = useOptionalPreviewContext();
-  const ownerKey = useOwnerKey();
-  const generation = useRef(0);
-  useEffect(() => {
-    generation.current += 1;
-    return () => {
-      generation.current += 1;
-    };
-  }, [projectId, conversationId, ownerKey]);
-  const { t, i18n } = useTranslation();
-  const open = async (): Promise<void> => {
-    if (!projectId || !conversationId || !preview) return;
-    const openedAt = generation.current;
-    const current = () =>
-      generation.current === openedAt &&
-      getCurrentProject() === projectId &&
-      getCurrentConversation() === conversationId;
-    try {
-      const detail = await ipcBridge.project.get.invoke({ project_id: projectId });
-      if (!current() || detail.project_id !== projectId || !detail.explorer.workspace_pe_id) return;
-      const { buildExplorerPreviewPayload } = await import('./pages/conversation/explorer/ExplorerContainer');
-      if (!current()) return;
-      const payload = await buildExplorerPreviewPayload(detail.explorer.workspace_pe_id, relativePath);
-      if (current()) preview.openPreview(payload.content, payload.contentType, payload.metadata);
-    } catch (error) {
-      if (current()) Message.error(t(previewErrorToI18nKey(classifyPreviewError(error))));
-    }
-  };
-  return (
-    <>
-      <ConversationFileLink
-        disabled={!projectId || !conversationId || !preview}
-        onOpen={() => void open()}
-        fileName={relativePath.split('/').pop()}
-        lang={i18n.language}
-        conversationId={conversationId}
-        relativePath={relativePath}
-      >
-        {children}
-      </ConversationFileLink>
-      <TemplateConfirmationAction
-        relativePath={relativePath}
-        disabled={!projectId || !conversationId || !preview}
-        lang={i18n.language}
-      />
-    </>
-  );
-};
+export { MyCoworkWorkspaceFileLinkSlot } from './mycowork-file-link';
 
 /** ADR-0031：会话内共用一次模板读取，成功模板工具及结束事件刷新，不轮询。 */
 export const MyCoworkTemplateConfirmationProvider: React.FC<{

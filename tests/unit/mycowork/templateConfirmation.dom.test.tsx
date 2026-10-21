@@ -386,7 +386,6 @@ describe('模板确认弹窗的正文页预览', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });
-
 it('当前文件范围提示随原按钮切换，按钮文字和回调保持', () => {
   function Toggle() {
     const [all, setAll] = useState(false);

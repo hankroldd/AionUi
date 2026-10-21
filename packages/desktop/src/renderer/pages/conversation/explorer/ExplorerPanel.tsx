@@ -216,7 +216,10 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       const status = data?.runtimeStatus;
       const degraded = status !== undefined && status !== 'available';
       const key = String(node.dataRef?.key ?? '');
-      const name = String(node.title);
+      // [mycowork] 折叠根节点（“本次对话文件”）只改显示标题；重命名预填、删除确认、拖拽等操作一律用真实目录名
+      const ref0 = keyToRef(key);
+      const name = ref0.relative_path ? (ref0.relative_path.split('/').pop() ?? '') : String(node.title);
+      const label = String(node.title);
       const isFile = Boolean(data?.isLeaf);
       const isExpanded = view.expanded.includes(key);
 
@@ -314,7 +317,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
           <FileTypeIcon node={{ name, relativePath: keyToRef(key).relative_path, isFile }} expanded={isExpanded} />
           {/* File names are code-like; bidi-neutral leading dots (.claude) must not flip under RTL. */}
           <span dir='ltr' title={name} className='overflow-hidden text-ellipsis whitespace-nowrap'>
-            {name}
+            {label}
           </span>
           {degraded && <Caution theme='outline' size='14' className='flex-shrink-0' />}
         </span>

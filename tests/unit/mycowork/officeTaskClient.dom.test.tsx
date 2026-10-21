@@ -49,6 +49,26 @@ const accepted = (): TaskRun => ({
 });
 const count = (path: string) => requests.filter((request) => request.path === path).length;
 
+it('会话最新任务查询只带conversation_id，并核对响应归属', async () => {
+  task = accepted();
+  expect(await lookupOfficeTask(owner, { conversationId: 'conversation-office-fixture' })).toEqual(task);
+  expect(requests[0].path).toBe('/bridge/v1/tasks/lookup?conversation_id=conversation-office-fixture');
+  expect(requests[0].init?.headers).toMatchObject({ 'x-mycowork-draft-owner': 'owner-office' });
+  task = { ...task, conversation_id: 'different-conversation' };
+  await expect(lookupOfficeTask(owner, { conversationId: 'conversation-office-fixture' })).rejects.toThrow('任务关联');
+});
+
+it('会话最新任务查询前后仍核对账号，身份变化不使用返回结果', async () => {
+  task = accepted();
+  let current = true;
+  delayLookup = async () => {
+    current = false;
+  };
+  await expect(
+    lookupOfficeTask({ ...owner, isCurrent: () => current }, { conversationId: 'conversation-office-fixture' })
+  ).rejects.toThrow('登录状态已变化');
+});
+
 beforeEach(() => {
   restoreScope({ items: [], views: [], origin: 'turn' });
   saved = document({ ...empty(), content: '已提交的虚构输入' });
@@ -204,7 +224,10 @@ it('查找任务的503不是404，不建计划、不降级为普通发送', asyn
 
 it('lookup等待期间范围被重新选择时拒发，不把原输入配到新范围', async () => {
   let release!: () => void;
-  delayLookup = () => new Promise<void>((resolve) => { release = resolve; });
+  delayLookup = () =>
+    new Promise<void>((resolve) => {
+      release = resolve;
+    });
   const sending = submitOfficeTask({ ...owner, draft: saved });
   restoreScope({ items: [], views: [], origin: 'turn', projectId: 'new-project-fixture' });
   release();

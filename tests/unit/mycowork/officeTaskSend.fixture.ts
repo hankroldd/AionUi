@@ -129,8 +129,15 @@ export async function fixtureFetch(raw: string, init?: RequestInit): Promise<Res
     fixture.docs.set(location, saved);
     return reply(200, saved);
   }
-  if (path.startsWith('/bridge/v1/tasks/lookup?'))
-    return fixture.task ? reply(200, fixture.task) : reply(404, { error: { code: 'NOT_FOUND' } });
+  if (path.startsWith('/bridge/v1/tasks/lookup?')) {
+    const query = new URL(path, 'http://fixture.invalid').searchParams;
+    const matches =
+      fixture.task &&
+      (!query.has('submission_id') || fixture.task.submission_id === query.get('submission_id')) &&
+      (!query.has('conversation_id') || fixture.task.conversation_id === query.get('conversation_id')) &&
+      (!query.has('turn_id') || fixture.task.turn_id === query.get('turn_id'));
+    return matches ? reply(200, fixture.task) : reply(404, { error: { code: 'NOT_FOUND' } });
+  }
   if (path === '/bridge/v1/context-plans')
     return reply(201, { plan_id: 'plan-native', status: 'EMPTY_SCOPE', brief: { explicit_empty: true, groups: [] } });
   if (path.endsWith('/tokens'))

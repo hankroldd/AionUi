@@ -261,6 +261,7 @@ export {
   watchTurnEnd,
   watchTurnEnded,
 } from './mycowork-task-send';
+export { useOfficeTaskRecovery } from './mycowork-task-recovery';
 
 // [mycowork] Business labels/path recognition stay in the owned UI package.
 export { ConversationFilesToggle, ConversationFilesEmpty, conversationFilePath } from '@mycowork/ui';

@@ -132,7 +132,7 @@ it('接受后显示已完成 / 完成有提醒（zh 与 en）', async () => {
   expect(screen.getByRole('status')).toHaveTextContent('Turn marked complete');
 });
 
-it('TURN_ERROR 显示出错，其他失败不冒充', () => {
+it('TURN_ERROR 显示轮次出错，其他失败仅显示未能完成', () => {
   render(
     <TaskCompletion
       run={mk({ status: 'failed', delivery_error: 'TURN_ERROR' })}
@@ -145,7 +145,8 @@ it('TURN_ERROR 显示出错，其他失败不冒充', () => {
   const { container } = render(
     <TaskCompletion run={mk({ status: 'failed', delivery_error: 'X' })} lang='zh-CN' onAccept={async () => {}} />
   );
-  expect(container).toBeEmptyDOMElement();
+  expect(container).toHaveTextContent('本轮任务未能完成');
+  expect(container).not.toHaveTextContent('本轮运行出错');
 });
 
 it('取消订阅后，在途的重读返回也不回调（新一轮或卸载不被旧结果覆盖）', async () => {

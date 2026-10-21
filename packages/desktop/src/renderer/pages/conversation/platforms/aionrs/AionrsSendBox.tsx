@@ -57,7 +57,7 @@ import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
 import { useAionrsMessage } from './useAionrsMessage';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
-import { MyCoworkTemplateConfirmationDialog, captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft, officeTaskOwner, watchTurnEnd, watchTurnEnded } from '@/renderer/mycowork-slots';
+import { MyCoworkTemplateConfirmationDialog, captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft, officeTaskOwner, watchTurnEnd, watchTurnEnded, useOfficeTaskRecovery } from '@/renderer/mycowork-slots';
 import type { DraftDocument, DraftState, TaskRun } from '@mycowork/contracts';
 import { withoutYolo } from '@/renderer/mycowork-approval-guard';
 import { useSendFailure } from '@/renderer/mycowork-send-failure';
@@ -227,6 +227,13 @@ const AionrsSendBox: React.FC<{
     () => isOfficeConversation(conversation_id, conversationContext?.assistantId)
   );
   const queueUnavailable = persistentDraft.enabled && officeQueueBlocked !== false;
+  const [officeRun, setOfficeRun] = useState<TaskRun | null>(null);
+  const [turnEnded, setTurnEnded] = useState(false);
+  const taskRecovery = useOfficeTaskRecovery({
+    conversationId: conversation_id, ownerKey: persistentDraft.ownerKey, isCurrent: persistentDraft.isCurrent,
+    enabled: persistentDraft.enabled && officeQueueBlocked === true, lang: i18n?.language,
+    onRecovered: (run, ended) => { setOfficeRun(run); setTurnEnded(ended); },
+  });
   const draftStateRef = useLatestRef(draftState);
   const sendingDraftRef = useRef(false);
 
@@ -319,6 +326,7 @@ const AionrsSendBox: React.FC<{
           if (!submitted && await isOfficeConversation(conversation_id, conversationContext?.assistantId))
             throw new Error('办公任务的队列发送尚未接通；已保留队列项，请编辑取回后明确发送。');
           if (submitted) {
+            taskRecovery.invalidate();
             const office = await sendOfficeDraft(persistentDraft, submitted, { expectedState: expectedState!, conversationId: conversation_id, assistantId: conversationContext?.assistantId, lang: i18n?.language, deliveryContent: input });
             if (office) {
               const runtime = officeTaskRuntime(office);
@@ -387,6 +395,7 @@ const AionrsSendBox: React.FC<{
       persistentDraft,
       conversationContext?.assistantId,
       i18n?.language,
+      taskRecovery.invalidate,
     ]
   );
 
@@ -759,10 +768,9 @@ const AionrsSendBox: React.FC<{
   );
 
   // R068：本会话最近一次办公任务；本轮结束由页面看到的turn.completed转给Bridge，确认可选
-  const [officeRun, setOfficeRun] = useState<TaskRun | null>(null);
-  const [turnEnded, setTurnEnded] = useState(false);
+  const officeRunActive = officeRun && ['running', 'waiting_input', 'waiting_approval', 'waiting_editor'].includes(officeRun.status);
   useEffect(() => {
-    if (!officeRun || !persistentDraft.enabled || officeRun.status !== 'running' || officeRun.turn_end) return;
+    if (!officeRun || !persistentDraft.enabled || !officeRunActive || officeRun.turn_end) return;
     try {
       return watchTurnEnd(officeTaskOwner(persistentDraft), officeRun, setOfficeRun);
     } catch {
@@ -771,9 +779,9 @@ const AionrsSendBox: React.FC<{
   }, [officeRun?.run_id, officeRun?.turn_id, officeRun?.status, officeRun?.turn_end, persistentDraft.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!officeRun || !persistentDraft.enabled || officeRun.status !== 'running') return;
+    if (!officeRun || !persistentDraft.enabled || !officeRunActive) return;
     try {
-      return watchTurnEnded(officeTaskOwner(persistentDraft), officeRun, (latest) => { if (latest) setOfficeRun((prev) => (prev?.run_id === latest.run_id && prev.status !== 'running' ? prev : latest)); setTurnEnded(true); }); // a late re-read never downgrades a terminal run
+      return watchTurnEnded(officeTaskOwner(persistentDraft), officeRun, (latest) => { if (latest) setOfficeRun((prev) => (prev?.run_id !== latest.run_id || !['running', 'waiting_input', 'waiting_approval', 'waiting_editor'].includes(prev.status) ? prev : latest)); setTurnEnded(true); }); // a late re-read never downgrades a terminal run
     } catch {
       return undefined;
     }
@@ -839,6 +847,7 @@ const AionrsSendBox: React.FC<{
         />
       )}
       {persistentDraft.enabled && <DraftStatus draft={persistentDraft} lang={i18n?.language} />}
+      {taskRecovery.notice}
       {sendFailure.notice}
       {persistentDraft.enabled && officeRun && (
         <TaskCompletion

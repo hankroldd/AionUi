@@ -173,7 +173,7 @@ describe('ConversationScopeSlot', () => {
     fetchMock.mockResolvedValue(reply(200, empty));
     render(<ConversationScopeSlot conversation_id='conv-1' />);
     expect(await screen.findByText(/可联网补充公开资料/)).toBeInTheDocument();
-    expect(screen.getByText('所选资料当前不可检索')).toHaveAttribute('role', 'alert');
+    expect(screen.getByText('所选资料在发送时都不可检索（本轮读不到资料）')).toHaveAttribute('role', 'alert');
   });
 
   it('shows the superseded notice without a change action, and the hand-off summary of a narrowed conversation', async () => {

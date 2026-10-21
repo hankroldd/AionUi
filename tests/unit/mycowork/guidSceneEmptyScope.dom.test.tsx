@@ -154,14 +154,14 @@ describe('scope strip for the explicit empty plan (A197)', () => {
     );
     render(<ConversationScopeSlot conversation_id='conv-e' />);
     expect(await screen.findByText(/本次不引用资料（已明确不选）/)).toBeInTheDocument();
-    expect(screen.queryByText(/当前不可检索/)).toBeNull();
+    expect(screen.queryByText(/不可检索/)).toBeNull();
     expect(screen.getByRole('button', { name: '更改范围' })).toBeInTheDocument(); // the user can still open the picker
   });
 
   it('an emptied plan that is not explicit keeps the "not searchable" wording', async () => {
     fetchMock.mockResolvedValue(reply(200, context({ groups: [], policy: { strict: false, web: 'off' } })));
     render(<ConversationScopeSlot conversation_id='conv-r' />);
-    expect(await screen.findByText(/所选资料当前不可检索/)).toBeInTheDocument();
+    expect(await screen.findByText(/所选资料在发送时都不可检索/)).toBeInTheDocument();
     expect(screen.queryByText(/未选资料（本轮/)).toBeNull();
   });
 });

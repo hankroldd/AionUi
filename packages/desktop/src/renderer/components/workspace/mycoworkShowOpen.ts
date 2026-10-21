@@ -11,7 +11,7 @@ import type { ShowOpenHandler } from '@/common/adapter/ipcBridge';
 export const blockedWebShowOpen: ShowOpenHandler = async () => {
   Message.warning(
     i18n.t('fileSelection.webFsPicker.disabled', {
-      defaultValue: '网页版不能浏览服务器目录，请用“从设备上传”或直接输入路径',
+      defaultValue: '网页版不能浏览服务器目录，请用“从设备上传”',
     })
   );
   return undefined;

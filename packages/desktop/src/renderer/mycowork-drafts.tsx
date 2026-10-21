@@ -24,37 +24,13 @@ import type { GuidAssistantSelectionResult } from '@/renderer/pages/guid/hooks/u
 import type { GuidModelSelectionResult } from '@/renderer/pages/guid/hooks/useGuidModelSelection';
 import type { GuidInputResult } from '@/renderer/pages/guid/hooks/useGuidInput';
 import type { IMcpServer } from '@/common/config/storage';
-import { collectChatFileRefs, splitChatFileRefs } from '@/renderer/utils/file/messageFiles';
 import { settleInitialSource } from './mycowork-task-send';
+import { conversationDraftState, pointer, same, type DraftPointer } from './mycowork-drafts-helpers';
 
 export { DraftStatus };
 export type PersistentDraft = ReturnType<typeof usePersistentDraft>;
-const sorted = (value: unknown): unknown =>
-  Array.isArray(value)
-    ? value.map(sorted)
-    : value && typeof value === 'object'
-      ? Object.fromEntries(
-          Object.entries(value)
-            .filter(([, item]) => item !== undefined)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([key, item]) => [key, sorted(item)])
-        )
-      : value;
-const same = (a: unknown, b: unknown) => JSON.stringify(sorted(a)) === JSON.stringify(sorted(b));
 const storagePrefix = 'aionrs_initial_message_';
-type DraftPointer = Pick<DraftDocument, 'input_location' | 'revision' | 'submission_id'>;
 type InitialHandoff = { ownerKey: string; source: DraftPointer; target: DraftPointer };
-const pointer = ({ input_location, revision, submission_id }: DraftDocument): DraftPointer => ({
-  input_location,
-  revision,
-  submission_id,
-});
-
-function conversationDraftState(state: DraftState): DraftState {
-  const { uploadFiles, atPath } = splitChatFileRefs(state.files);
-  return { ...state, files: collectChatFileRefs(uploadFiles, atPath) };
-}
-
 function useCurrentOwner() {
   let auth: ReturnType<typeof useAuth> | undefined;
   try {
@@ -322,8 +298,10 @@ export function useConversationPersistentDraft(
     onRestore,
   });
   const attempt = useRef<string | undefined>(undefined);
-  const clearSource = (handoff: InitialHandoff, taskAccepted = false) => owner.ownerKey
-    ? settleInitialSource({ ...owner, ownerKey: owner.ownerKey }, handoff.source, taskAccepted) : Promise.resolve();
+  const clearSource = (handoff: InitialHandoff, taskAccepted = false) =>
+    owner.ownerKey
+      ? settleInitialSource({ ...owner, ownerKey: owner.ownerKey }, handoff.source, taskAccepted)
+      : Promise.resolve();
   const initial = async (send: (state: DraftState, saved: DraftDocument) => Promise<TaskRun | void>) => {
     if (!draft.ready || !enabled || !owner.isCurrent() || attempt.current === conversationId) return;
     const key = `${storagePrefix}${conversationId}`;

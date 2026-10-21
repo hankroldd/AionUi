@@ -9,20 +9,12 @@ import '@testing-library/jest-dom/vitest';
 import React, { useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createInstance } from 'i18next';
-import enConversation from '@/renderer/services/i18n/locales/en-US/conversation.json';
-import { I18nextProvider } from 'react-i18next';
-import { MemoryRouter } from 'react-router-dom';
-import { SWRConfig } from 'swr';
 import type { DraftState, TaskRun } from '@mycowork/contracts';
+import { Conversation, Providers } from './officeTaskSend.harness';
 import { count, fixture, fixtureFetch, idle, ipcCount, resetFixture } from './officeTaskSend.fixture';
 import { resetAccountScopedState, restoreScope, SavedResults, usePersistentDraft } from '@mycowork/ui';
-import { AuthProvider, useAuth } from '@/renderer/hooks/context/AuthContext';
-import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
-import { ThemeProvider } from '@/renderer/hooks/context/ThemeContext';
-import { PreviewProvider } from '@/renderer/pages/conversation/Preview';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useGuidSend } from '@/renderer/pages/guid/hooks/useGuidSend';
-import AionrsSendBox from '@/renderer/pages/conversation/platforms/aionrs/AionrsSendBox';
 import { resetConversationRuntimeViewStoreForTest } from '@/renderer/pages/conversation/runtime/conversationRuntimeViewStore';
 import { resetConversationCommandQueueBackgroundRunnerForTest } from '@/renderer/pages/conversation/platforms/useConversationCommandQueue';
 import { captureOfficeDraftState } from '@/renderer/mycowork-task-send';
@@ -33,12 +25,6 @@ vi.hoisted(() => {
   vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }));
 });
 vi.mock('@/common', async () => (await import('./officeTaskSend.fixture')).createIPCFixture());
-const i18n = createInstance();
-void i18n.init({
-  lng: 'en',
-  fallbackLng: 'en',
-  resources: { en: { translation: { conversation: enConversation } } },
-});
 const empty = (): DraftState => ({ content: '', files: [], sessions: [] });
 const navigate = vi.fn(async () => {});
 beforeEach(() => {
@@ -59,19 +45,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-      <I18nextProvider i18n={i18n}>
-        <MemoryRouter>
-          <AuthProvider>
-            <ThemeProvider>{children}</ThemeProvider>
-          </AuthProvider>
-        </MemoryRouter>
-      </I18nextProvider>
-    </SWRConfig>
-  );
-}
 function Home() {
   const auth = useAuth();
   const [state, setState] = useState<DraftState>({
@@ -130,29 +103,6 @@ function Home() {
         首页发送
       </button>
     </>
-  );
-}
-const model = {
-  current_model: { id: 'provider-fixture', use_model: 'model-fixture' },
-  providers: [],
-  getAvailableModels: (): string[] => [],
-  formatModelLabel: () => '',
-  handleSelectModel: async () => {},
-} as never;
-function Conversation({ team }: { team?: (payload: unknown) => Promise<void> }) {
-  return (
-    <ConversationProvider
-      value={{
-        conversation_id: fixture.conversation,
-        type: 'aionrs',
-        workspace: '/fixture/native',
-        assistantId: fixture.scene ? 'mycowork-scene-ppt' : 'generic-fixture',
-      }}
-    >
-      <PreviewProvider>
-        <AionrsSendBox conversation_id={fixture.conversation} modelSelection={model} teamSendMessage={team} />
-      </PreviewProvider>
-    </ConversationProvider>
   );
 }
 async function mountConversation(team?: (payload: unknown) => Promise<void>) {

@@ -21,6 +21,8 @@ import {
   setCurrentConversation,
 } from '@/renderer/pages/conversation/explorer/currentConversationStore';
 
+import { context, preview, response } from './templateConfirmation.fixture';
+
 type Stream = { conversation_id: string; type: string; data?: { name: string; status: string } };
 const h = vi.hoisted(() => ({
   fetch: vi.fn(),
@@ -48,29 +50,6 @@ vi.mock('@/common', () => ({
     },
   },
 }));
-const preview = {
-  decision_id: 'private-decision-id',
-  decision_version: 1,
-  theme: { asset_id: 'private-asset-id', version: 2, title: '暖色活动' },
-  copy_id: 'private-copy-id',
-  relative_path: 'deck/c1/模板.pptx',
-};
-const context = (value: unknown = preview) => ({
-  plan_id: 'plan-one',
-  version: 1,
-  status: 'OK',
-  working_project_id: 'p1',
-  brief: { groups: [] as unknown[], policy: {} },
-  used: [] as unknown[],
-  withheld: 0,
-  superseded: false,
-  ...(value === undefined || value === null ? {} : { template_preview: value }),
-});
-const response = (data: unknown, status = 200) => ({
-  ok: status >= 200 && status < 300,
-  status,
-  json: async () => data,
-});
 function Harness({ id = 'c1', disabled = false, initial = '' }: { id?: string; disabled?: boolean; initial?: string }) {
   const [content, setContent] = useState(initial);
   return (
@@ -363,7 +342,11 @@ describe('模板确认弹窗的正文页预览', () => {
     render(<Harness initial='补充甲' />);
     await open();
     expect(screen.queryByRole('button', { name: '查看当前模板' })).toBeNull();
-    fireEvent.keyDown(within(screen.getByRole('dialog')).getByRole('textbox'), { key: 'Escape', code: 'Escape', keyCode: 27 });
+    fireEvent.keyDown(within(screen.getByRole('dialog')).getByRole('textbox'), {
+      key: 'Escape',
+      code: 'Escape',
+      keyCode: 27,
+    });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getByTestId('draft')).toHaveTextContent('补充甲');
     expect(h.submit).not.toHaveBeenCalled();

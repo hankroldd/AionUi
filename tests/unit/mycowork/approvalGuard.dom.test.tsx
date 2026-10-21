@@ -125,8 +125,10 @@ describe('D115 批准卡', () => {
   });
 
   it.each([
+    ['memory_suggest', ['bridge']],
     ['office_fetch_original', ['bridge']],
     ['mcp__mycowork_bridge_office_fetch_original', OTHER],
+    ['mcp__mycowork_bridge_memory_suggest', OTHER],
   ])(
     '[mycowork] A85：%s 卡片即使会话未识别为 MyCowork（Bridge 以别名挂载）也不给“始终允许”（点了会按 mcp 类连带放行写工具）',
     (tool, servers) => {
@@ -297,10 +299,8 @@ it.each([
     )
   );
   expect(screen.getByText(label)).toBeVisible();
-  // A532：请求详情默认收起，但 DOM 保留全文（自动化脚本靠它判断白名单）
-  expect(screen.getByText(/rm -rf \/fictional\/example/)).toBeInTheDocument();
-  expect(screen.getByText(/target_relative_path/)).toBeInTheDocument();
-  expect((screen.getByTestId('message-permission-detail') as HTMLDetailsElement).open).toBe(false);
+  expect(screen.getByText(/rm -rf \/fictional\/example/)).toBeVisible();
+  expect(screen.getByText(/target_relative_path/)).toBeVisible();
   expect(optionValues()).toEqual(['proceed_once', 'cancel']);
   fireEvent.click(screen.getByTestId('message-permission-option-cancel'));
   await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1));

@@ -204,6 +204,18 @@ const clickAdd = async () => {
 };
 
 describe('ExplorerContainer attach/remove', () => {
+  it('[mycowork] D306：WebUI（无 electronAPI）不渲染“添加文件夹”', async () => {
+    const electron = (window as { electronAPI?: unknown }).electronAPI;
+    delete (window as { electronAPI?: unknown }).electronAPI;
+    try {
+      renderIt();
+      await screen.findByTestId('roots');
+      expect(screen.queryByLabelText('conversation.explorer.addFolder')).toBeNull();
+    } finally {
+      (window as { electronAPI?: unknown }).electronAPI = electron;
+    }
+  });
+
   it('attaches a picked directory as a file:// URI and revalidates the tree', async () => {
     showOpen.mockResolvedValue(['/Users/me/lib']);
     attachFolder.mockResolvedValue(entry({ pe_id: 'peB', role: 'attached' }));

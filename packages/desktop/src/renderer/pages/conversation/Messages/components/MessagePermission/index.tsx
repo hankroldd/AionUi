@@ -138,6 +138,7 @@ const MessagePermission: React.FC<MessagePermissionProps> = React.memo(({ messag
       operationKind={normalizePermissionOperationKind(action)}
       detail={detail}
       detailLabelKey='messages.requestDetails'
+      collapseDetail={Boolean(summary && displayInput)}
       options={panelOptions}
       onConfirm={handleConfirm}
     />

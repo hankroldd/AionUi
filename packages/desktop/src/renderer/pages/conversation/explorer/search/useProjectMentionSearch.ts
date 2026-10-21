@@ -27,6 +27,7 @@ import { useEffect, useMemo } from 'react';
 import type { FileOrFolderItem } from '@/renderer/utils/file/fileTypes';
 
 import { useCurrentConversation } from '../currentConversationStore';
+import { useIsMycoworkConversation } from '@/renderer/mycowork-session';
 import { isInternalPath } from './internalPaths';
 import { type PeNameMap, searchHitToMentionItem } from './searchModel';
 import { MENTION_SEARCH_OWNER } from './searchStore';
@@ -57,6 +58,7 @@ export const useProjectMentionSearch = ({
 }): ProjectMentionSearch => {
   const { roots, peNames } = useProjectSearchRoots();
   const conversationId = useCurrentConversation();
+  const mycowork = useIsMycoworkConversation(conversationId);
   const active = roots.length > 0;
   const { view, runSearch, cancel } = useFileSearch(MENTION_SEARCH_OWNER, roots);
   // Render results only while this skin owns the shared stream — if the search
@@ -79,11 +81,11 @@ export const useProjectMentionSearch = ({
     () =>
       active && owned
         ? view.hits
-            .filter((h) => !isInternalPath(h.relative_path, conversationId))
+            .filter((h) => !isInternalPath(h.relative_path, conversationId, mycowork))
             .slice(0, limit)
             .map(searchHitToMentionItem)
         : [],
-    [active, owned, limit, view.hits, conversationId]
+    [active, owned, limit, view.hits, conversationId, mycowork]
   );
 
   return { active, items, loading: active && owned && view.status === 'searching', peNames };

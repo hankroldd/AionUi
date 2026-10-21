@@ -117,6 +117,19 @@ describe('SkillsHubSettings', () => {
     mocks.listSkillImportHistory.mockResolvedValue([]);
   });
 
+  it('[mycowork] D306：WebUI（无 electronAPI）没有“导入技能”（服务器目录浏览）菜单项', async () => {
+    const electron = (window as { electronAPI?: unknown }).electronAPI;
+    delete (window as { electronAPI?: unknown }).electronAPI;
+    try {
+      render(<SkillsHubSettings withWrapper={false} />);
+      await waitFor(() => expect(mocks.listAvailableSkills).toHaveBeenCalled());
+      fireEvent.click(screen.getByTestId('btn-add-skill'));
+      expect(screen.queryByTestId('btn-add-skill-manual')).toBeNull();
+    } finally {
+      (window as { electronAPI?: unknown }).electronAPI = electron;
+    }
+  });
+
   it('exports a component (smoke)', () => {
     expect(SkillsHubSettings).toBeDefined();
     expect(typeof SkillsHubSettings).toBe('function');

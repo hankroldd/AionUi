@@ -41,6 +41,7 @@ import { openProject, reveal, select, setExpandedKeys } from './explorerStore';
 import { initExplorerRuntime } from './monitorTransport';
 import { useExplorerView } from './useExplorerView';
 import { collapseToVisibleRoot, filterVisibleTree } from './search/visibleTree';
+import { useIsMycoworkConversation } from '@/renderer/mycowork-session';
 import { hideInternalNodes } from './search/internalPaths';
 import { useCurrentConversation } from './currentConversationStore';
 import type { DirRef } from './explorerModel';
@@ -119,8 +120,9 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
 }) => {
   const view = useExplorerView();
   const conversationId = useCurrentConversation();
+  const mycowork = useIsMycoworkConversation(conversationId);
   const treeData = collapseToVisibleRoot(
-    filterVisibleTree(hideInternalNodes(view.treeData, conversationId), visibleRoots),
+    filterVisibleTree(hideInternalNodes(view.treeData, conversationId, mycowork), visibleRoots),
     visibleRoots,
     visibleRootLabel
   );

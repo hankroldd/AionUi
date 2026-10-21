@@ -30,6 +30,8 @@ type PermissionRequestPanelProps = {
   /** i18n key for the detail block label; defaults to messages.command. Lets a
    *  non-command payload (e.g. a raw tool input dump) carry an accurate label. */
   detailLabelKey?: string;
+  /** [mycowork] 只有已有人话摘要时才默认收起原始入参；ACP 命令、取不到参数的提示、无摘要工具默认展开（要执行什么必须看得见） */
+  collapseDetail?: boolean;
   options: PermissionPanelOption[];
   onConfirm: (optionValue: string) => Promise<void>;
 };
@@ -41,6 +43,7 @@ export const PermissionRequestPanel: React.FC<PermissionRequestPanelProps> = ({
   description,
   operationKind,
   detail,
+  collapseDetail = false,
   options,
   onConfirm,
 }) => {
@@ -118,8 +121,8 @@ export const PermissionRequestPanel: React.FC<PermissionRequestPanelProps> = ({
         </div>
 
         {detail && (
-          // [mycowork] A532：原始入参默认收起，DOM 保留全文（自动化脚本靠它判断白名单）。
-          <details className={styles.detailBlock} data-testid={`${testIdPrefix}-detail`}>
+          // [mycowork] A532：有摘要时原始入参默认收起，DOM 保留全文（自动化脚本靠它判断白名单）。
+          <details open={!collapseDetail} className={styles.detailBlock} data-testid={`${testIdPrefix}-detail`}>
             <summary className={styles.detailLabel}>{t('messages.requestDetails')}</summary>
             <code className={styles.detail} dir='auto'>
               {detail}

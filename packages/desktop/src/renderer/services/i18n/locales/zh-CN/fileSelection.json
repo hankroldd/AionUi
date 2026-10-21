@@ -4,6 +4,7 @@
   "pleaseSelectFile": "请选择一个文件",
   "pleaseSelectDirectory": "请选择一个目录",
   "webFsPicker": {
+    "disabled": "网页版不能浏览服务器目录，请用“从设备上传”或直接输入路径",
     "loadFailed": "无法打开该目录",
     "titleDirectory": "选择服务器上的文件夹",
     "titleFile": "选择服务器上的文件",

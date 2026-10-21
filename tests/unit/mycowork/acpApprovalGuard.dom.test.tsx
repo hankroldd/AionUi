@@ -95,4 +95,10 @@ describe('[mycowork] D115 ACP 批准卡（Claude Code）', () => {
     render(<MessageAcpPermission message={card('mcp__mycowork_bridge__memory_suggest')} />);
     expect(optionValues()).toEqual(['allow', 'reject']);
   });
+
+  it('[mycowork] A532：ACP Bash 卡要执行的命令默认可见（不收进“请求详情”）', () => {
+    render(inSession(MYCOWORK, <MessageAcpPermission message={card('Bash')} />));
+    expect(screen.getByText(/curl http:\/\/127.0.0.1:25900\/bridge\/mcp/)).toBeVisible();
+    expect((screen.getByTestId('message-acp-permission-detail') as HTMLDetailsElement).open).toBe(true);
+  });
 });

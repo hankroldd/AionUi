@@ -11,8 +11,8 @@
  */
 
 import { registerWebShowOpenHandler } from '@/common/adapter/ipcBridge';
-import { showWebFsPicker } from './webFsPicker';
+import { blockedWebShowOpen } from './mycoworkShowOpen';
 
 if (typeof window !== 'undefined' && !(window as { electronAPI?: unknown }).electronAPI) {
-  registerWebShowOpenHandler(showWebFsPicker);
+  registerWebShowOpenHandler(blockedWebShowOpen); // [mycowork] D306：不再提供服务器目录选择器
 }

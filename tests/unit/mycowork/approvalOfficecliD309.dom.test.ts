@@ -36,7 +36,7 @@ describe('D309 batch 含 remove', () => {
       { command: 'remove', path: '/slide[4]' },
     ]);
     expect(s?.action).toBe('修改并删除页/对象');
-    expect(s?.target).toContain('删除：/slide[3]、/slide[4]');
+    expect(s?.target).toContain('删除：第 3 页（整页）、第 4 页（整页）');
     expect(s?.impact).toContain('**会删除 2 处内容**');
   });
   it('只有 remove；超过 5 个写“等 N 处”', () => {
@@ -49,7 +49,7 @@ describe('D309 batch 含 remove', () => {
       b([
         { command: 'remove', path: '/slide[2]' },
         { command: 'raw-set', path: '/x' },
-      ]),
+      ])
     ).toBeNull();
     expect(b([{ command: 'remove', path: '/slide[2]' }, { command: 'bogus' }])).toBeNull();
   });
@@ -78,5 +78,56 @@ describe('D309 && 串联', () => {
   });
   it('4 条可以', () => {
     expect(run(Array(4).fill(`officecli open ${F}`).join(' && '))).not.toBeNull();
+  });
+});
+
+describe('D309 安全审查后的收紧', () => {
+  const B = (json: string) => `officecli batch ${F} --commands '${json}'`;
+  it('M1：batch 项里的别名、大写或未知字段 → null（officecli 字段名不分大小写、op/action 是别名）', () => {
+    for (const j of [
+      '[{"command":"get","op":"remove","path":"/slide[1]/shape[1]"}]',
+      '[{"command":"get","op":"raw-set","part":"/slide[1]","xpath":"//p:sp","action":"remove"}]',
+      '[{"command":"set","Command":"remove","path":"/slide[2]"}]',
+      '[{"command":"remove","path":"/slide[1]/shape[1]","Path":"/slide[3]"}]',
+      '[{"command":"get","path":"/","depth":2}]',
+    ])
+      expect(run(B(j)), j).toBeNull();
+  });
+  it('M2：串联里任一段含 remove → null，不少报条数', () => {
+    expect(
+      run(
+        `${B('[{"command":"remove","path":"/slide[1]"}]')} && ${B('[{"command":"remove","path":"/slide[2]"},{"command":"remove","path":"/slide[3]"}]')}`
+      )
+    ).toBeNull();
+    expect(run(`officecli get ${F} "/" --json && ${B('[{"command":"remove","path":"/slide[2]"}]')}`)).toBeNull();
+  });
+  it('M3：等号/冒号写法的选项与 batch 非 text 属性 → null', () => {
+    expect(run(`officecli add ${F} /slide[1] --type=picture --prop:src=/home/u/secret.png`)).toBeNull();
+    expect(run(`officecli set ${F} /slide[1] --prop text=x --force=true`)).toBeNull();
+    expect(run(`officecli set ${F} /slide[1] --prop=text=x`)).toBeNull();
+    expect(
+      run(B('[{"command":"add","parent":"/slide[1]","type":"picture","props":{"src":"/home/u/secret.png"}}]'))
+    ).toBeNull();
+    expect(run(B('[{"command":"set","path":"/slide[1]","props":{"text":"x"}}]'))?.action).toBe('修改文件内容');
+  });
+  it('引号或转义里的 && 不是分隔符：多余参数按原规则回退', () => {
+    expect(run(`officecli get ${F} '&&' officecli set ${F} /slide[1] --prop text=x`)).toBeNull();
+    expect(run(`officecli get ${F} \\&\\& officecli set ${F} /slide[1] --prop text=x`)).toBeNull();
+  });
+  it('cd / 时目录写 /；零宽与双向控制字符 → null；remove 的 path 不是字符串 → null；整页删除写“第 N 页（整页）”、全删写“全部为删除”', () => {
+    expect(run(`cd / && officecli get ${F} "/" --json`)?.target).toContain('目录 …//');
+    expect(run(`officecli get ${F} "/‮" --json`)).toBeNull();
+    expect(run(B('[{"command":"remove","path":{"x":1}}]'))).toBeNull();
+    const r = run(B('[{"command":"remove","path":"/slide[2]"},{"command":"remove","path":"/slide[3]"}]'));
+    expect(r?.target).toContain('第 2 页（整页）');
+    expect(r?.impact).toContain('全部为删除');
+  });
+  it('英文 weight：串联取最重', () => {
+    const en = approvalSummary(
+      'ExecCommand',
+      { cmd: `officecli open ${F} && officecli set ${F} /slide[1] --prop text=x` },
+      'en'
+    );
+    expect(en?.impact).toMatch(/^Edits this file directly/);
   });
 });

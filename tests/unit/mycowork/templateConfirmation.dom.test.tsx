@@ -350,7 +350,7 @@ describe('模板确认弹窗的正文页预览', () => {
       res: { ok: false, status: 500, json: async () => ({ error: { code: 'INTERNAL' } }) },
       note: '预览加载失败',
     },
-  ])('预览$name时显示说明，仍可确认，且可关闭查看当前模板', async ({ res, note }) => {
+  ])('预览$name时显示说明，仍可确认', async ({ res, note }) => {
     h.preview.mockResolvedValue(res);
     render(<Harness initial='先保留' />);
     const dialog = await open();
@@ -359,11 +359,12 @@ describe('模板确认弹窗的正文页预览', () => {
     await waitFor(() => expect(h.submit).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
-  it('查看当前模板关闭弹窗，补充保留在草稿里，预览未成为必点步骤', async () => {
+  it('没有“查看当前模板”按钮（预览已内嵌）；Esc 关闭后补充保留在草稿里，预览未成为必点步骤', async () => {
     render(<Harness initial='补充甲' />);
     await open();
-    fireEvent.click(screen.getByRole('button', { name: '查看当前模板' }));
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: '查看当前模板' })).toBeNull();
+    fireEvent.keyDown(within(screen.getByRole('dialog')).getByRole('textbox'), { key: 'Escape', code: 'Escape', keyCode: 27 });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getByTestId('draft')).toHaveTextContent('补充甲');
     expect(h.submit).not.toHaveBeenCalled();
   });

@@ -86,7 +86,7 @@ describe('OfficeMemorySlot', () => {
     expect(await screen.findByText('二期验收定在十月（虚构）')).toBeInTheDocument();
     expect(screen.getByText('项目')).toBeInTheDocument();
     expect(screen.getByText('个人')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '来源 1' })).toHaveAttribute('href', '/bridge/v1/resources/res_a/preview');
+    expect(screen.getByRole('link', { name: '来源 1' })).toHaveAttribute('href', '#/office/resources/res_a/versions');
     expect(screen.getByRole('link', { name: '所在会话' })).toHaveAttribute('href', '#/conversation/c1');
     // 分组顺序：个人（mem_3）在前、项目（mem_1）在后
     fireEvent.click(screen.getAllByRole('button', { name: '接受' })[1] as HTMLElement);

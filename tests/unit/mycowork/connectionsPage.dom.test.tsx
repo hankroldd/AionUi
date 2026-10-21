@@ -119,8 +119,8 @@ describe('OfficeConnectionsSlot', () => {
     for (const k of ['model', 'knowledge', 'office', 'arxiv', 'paths'])
       expect(await screen.findByTestId(`conn-${k}`)).toBeInTheDocument();
     expect(within(screen.getByTestId('conn-arxiv')).getByText('未检测')).toBeInTheDocument();
-    expect(screen.getByTestId('mycowork-connections-keys').textContent).toContain('密钥在部署配置里修改');
-    expect(screen.getByTestId('mycowork-connections-keys').textContent).toContain('docs/runbooks/offline-deploy.md');
+    expect(screen.getByTestId('mycowork-connections-keys').textContent).toContain('密钥由部署负责人在部署配置里修改');
+    expect(screen.getByTestId('mycowork-connections-keys').textContent).not.toContain('docs/runbooks'); // 手册路径收进“技术细节”
     const k = screen.getByTestId('conn-knowledge');
     expect(within(k).getByText('未配置')).toBeInTheDocument();
     fireEvent.click(within(k).getByRole('button', { name: '测试连接' }));
@@ -186,6 +186,10 @@ describe('P15 切片 B：如何更新 / 断开（只读指引，D294）', () => 
     for (const k of ['knowledge', 'office', 'arxiv']) {
       expect(screen.queryByTestId(`conn-guide-cmd-${k}`)).toBeNull();
       fireEvent.click(within(screen.getByTestId(`conn-guide-${k}`)).getByRole('button'));
+      // 默认只有一句“联系部署负责人”，命令、变量名、错误码、手册路径都在“技术细节”里（验收 中 19）
+      expect(screen.getByTestId(`conn-guide-${k}`).textContent).toContain('请联系部署负责人更新或断开连接');
+      expect(screen.queryByTestId(`conn-guide-cmd-${k}`)).toBeNull();
+      fireEvent.click(within(screen.getByTestId(`conn-guide-tech-${k}`)).getByRole('button'));
     }
     const root = screen.getByTestId('mycowork-connections');
     expect(root.querySelectorAll('input,textarea').length).toBe(0);

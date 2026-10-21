@@ -60,7 +60,7 @@ describe('fixed-version Review UI', () => {
     expect((report.findings as ReviewReport['findings'])[0]!.evidence[1]).toEqual({ source: 'program_check' });
     const shown = screen.getAllByTestId('version-review-results')[0]!;
     expect(within(shown).getByText('用量未观测')).toBeInTheDocument();
-    expect(within(shown).getByText('Reviewer 查询: 虚构查询')).toBeInTheDocument();
+    expect(within(shown).getByText('审查者查询: 虚构查询')).toBeInTheDocument();
     expect(shown.querySelector('img')).toBeNull();
     expect(shown.querySelector('[data-revision-id]')?.getAttribute('data-revision-id')).toBe('revision-old');
   });

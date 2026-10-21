@@ -40,7 +40,7 @@ import {
 import { openProject, reveal, select, setExpandedKeys } from './explorerStore';
 import { initExplorerRuntime } from './monitorTransport';
 import { useExplorerView } from './useExplorerView';
-import { filterVisibleTree } from './search/visibleTree';
+import { collapseToVisibleRoot, filterVisibleTree } from './search/visibleTree';
 import type { DirRef } from './explorerModel';
 
 export type ExplorerPanelProps = {
@@ -48,6 +48,8 @@ export type ExplorerPanelProps = {
   roots: RootRef[];
   /** Optional display-only subtree filter; does not change the store or file permissions. */
   visibleRoots?: DirRef[];
+  /** [mycowork] 仅本次对话时，把到该目录的祖先链折成一个标此名称的根节点（只改展示）。 */
+  visibleRootLabel?: string;
   emptyContent?: React.ReactNode;
   /** pe_id of the workspace root — its remove action is disabled (immutable). */
   workspacePeId?: string;
@@ -98,6 +100,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   roots,
   workspacePeId,
   visibleRoots,
+  visibleRootLabel,
   emptyContent,
   onRemoveRoot,
   onOpenFile,
@@ -113,7 +116,11 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   onTransfer,
 }) => {
   const view = useExplorerView();
-  const treeData = filterVisibleTree(view.treeData, visibleRoots);
+  const treeData = collapseToVisibleRoot(
+    filterVisibleTree(view.treeData, visibleRoots),
+    visibleRoots,
+    visibleRootLabel
+  );
   const { t } = useTranslation();
   // Key of the node currently under a drag (for the drop highlight).
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);

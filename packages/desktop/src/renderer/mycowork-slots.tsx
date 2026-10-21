@@ -265,7 +265,12 @@ export {
 export { useOfficeTaskRecovery } from './mycowork-task-recovery';
 
 // [mycowork] Business labels/path recognition stay in the owned UI package.
-export { ConversationFilesToggle, ConversationFilesEmpty, conversationFilePath } from '@mycowork/ui';
+export {
+  ConversationFilesToggle,
+  ConversationFilesEmpty,
+  conversationFilePath,
+  conversationRootLabel,
+} from '@mycowork/ui';
 
 /** Display-only scope; successful workspace tools refresh the existing Explorer without waiting for turn end. */
 export function useMyCoworkConversationFiles(
@@ -337,6 +342,8 @@ export const MyCoworkWorkspaceFileLinkSlot: React.FC<{ relativePath: string; chi
         onOpen={() => void open()}
         fileName={relativePath.split('/').pop()}
         lang={i18n.language}
+        conversationId={conversationId}
+        relativePath={relativePath}
       >
         {children}
       </ConversationFileLink>

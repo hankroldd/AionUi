@@ -45,6 +45,7 @@ import { ExplorerPanel } from './ExplorerPanel';
 import {
   ConversationFilesEmpty,
   ConversationFilesToggle,
+  conversationRootLabel,
   useMyCoworkConversationFiles,
 } from '@/renderer/mycowork-slots';
 import { matchesVisibleRoots } from './search/visibleTree';
@@ -653,6 +654,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
             roots={roots}
             workspacePeId={workspacePeId}
             visibleRoots={visibleRoots}
+            visibleRootLabel={conversationRootLabel(i18n?.language)}
             emptyContent={<ConversationFilesEmpty lang={i18n?.language} />}
             onRemoveRoot={handleRemoveFolder}
             onOpenFile={handleOpenFile}

@@ -33,3 +33,26 @@ export function filterVisibleTree(nodes: TreeNode[], roots: DirRef[] | undefined
     return children.length ? [{ ...node, children }] : [];
   });
 }
+
+/**
+ * [mycowork] 仅本次对话：找到恰好等于唯一可见目录的节点，丢掉其祖先链（项目根 / deck），
+ * 标成 label 作为唯一根；只改展示，key 与路径不变。目录尚未出现在树里时原样返回。
+ */
+export function collapseToVisibleRoot(
+  nodes: TreeNode[],
+  roots: DirRef[] | undefined,
+  label: string | undefined
+): TreeNode[] {
+  const target = roots?.length === 1 ? roots[0] : undefined;
+  if (!target || !label || !target.relative_path) return nodes;
+  const find = (list: TreeNode[]): TreeNode | undefined => {
+    for (const node of list) {
+      const ref = keyToRef(node.key);
+      if (ref.pe_id === target.pe_id && ref.relative_path === target.relative_path) return node;
+      const hit = node.children && find(node.children);
+      if (hit) return hit;
+    }
+  };
+  const hit = find(nodes);
+  return hit ? [{ ...hit, title: label }] : nodes;
+}

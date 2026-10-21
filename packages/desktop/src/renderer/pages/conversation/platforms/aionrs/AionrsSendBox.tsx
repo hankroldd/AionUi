@@ -49,7 +49,7 @@ import { localSelectionItems, mergeFileSelectionItems } from '@/renderer/utils/f
 import { collectChatFileRefs, splitChatFileRefs } from '@/renderer/utils/file/messageFiles';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import { Button, Message, Tag } from '@arco-design/web-react';
-import { acceptOfficeTask, SavedResults, TaskCompletion } from '@mycowork/ui';
+import { SavedResults, TaskCompletion } from '@mycowork/ui';
 import { Brain, Lightning, MagicHat, Shield } from '@icon-park/react';
 import useSWR from 'swr';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -57,7 +57,7 @@ import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
 import { useAionrsMessage } from './useAionrsMessage';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
-import { MyCoworkTemplateConfirmationDialog, captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft, officeTaskOwner, watchTurnEnd, watchTurnEnded, useOfficeTaskRecovery } from '@/renderer/mycowork-slots';
+import { MyCoworkTemplateConfirmationDialog, captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft, officeTaskOwner, watchTurnEnd, watchTurnEnded, acceptOfficeRun, useOfficeTaskRecovery } from '@/renderer/mycowork-slots';
 import type { DraftDocument, DraftState, TaskRun } from '@mycowork/contracts';
 import { withoutYolo } from '@/renderer/mycowork-approval-guard';
 import { useSendFailure } from '@/renderer/mycowork-send-failure';
@@ -235,6 +235,7 @@ const AionrsSendBox: React.FC<{
     onRecovered: (run, ended) => { setOfficeRun(run); setTurnEnded(ended); },
   });
   const draftStateRef = useLatestRef(draftState);
+  const conversationIdRef = useLatestRef(conversation_id);
   const sendingDraftRef = useRef(false);
 
   useEffect(() => {
@@ -855,7 +856,7 @@ const AionrsSendBox: React.FC<{
           run={officeRun}
           turnEnded={turnEnded || taskRecovery.hasObservedEnd(officeRun.turn_id)}
           lang={i18n?.language}
-          onAccept={async (runId) => setOfficeRun(await acceptOfficeTask(officeTaskOwner(persistentDraft), runId))}
+          onAccept={(runId) => acceptOfficeRun(officeTaskOwner(persistentDraft), runId, () => conversationIdRef.current === conversation_id, setOfficeRun)}
         />
       )}
       <div inert={persistentDraft.status === 'loading'}>

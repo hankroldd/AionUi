@@ -6,6 +6,7 @@
  */
 import type { DraftDocument, DraftState, TaskRun } from '@mycowork/contracts';
 import {
+  acceptOfficeTask,
   forwardTurnEnd,
   fetchConversationContext,
   draftStateEquals,
@@ -60,6 +61,21 @@ export function captureOfficeDraftState(
 export function officeTaskOwner(draft: CapturedDraft): OfficeTaskOwner {
   if (!draft.ownerKey || !draft.isCurrent()) throw new Error('登录状态已变化，输入已保留，请重新登录后检查任务。');
   return { ownerKey: draft.ownerKey, isCurrent: draft.isCurrent };
+}
+
+/**
+ * 用户点“标记完成”；响应迟到时只在身份仍有效、仍在原会话、且当前仍是同一 run 时回填。
+ * 新发送、恢复失效（置空）或切换会话后，旧响应被丢弃；沿用“迟到重读不降级终态”的按 run_id 写法。
+ */
+export async function acceptOfficeRun(
+  owner: OfficeTaskOwner,
+  runId: string,
+  isHere: () => boolean,
+  apply: (update: (prev: TaskRun | null) => TaskRun | null) => void
+): Promise<void> {
+  const run = await acceptOfficeTask(owner, runId);
+  if (!owner.isCurrent() || !isHere()) return;
+  apply((prev) => (prev?.run_id === runId ? run : prev));
 }
 
 /** 现会话的计划为准；只有404表示无计划，场景助手即使显式空范围也属于办公。 */

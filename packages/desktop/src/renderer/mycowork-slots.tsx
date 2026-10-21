@@ -260,6 +260,7 @@ export {
   officeTaskOwner,
   watchTurnEnd,
   watchTurnEnded,
+  acceptOfficeRun,
 } from './mycowork-task-send';
 export { useOfficeTaskRecovery } from './mycowork-task-recovery';
 

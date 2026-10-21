@@ -130,4 +130,10 @@ describe('D309 安全审查后的收紧', () => {
     );
     expect(en?.impact).toMatch(/^Edits this file directly/);
   });
+  it('JSON 转义后才出现的控制字符 → null；分开写的 --prop src → null；get 只带选项时位置写全文', () => {
+    expect(run(B('[{"command":"remove","path":"/slide[1]\\u202e]3[edils/"}]'))).toBeNull();
+    expect(run(B('[{"command":"set","path":"/slide[1]","props":{"text":"a\\u2060b"}}]'))).toBeNull();
+    expect(run(`officecli set ${F} /slide[1] --prop text=x --prop src=/x`)).toBeNull();
+    expect(run(`officecli get ${F} --depth 2 --json`)?.target).toContain('全文');
+  });
 });

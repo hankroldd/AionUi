@@ -8,7 +8,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import MarkdownView from '@/renderer/components/Markdown';
 import { createPortal } from 'react-dom';
-import { ConversationFileLink, conversationFilePath } from '@mycowork/ui';
+import { ConversationFileLink, conversationFilePath, templateReviewHref } from '@mycowork/ui';
 import {
   resetCurrentProjectForTest,
   setCurrentProject,
@@ -91,6 +91,30 @@ describe('安全相对文件链接', () => {
       expect(conversationFilePath(href)).toBe(decodeURIComponent(href).replace(/^\.\//, ''));
     }
   );
+
+  it.each(['/#/office/compositions/tdec_1234-abcd', '#/office/compositions/tdec_1234-abcd'])(
+    '模板审阅链接保留当前标签页的原生点击导航：%s',
+    (href) => {
+      render(<MarkdownView>{`[打开模板审阅页](${href})`}</MarkdownView>);
+      const link = screen.getByRole('link', { name: '打开模板审阅页' });
+      expect(fireEvent.click(link)).toBe(true);
+      expect(link).toHaveAttribute('href', '#/office/compositions/tdec_1234-abcd');
+      expect(link).toHaveAttribute('target', '_self');
+      expect(h.browser).not.toHaveBeenCalled();
+      expect(h.external).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    'https://outside.test/#/office/compositions/tdec_1234-abcd',
+    '//outside.test/#/office/compositions/tdec_1234-abcd',
+    '#/office/compositions/tdec_1234-abcd?next=https://outside.test',
+    '#/office/compositions/tdec_1234-abcd/../../edit/123',
+    'javascript:alert(1)',
+    'deck/c1/成品.pptx',
+  ])('其他地址不作为模板审阅导航：%s', (href) => {
+    expect(templateReviewHref(href)).toBeNull();
+  });
 
   it('PPT 链接直接打开当前项目同一个 fileRef 的已有预览，不进入浏览器', async () => {
     render(<MarkdownView>{'[最终稿.pptx](deck/c1/最终稿.pptx)'}</MarkdownView>);

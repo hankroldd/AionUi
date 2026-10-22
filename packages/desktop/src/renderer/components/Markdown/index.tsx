@@ -28,6 +28,7 @@ import { resolveLocalFileLinkPath, resolveLocalFileLinkReference } from './markd
 import type { LocalFileLinkReference } from './markdownUtils';
 import {
   conversationFilePath,
+  templateReviewHref,
   resourceCitationId,
   MyCoworkResourceCitationSlot,
   MyCoworkWorkspaceFileLinkSlot,
@@ -116,6 +117,8 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
         a: ({ node: _node, ...rest }: Record<string, unknown>) => {
           const anchorProps = rest as React.AnchorHTMLAttributes<HTMLAnchorElement>;
           const rawHref = typeof anchorProps.href === 'string' ? anchorProps.href : '';
+          const reviewHref = templateReviewHref(rawHref);
+          if (reviewHref) return <a {...anchorProps} href={reviewHref} target='_self' />;
           const resourceId = resourceCitationId(rawHref);
           if (resourceId)
             return (

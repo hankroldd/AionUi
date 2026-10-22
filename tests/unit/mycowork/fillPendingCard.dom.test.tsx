@@ -48,6 +48,9 @@ describe('成品卡片下方的待确认清单', () => {
     h.fetch.mockResolvedValue(reply(200, { resource_id: 'res_1', pending_confirmations: PENDING }));
     card();
     const toggle = await screen.findByRole('button', { name: /待你确认（4 条）/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     const groups = screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'));
     expect(groups).toEqual(['金额与分档', '缺内容的栏目', '标题', '需要你拍板']);

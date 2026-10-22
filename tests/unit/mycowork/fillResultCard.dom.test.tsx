@@ -97,6 +97,9 @@ describe('持久填充结果的固定成品入口', () => {
       'false'
     );
     expect(await screen.findByText('交付文件')).toBeVisible();
+    const pendingToggle = screen.getByRole('button', { name: /待你确认（1 条）/ });
+    expect(pendingToggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(pendingToggle);
     expect(screen.getByText('第 6 页 · 子项 2：代价没有依据，已写待确认')).toBeVisible();
     expect(String(h.fetch.mock.calls[0]?.[0])).toBe(
       `/bridge/v1/conversations/c1/output-resource?relative_path=${encodeURIComponent(path)}`

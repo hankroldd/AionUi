@@ -107,7 +107,9 @@ it('固定成品与同文件 Markdown 只保留一份完整卡和清单，普通
   expect(container.querySelectorAll('.mcw-conversation-file-card')).toHaveLength(1);
   const buttons = screen.getAllByRole('button', { name: '最终稿.pptx' });
   expect(buttons).toHaveLength(2);
-  fireEvent.click(screen.getByText('最终稿.pptx', { selector: 'button' }));
+  const link = buttons.find((button) => !button.classList.contains('mcw-conversation-file-card'));
+  expect(link).toBeDefined();
+  fireEvent.click(link as HTMLElement);
   await waitFor(() =>
     expect(h.open).toHaveBeenCalledWith(
       '',

@@ -4,7 +4,7 @@
  * 边界：只负责打开与传参；角色与模板入口由 @mycowork/ui 判定。从 mycowork-slots.tsx 拆出（单文件 ≤ 400 行）。
  */
 import React, { useEffect, useRef } from 'react';
-import { Message } from '@arco-design/web-react';
+import { Button, Message } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { ToolMessage } from '@/common/chat/normalizeToolCall';
@@ -108,8 +108,8 @@ export const MyCoworkWorkspaceFileLinkSlot: React.FC<{
   const disabled = !projectId || !conversationId || !preview;
   if (!fixedResult && conversationId && messages.some((item) => fillResultPath(item, conversationId) === relativePath))
     return (
-      <button
-        type='button'
+      <Button
+        type='text'
         disabled={disabled}
         onClick={() => void open()}
         style={{
@@ -122,7 +122,7 @@ export const MyCoworkWorkspaceFileLinkSlot: React.FC<{
         }}
       >
         {children}
-      </button>
+      </Button>
     );
   return (
     <>

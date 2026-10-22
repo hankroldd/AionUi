@@ -325,6 +325,8 @@ export default defineConfig(({ mode }) => {
         __APP_VERSION__: JSON.stringify(rootPackageJson.version),
         // Renderer-side discontinued-build flag; consumed via discontinuedBuild.ts.
         __IS_DISCONTINUED_BUILD__: JSON.stringify(process.env.IS_DISCONTINUED_BUILD === 'true'),
+        // [mycowork] A567（D326）: coding agents whose login state this deployment releases (D148/D260), set by MyCowork build scripts.
+        __MYCOWORK_RELEASED_AGENTS__: JSON.stringify(process.env.MYCOWORK_SANDBOX_AGENTS ?? ''),
         global: 'globalThis',
       },
       optimizeDeps: {

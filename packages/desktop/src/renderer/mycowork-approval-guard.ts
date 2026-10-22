@@ -19,12 +19,14 @@ export const isMycoworkSession = (mcpServers?: string[]): boolean => Boolean(mcp
 /**
  * [mycowork] D115 安全审查 M3：MyCowork 会话里 exec 类（ExecCommand、Spawn）同样不给——“始终允许”一次后 shell 免批准，
  * 模型可从 AionUi 库里读出计划令牌、用 curl 直连 Bridge MCP 调写工具，绕过写工具卡片。
+ * A568（D326）：edit 类（原生 Write/Edit）也不给——aionrs 自带记忆会让模型往宿主 ~/.config/aionrs/…/memory/ 写文件，
+ * 点一次“始终允许”后之后的原生写文件都免批准。
  */
-const GUARDED_IN_SESSION = new Set(['mcp', 'exec']);
+const GUARDED_IN_SESSION = new Set(['mcp', 'exec', 'edit']);
 
 /**
  * 批准卡是否隐藏此选项：只隐藏“始终允许”（proceed_always）。MyCowork 会话里 mcp 类（任一 mcp 卡片点了始终允许都会连带放行
- * 三个写工具）与 exec 类（见上）整类不给；取不到会话信息（mcpServers 为 undefined，不同于已知的空列表）时同样按 MyCowork 会话
+ * 三个写工具）、exec 类与 edit 类（见上）整类不给；取不到会话信息（mcpServers 为 undefined，不同于已知的空列表）时同样按 MyCowork 会话
  * 处理，宁可多藏（A85）；写工具本身的卡片无论会话信息如何都不给。已知的非 MyCowork 会话不受影响。
  */
 export const hidesAlwaysAllow = (
@@ -40,10 +42,16 @@ export const hidesAlwaysAllow = (
 /**
  * [mycowork] D115：ACP 批准卡（Claude Code 等，aioncore 投成 acp_permission）的类别。原生 Claude Code 卡片 title 为工具名、
  * 无 kind（aioncore session_agent.rs），ACP 适配器给 kind。shell 执行（kind execute、Bash）→ exec；MCP 工具
- * （title `mcp__<服务>__<工具>`）→ mcp；其余不归类（照常给“始终允许”）。
+ * （title `mcp__<服务>__<工具>`）→ mcp；写文件（kind edit、Write/Edit/MultiEdit/NotebookEdit，A568）→ edit；其余不归类（照常给“始终允许”）。
  */
 export const acpCategory = (kind: string | undefined, title: string | undefined): string | undefined =>
-  kind === 'execute' || title === 'Bash' ? 'exec' : title?.startsWith('mcp__') ? 'mcp' : undefined;
+  kind === 'execute' || title === 'Bash'
+    ? 'exec'
+    : title?.startsWith('mcp__')
+      ? 'mcp'
+      : kind === 'edit' || /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(title ?? '')
+        ? 'edit'
+        : undefined;
 
 /** 权限模式列表：MyCowork 会话去掉 yolo（auto_edit 只放行 info/edit 类，不含 mcp，保留）。 */
 export const withoutYolo = <T extends { value: string }>(mcpServers: string[] | undefined, modes: T[]): T[] =>

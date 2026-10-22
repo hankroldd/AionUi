@@ -136,6 +136,8 @@
     "memory_suggest": "Prepare a memory suggestion",
     "research_search_arxiv": "Search research papers",
     "ExecCommand": "Run a command",
+    "Write": "Write a file",
+    "Edit": "Edit a file",
     "template_select": "Select the template"
   }
 }

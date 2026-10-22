@@ -77,8 +77,17 @@ describe('[mycowork] D115 ACP 批准卡（Claude Code）', () => {
     expect(optionValues()).toEqual(['allow', 'reject']);
   });
 
-  it('MyCowork 会话里其他工具（Write、Read）与非 MyCowork 会话的 Bash、MCP 照常给 allow_always', () => {
-    const { unmount } = render(inSession(MYCOWORK, <MessageAcpPermission message={card('Write', 'edit')} />));
+  it.each([
+    ['Write', undefined],
+    ['NotebookEdit', undefined],
+    ['Write', 'edit'],
+  ])('[mycowork] A568：MyCowork 会话里原生写文件 %s（kind %s）不给 allow_always', (title, kind) => {
+    render(inSession(MYCOWORK, <MessageAcpPermission message={card(title, kind)} />));
+    expect(optionValues()).toEqual(['allow', 'reject']);
+  });
+
+  it('MyCowork 会话里其他工具（Read）与非 MyCowork 会话的 Bash、MCP 照常给 allow_always', () => {
+    const { unmount } = render(inSession(MYCOWORK, <MessageAcpPermission message={card('Read', 'read')} />));
     expect(optionValues()).toEqual(['allow', 'allow_always', 'reject']);
     unmount();
     const other = render(inSession(OTHER, <MessageAcpPermission message={card('Bash')} />));

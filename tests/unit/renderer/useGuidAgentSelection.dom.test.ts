@@ -5,7 +5,7 @@
  */
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
 import {
@@ -43,7 +43,10 @@ vi.mock('@/renderer/hooks/agent/useManagedAgents', () => ({
 }));
 
 describe('useGuidAssistantSelection', () => {
+  // [mycowork] A567: Guid hides coding agents unless the build releases them (D260); these upstream cases run as a releasing build.
+  afterEach(() => vi.unstubAllGlobals());
   beforeEach(() => {
+    vi.stubGlobal('__MYCOWORK_RELEASED_AGENTS__', 'claude,codex');
     configGetMock.mockReturnValue(undefined);
     configSetMock.mockResolvedValue(undefined);
     mockManagedAgents = [];
@@ -95,13 +98,14 @@ describe('useGuidAssistantSelection', () => {
     });
   });
 
+  // [mycowork] A567: only office scene assistants are remembered as the Guid default (see guidOfficeAgents.dom.test.tsx).
   it('restores the last selected guid assistant before falling back to the aionrs default', async () => {
     mockAssistants = [
       assistantFixture({ id: 'bare-aionrs', runtimeKey: 'aionrs', source: 'generated', sortOrder: 1 }),
-      assistantFixture({ id: 'assistant-claude', runtimeKey: 'claude', source: 'builtin', sortOrder: 2 }),
+      assistantFixture({ id: 'mycowork-scene-materials', runtimeKey: 'aionrs', source: 'user', sortOrder: 2 }),
     ];
     configGetMock.mockImplementation((key: string) =>
-      key === 'guid.lastAssistantId' ? 'assistant-claude' : undefined
+      key === 'guid.lastAssistantId' ? 'mycowork-scene-materials' : undefined
     );
 
     const { result } = renderHook(() =>
@@ -111,17 +115,17 @@ describe('useGuidAssistantSelection', () => {
     );
 
     await waitFor(() => {
-      expect(result.current.selectedAssistantId).toBe('assistant-claude');
+      expect(result.current.selectedAssistantId).toBe('mycowork-scene-materials');
     });
   });
 
   it('restores the last selected guid assistant when the guid page resets for a new chat', async () => {
     mockAssistants = [
       assistantFixture({ id: 'bare-aionrs', runtimeKey: 'aionrs', source: 'generated', sortOrder: 1 }),
-      assistantFixture({ id: 'assistant-claude', runtimeKey: 'claude', source: 'builtin', sortOrder: 2 }),
+      assistantFixture({ id: 'mycowork-scene-materials', runtimeKey: 'aionrs', source: 'user', sortOrder: 2 }),
     ];
     configGetMock.mockImplementation((key: string) =>
-      key === 'guid.lastAssistantId' ? 'assistant-claude' : undefined
+      key === 'guid.lastAssistantId' ? 'mycowork-scene-materials' : undefined
     );
 
     const { result } = renderHook(() =>
@@ -132,14 +136,14 @@ describe('useGuidAssistantSelection', () => {
     );
 
     await waitFor(() => {
-      expect(result.current.selectedAssistantId).toBe('assistant-claude');
+      expect(result.current.selectedAssistantId).toBe('mycowork-scene-materials');
     });
   });
 
   it('persists manual guid assistant selections for the next visit', async () => {
     mockAssistants = [
       assistantFixture({ id: 'bare-aionrs', runtimeKey: 'aionrs', source: 'generated', sortOrder: 1 }),
-      assistantFixture({ id: 'assistant-claude', runtimeKey: 'claude', source: 'builtin', sortOrder: 2 }),
+      assistantFixture({ id: 'mycowork-scene-materials', runtimeKey: 'aionrs', source: 'user', sortOrder: 2 }),
     ];
 
     const { result } = renderHook(() =>
@@ -153,10 +157,10 @@ describe('useGuidAssistantSelection', () => {
     });
 
     act(() => {
-      result.current.setSelectedAssistantId('assistant-claude');
+      result.current.setSelectedAssistantId('mycowork-scene-materials');
     });
 
-    expect(configSetMock).toHaveBeenCalledWith('guid.lastAssistantId', 'assistant-claude');
+    expect(configSetMock).toHaveBeenCalledWith('guid.lastAssistantId', 'mycowork-scene-materials');
   });
 
   it('falls back to the default assistant when the persisted guid assistant no longer exists', async () => {

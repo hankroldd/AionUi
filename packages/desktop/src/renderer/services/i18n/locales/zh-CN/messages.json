@@ -137,6 +137,8 @@
     "memory_suggest": "整理待确认记忆",
     "research_search_arxiv": "检索论文",
     "ExecCommand": "运行命令",
+    "Write": "写入文件",
+    "Edit": "修改文件",
     "template_select": "确认模板选择",
     "review_report_candidate": "整理审查意见"
   }

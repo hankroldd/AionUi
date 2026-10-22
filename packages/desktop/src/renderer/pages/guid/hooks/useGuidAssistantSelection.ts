@@ -20,6 +20,11 @@ import type { SlashCommandItem } from '@/common/chat/slash/types';
 import { useManagedAgentRuntimeCatalog } from '@/renderer/hooks/agent/useManagedAgents';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCustomAgentsLoader } from './useCustomAgentsLoader';
+import {
+  officeFallbackAssistantId,
+  officeOfferedAssistants,
+  persistsAsGuidDefault,
+} from '@/renderer/mycowork-office-agents';
 
 export {
   buildAgentRuntimeModeState,
@@ -92,10 +97,13 @@ export function resolveAssistantSelectionKey(
 function readPersistedGuidAssistantSelectionKey(assistants: Assistant[]): string | undefined {
   const savedKey = configService.get('guid.lastAssistantId');
   const enabledAssistants = assistants.filter((assistant) => assistant.enabled !== false);
-  return resolveAssistantSelectionKey(savedKey, enabledAssistants);
+  // [mycowork] A567：只认记住的办公场景助手（旧版本记成 Claude Code 等的值作废），否则回落「汇报 / PPT」
+  const saved = resolveAssistantSelectionKey(savedKey, enabledAssistants);
+  return saved && persistsAsGuidDefault(saved) ? saved : officeFallbackAssistantId(enabledAssistants);
 }
 
 function persistGuidAssistantSelectionKey(assistantId: string): void {
+  if (!persistsAsGuidDefault(assistantId)) return; // [mycowork] A567：选别的助手只影响本次，不记成默认
   void configService.set('guid.lastAssistantId', assistantId).catch((error) => {
     console.error('[Guid] Failed to persist selected assistant:', error);
   });
@@ -125,7 +133,9 @@ export const useGuidAssistantSelection = ({
   const [selectedMode, _setSelectedMode] = useState<string>('default');
   const [selectedAcpModel, _setSelectedAcpModel] = useState<string | null>(null);
   const [selectedThoughtLevelValue, _setSelectedThoughtLevelValue] = useState<string>('');
-  const { assistants } = useCustomAgentsLoader();
+  const { assistants: catalog } = useCustomAgentsLoader();
+  // [mycowork] A567（D326）：首页不列本部署未放开登录态的编程 agent（Claude Code、Codex 等），见 mycowork-office-agents.ts
+  const assistants = useMemo(() => officeOfferedAssistants(catalog), [catalog]);
   const managedAgentRuntimeCatalog = useManagedAgentRuntimeCatalog();
 
   const setSelectedMode = useCallback(

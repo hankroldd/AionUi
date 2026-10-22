@@ -23,6 +23,8 @@ const labels: Record<string, I18nKey> = {
   memory_suggest: 'messages.toolNames.memory_suggest',
   research_search_arxiv: 'messages.toolNames.research_search_arxiv',
   ExecCommand: 'messages.toolNames.ExecCommand',
+  Write: 'messages.toolNames.Write', // [mycowork] A568：aionrs 原生写文件卡片不再显示英文工具名
+  Edit: 'messages.toolNames.Edit',
   template_select: 'messages.toolNames.template_select',
   review_report_candidate: 'messages.toolNames.review_report_candidate',
 };

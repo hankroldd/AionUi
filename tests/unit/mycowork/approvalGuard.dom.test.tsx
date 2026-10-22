@@ -170,10 +170,21 @@ describe('D115 批准卡', () => {
     expect(optionValues()).toEqual(['proceed_once', 'proceed_always', 'cancel']);
   });
 
-  it('MyCowork 会话里 info / edit 类卡片不受影响（auto_edit 本就放行这两类）', () => {
-    render(inSession(MYCOWORK, <MessagePermission message={card('Write', 'edit')} />));
+  it('MyCowork 会话里 info 类卡片不受影响', () => {
+    render(inSession(MYCOWORK, <MessagePermission message={card('Read', 'info')} />));
     expect(optionValues()).toEqual(['proceed_once', 'proceed_always', 'cancel']);
   });
+
+  it.each(['Write', 'Edit'])(
+    '[mycowork] A568：MyCowork 会话里原生写文件 %s（edit 类）卡片不给“始终允许”，非 MyCowork 会话照旧',
+    (tool) => {
+      render(inSession(MYCOWORK, <MessagePermission message={card(tool, 'edit')} />));
+      expect(optionValues()).toEqual(['proceed_once', 'cancel']);
+      document.body.replaceChildren();
+      render(inSession(OTHER, <MessagePermission message={card(tool, 'edit')} />));
+      expect(optionValues()).toEqual(['proceed_once', 'proceed_always', 'cancel']);
+    }
+  );
 
   it('非 MyCowork 会话的 mcp 卡片不受影响', () => {
     render(inSession(OTHER, <MessagePermission message={card('create_issue', 'mcp')} />));

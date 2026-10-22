@@ -126,3 +126,47 @@ describe('D302 批准卡摘要', () => {
     expect(screen.queryByTestId('message-permission-option-proceed_always')).toBeNull();
   });
 });
+
+describe('[mycowork] A568 原生 Write/Edit 卡片', () => {
+  const WS = '/data/workspaces/u1/MyCowork 临时项目';
+  const HOST = '/home/someone/.config/aionrs/projects/x/memory/MEMORY.md';
+  const writeCard = (tool: string): IMessagePermission => ({
+    ...card(tool),
+    content: {
+      ...card(tool).content,
+      title: `edit wants to use: ${tool}`,
+      description: `edit wants to use: ${tool}`,
+      command_type: 'edit',
+    },
+  });
+  const showWrite = (tool: string, input: unknown) =>
+    render(
+      <ConversationProvider
+        value={{ conversation_id: 'conv-1', type: 'aionrs', workspace: WS, loadedMcpServers: ['mycowork_bridge'] }}
+      >
+        <MessageListProvider value={[toolMsg(tool, input)]}>
+          <MessagePermission message={writeCard(tool)} />
+        </MessageListProvider>
+      </ConversationProvider>
+    );
+
+  it('写到宿主记忆目录：标“写入宿主文件”、只显示末两段，没有“始终允许”', () => {
+    showWrite('Write', { file_path: HOST, content: '偏好' });
+    const summary = (document.body.textContent ?? '').split('messages.requestDetails')[0];
+    expect(summary).toContain('写入宿主文件');
+    expect(summary).toContain('…/memory/MEMORY.md');
+    expect(summary).not.toContain('/home/someone');
+    expect(summary).not.toContain('wants to use');
+    expect(screen.queryByTestId('message-permission-option-proceed_always')).toBeNull();
+  });
+
+  it('工作目录内显示相对路径；.. 逃逸与不知道工作目录都按宿主文件', () => {
+    expect(approvalSummary('Write', { file_path: `${WS}/deck/a/草稿.md` }, 'zh', WS)?.action).toBe('写入工作目录文件');
+    expect(approvalSummary('Edit', { file_path: `${WS}/deck/a/草稿.md` }, 'zh', `${WS}/`)?.target).toBe(
+      'deck/a/草稿.md'
+    );
+    expect(approvalSummary('Write', { file_path: `${WS}/../x/y.md` }, 'zh', WS)?.action).toBe('写入宿主文件');
+    expect(approvalSummary('Edit', { file_path: HOST }, 'en')?.action).toBe('Edit a file on this computer');
+    expect(approvalSummary('Write', { content: 'x' }, 'zh', WS)).toBeNull();
+  });
+});

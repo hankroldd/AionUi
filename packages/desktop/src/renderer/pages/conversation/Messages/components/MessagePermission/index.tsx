@@ -95,7 +95,8 @@ const MessagePermission: React.FC<MessagePermissionProps> = React.memo(({ messag
   const summary = approvalSummary(
     tool?.content.name ?? fullTool?.content.name ?? action,
     displayInput,
-    i18n?.language?.startsWith('zh') ? 'zh' : 'en'
+    i18n?.language?.startsWith('zh') ? 'zh' : 'en',
+    conversationContext?.workspace // [mycowork] A568：原生 Write/Edit 写到工作目录之外时标“宿主文件”
   );
   const shownDescription = summary ? [summary.action, summary.target, summary.impact].join(' · ') : description;
 

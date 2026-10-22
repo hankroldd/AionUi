@@ -202,5 +202,19 @@
   },
   "selectedCount": "選択済み {{count}}",
   "selectedSkills": "選択済みスキル",
-  "aiAssistant": "AI アシスタント"
+  "aiAssistant": "AI アシスタント",
+  "reviewSources": {
+    "title": "元の依頼との照合",
+    "hint": "任意。最大10件、合計20,000文字。",
+    "conversation": "依頼の会話を選択",
+    "loadError": "メッセージを読み込めません。再試行してください。",
+    "lookupError": "この依頼を確認できません。後で再試行してください。",
+    "unavailable": "このメッセージに一意の受付済みオフィス依頼がないため選択できません。",
+    "empty": "このページに選択可能なユーザーメッセージはありません。",
+    "earlier": "以前のメッセージを読み込む",
+    "selected": "選択済み: {{count}} / 10",
+    "remove": "削除: {{label}}",
+    "clear": "選択した依頼をクリア",
+    "noConversations": "選択できる読み込み済みの会話はありません。"
+  }
 }

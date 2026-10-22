@@ -7,6 +7,7 @@ import React, { useEffect, useRef } from 'react';
 import { Message } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
+import type { ToolMessage } from '@/common/chat/normalizeToolCall';
 import { getCurrentProject, useCurrentProject } from '@/renderer/pages/conversation/explorer/currentProjectStore';
 import {
   getCurrentConversation,
@@ -15,7 +16,29 @@ import {
 import { useOptionalPreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 import { classifyPreviewError, previewErrorToI18nKey } from '@/renderer/utils/previewError';
 import { useOwnerKey } from '@/renderer/mycowork-resource-navigation';
-import { ConversationFileLink, ResourceCitationLink, TemplateConfirmationAction } from '@mycowork/ui';
+import { ConversationFileLink, FillResultFile, ResourceCitationLink, TemplateConfirmationAction } from '@mycowork/ui';
+
+const renderFillFile = (relativePath: string) => (
+  <MyCoworkWorkspaceFileLinkSlot relativePath={relativePath}>
+    {relativePath.split('/').pop()}
+  </MyCoworkWorkspaceFileLinkSlot>
+);
+
+/** [mycowork] 持久工具消息只转交自有 UI；文件打开仍走原会话预览。 */
+export const MyCoworkFillResultFileSlot: React.FC<{ message: ToolMessage }> = ({ message }) => {
+  const conversationId = useCurrentConversation();
+  const ownerKey = useOwnerKey();
+  if (!conversationId || !ownerKey) return null;
+  return (
+    <FillResultFile
+      key={`${ownerKey}:${conversationId}`}
+      message={message}
+      conversationId={conversationId}
+      readMessage={ipcBridge.database.getConversationMessage.invoke}
+      renderFile={renderFillFile}
+    />
+  );
+};
 
 /** [mycowork] Resource citations remain tied to the current authenticated conversation. */
 export const MyCoworkResourceCitationSlot: React.FC<{ resourceId: string; children?: React.ReactNode }> = ({

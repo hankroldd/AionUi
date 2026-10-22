@@ -15,6 +15,7 @@ import { normalizeToolMessages, hasRunningToolMessages } from '@/common/chat/nor
 import LocalImageView from '@/renderer/components/media/LocalImageView';
 import { downloadFileFromPath } from '@/renderer/utils/file/download';
 import { MyCoworkCitedRevisionSlot } from '@/renderer/mycowork-cited-revision'; // [mycowork] R014
+import { MyCoworkFillResultFileSlot } from '@/renderer/mycowork-file-link'; // [mycowork] R032
 import { toolDisplayNameKey } from './toolDisplayName';
 import './MessageToolGroupSummary.css';
 
@@ -185,6 +186,9 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
           <Right theme='outline' size='12' />
         </span>
       </Button>
+      {messages.map((message) => (
+        <MyCoworkFillResultFileSlot key={message.id} message={message} />
+      ))}
       {showMore && (
         <div className='tool-group-summary__body'>
           {tools.map((item) => (

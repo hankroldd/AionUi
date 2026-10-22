@@ -21,14 +21,18 @@ vi.mock('react-router-dom', () => ({
 }));
 
 const tp = (id: string) => ({ asset_id: id, title: `页型 ${id}`, structure: id, relation: 'parallel', fields: [] });
-/** 在有状态假 Bridge 上给每个决策响应加 theme_pages（与 Bridge 的 GET 详情、choices 返回同形）。 */
+/** Bridge GET adds theme_pages; choices returns only the persisted decision. */
 function serveWithThemePages(s: Server, ids: string[]) {
   const posts = serve(s);
   const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<ReturnType<typeof reply>>;
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     const r = await base(url, init);
     if (!/template-decisions\//.test(url) || r.status >= 300) return r;
-    return reply(r.status, { ...((await r.json()) as object), theme_pages: ids.map(tp) });
+    return reply(r.status, {
+      ...((await r.json()) as object),
+      theme: { asset_id: 'theme.dept-decision', version: 1, title: '部门主题' },
+      ...(init?.method === 'POST' ? {} : { theme_pages: ids.map(tp) }),
+    });
   });
   return posts;
 }
@@ -96,8 +100,43 @@ describe('P09 adopt the theme page set (D322)', () => {
     expect(back).not.toHaveBeenCalled();
   });
 
+  it('keeps the full theme action after a manual page choice with GET-only metadata', async () => {
+    const posts = serveWithThemePages(
+      {
+        pages: [
+          { no: 1, cands: ['p1'] },
+          { no: 2, cands: ['p2'] },
+          { no: 3, cands: ['p3'] },
+        ],
+      },
+      ['p1', 'p2', 'p3']
+    );
+    render(<OfficeCompositionSlot />);
+    await screen.findByRole('button', { name: '采用本主题整套页型（3 页）' });
+    fireEvent.click(screen.getAllByRole('button', { name: '选这个结构' })[0] as HTMLElement);
+    await screen.findByRole('button', { name: '已选中' });
+    fireEvent.click(await screen.findByRole('button', { name: '采用本主题整套页型（3 页）' }));
+    await waitFor(() => expect(back).toHaveBeenCalledTimes(1));
+    expect(posts.map((p) => [p.id, p.body.page_no, p.body.asset_id])).toEqual([
+      ['dec_1', 1, 'p1'],
+      ['dec_2', 2, 'p2'],
+      ['dec_3', 3, 'p3'],
+    ]);
+    expect(
+      fetchMock.mock.calls.filter(([url, init]) => /template-decisions\//.test(url) && init?.method !== 'POST')
+    ).toHaveLength(1);
+  });
+
   it('is not offered when the page plan and theme_pages differ in length', async () => {
-    serveWithThemePages({ pages: [{ no: 1, cands: ['a1'] }, { no: 2, cands: ['b1'] }] }, ['p1', 'p2', 'p3']);
+    serveWithThemePages(
+      {
+        pages: [
+          { no: 1, cands: ['a1'] },
+          { no: 2, cands: ['b1'] },
+        ],
+      },
+      ['p1', 'p2', 'p3']
+    );
     render(<OfficeCompositionSlot />);
     expect(await screen.findByRole('button', { name: '全部采用首选' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /采用本主题整套页型/ })).toBeNull();

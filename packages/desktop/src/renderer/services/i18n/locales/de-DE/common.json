@@ -202,5 +202,19 @@
   "goBack": "Zurück",
   "selectedCount": "{{count}} ausgewählt",
   "selectedSkills": "Ausgewählte Skills",
-  "aiAssistant": "KI-Assistent"
+  "aiAssistant": "KI-Assistent",
+  "reviewSources": {
+    "title": "Ursprüngliche Anfragen",
+    "hint": "Optional: bis zu 10 Anfragen und insgesamt 20.000 Zeichen.",
+    "conversation": "Unterhaltung auswählen",
+    "loadError": "Nachrichten konnten nicht geladen werden. Bitte erneut versuchen.",
+    "lookupError": "Diese Anfrage konnte nicht geprüft werden. Bitte später erneut versuchen.",
+    "unavailable": "Diese Nachricht hat keine eindeutige angenommene Büroanfrage und kann nicht ausgewählt werden.",
+    "empty": "Auf dieser Seite gibt es keine auswählbaren Benutzernachrichten.",
+    "earlier": "Frühere Nachrichten laden",
+    "selected": "Ausgewählt: {{count}} / 10",
+    "remove": "Entfernen: {{label}}",
+    "clear": "Ausgewählte Anfragen löschen",
+    "noConversations": "Keine geladenen Unterhaltungen zur Auswahl verfügbar."
+  }
 }

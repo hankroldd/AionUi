@@ -202,5 +202,19 @@
   },
   "selectedCount": "{{count}} seçili",
   "selectedSkills": "Seçili beceriler",
-  "aiAssistant": "Yapay Zekâ Asistanı"
+  "aiAssistant": "Yapay Zekâ Asistanı",
+  "reviewSources": {
+    "title": "Özgün istekler",
+    "hint": "İsteğe bağlı: en fazla 10 istek ve toplam 20.000 karakter.",
+    "conversation": "Bir konuşma seçin",
+    "loadError": "Mesajlar yüklenemedi. Yeniden deneyin.",
+    "lookupError": "Bu istek doğrulanamadı. Daha sonra yeniden deneyin.",
+    "unavailable": "Bu mesajın tek bir kabul edilmiş ofis gönderimi yok; seçilemez.",
+    "empty": "Bu sayfada seçilebilir kullanıcı mesajı yok.",
+    "earlier": "Önceki mesajları yükle",
+    "selected": "Seçilen: {{count}} / 10",
+    "remove": "Kaldır: {{label}}",
+    "clear": "Seçilen istekleri temizle",
+    "noConversations": "Seçilebilecek yüklü konuşma yok."
+  }
 }

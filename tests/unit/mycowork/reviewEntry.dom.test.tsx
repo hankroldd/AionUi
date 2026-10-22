@@ -52,7 +52,7 @@ it.each([
     expect(readPages).toEqual(Array.from({ length: pages }, (_, index) => index + 1));
   }
 );
-it('opens only by an explicit old-version menu action and displays only that version’s saved review', async () => {
+it.each(['menu', 'selected'])('opens saved results via the explicit %s action without preload', async (entry) => {
   const calls: string[] = [];
   setScopeSelection({ items: [{ source_id: 'old-account-source', name: '旧账号范围' }], views: [] });
   vi.stubGlobal(
@@ -96,7 +96,13 @@ it('opens only by an explicit old-version menu action and displays only that ver
       });
     })
   );
-  const adapter: ReviewAdapter = { create: vi.fn(), verify: vi.fn(), send: vi.fn(), observe: vi.fn(), cancel: vi.fn() };
+  const adapter: ReviewAdapter = {
+    create: vi.fn(),
+    verify: vi.fn(),
+    send: vi.fn(),
+    observe: vi.fn(),
+    cancel: vi.fn(),
+  };
   const props = {
     items: [
       {
@@ -120,7 +126,7 @@ it('opens only by an explicit old-version menu action and displays only that ver
     ] satisfies RevisionItem[],
     pubs: [],
     pubsStale: false,
-    selected: 'latest-version',
+    selected: entry === 'selected' ? 'old-version' : 'latest-version',
     lang: 'zh-CN',
     text: versionsText('zh-CN'),
     vOf: (id: string) => (id === 'old-version' ? 'v1' : 'v2'),
@@ -128,6 +134,7 @@ it('opens only by an explicit old-version menu action and displays only that ver
     canAct: true,
     more: { has: false, loading: false, onLoad: vi.fn() },
     onSelect: vi.fn(),
+    onSideBySide: vi.fn(),
     onRestore: vi.fn(),
     resourceId: 'resource-1',
     headRevisionId: 'latest-version',
@@ -140,8 +147,12 @@ it('opens only by an explicit old-version menu action and displays only that ver
   const mounted = render(<VersionTimeline {...props} />);
   expect(calls).toHaveLength(0);
   expect(screen.queryByRole('dialog')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: '更多操作 v1' }));
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'AI 审查' }));
+  if (entry === 'selected') {
+    fireEvent.click(within(screen.getAllByTestId('version-item')[1]!).getByRole('button', { name: 'AI 审查' }));
+  } else {
+    fireEvent.click(screen.getByRole('button', { name: '更多操作 v1' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'AI 审查' }));
+  }
   await screen.findByText('固定1轮规则（虚构）');
   expect(calls.find((p) => p.includes('/reviews?'))).toContain('revision_id=old-version');
   const rows = screen.getAllByTestId('version-item');

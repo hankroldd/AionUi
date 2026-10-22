@@ -207,5 +207,19 @@
   },
   "selectedCount": "Selected {{count}}",
   "selectedSkills": "Selected skills",
-  "aiAssistant": "AI Assistant"
+  "aiAssistant": "AI Assistant",
+  "reviewSources": {
+    "title": "Original requests",
+    "hint": "Optional: up to 10 requests and 20,000 characters in total.",
+    "conversation": "Choose a conversation",
+    "loadError": "Messages could not be loaded. Please retry.",
+    "lookupError": "This request could not be verified. Please retry later.",
+    "unavailable": "This message has no unique accepted office submission and cannot be selected.",
+    "empty": "No selectable user messages on this page.",
+    "earlier": "Load earlier messages",
+    "selected": "Selected: {{count}} / 10",
+    "remove": "Remove: {{label}}",
+    "clear": "Clear selected requests",
+    "noConversations": "No loaded conversations are available to select."
+  }
 }

@@ -202,5 +202,19 @@
   },
   "selectedCount": "{{count}} sélectionné(s)",
   "selectedSkills": "Compétences sélectionnées",
-  "aiAssistant": "Assistant IA"
+  "aiAssistant": "Assistant IA",
+  "reviewSources": {
+    "title": "Demandes initiales",
+    "hint": "Facultatif : 10 demandes et 20 000 caractères au total au maximum.",
+    "conversation": "Choisir une conversation",
+    "loadError": "Impossible de charger les messages. Réessayez.",
+    "lookupError": "Impossible de vérifier cette demande. Réessayez plus tard.",
+    "unavailable": "Ce message ne correspond pas à une demande de bureau acceptée unique et ne peut pas être sélectionné.",
+    "empty": "Aucun message utilisateur sélectionnable sur cette page.",
+    "earlier": "Charger les messages précédents",
+    "selected": "Sélectionnées : {{count}} / 10",
+    "remove": "Retirer : {{label}}",
+    "clear": "Effacer les demandes sélectionnées",
+    "noConversations": "Aucune conversation chargée ne peut être sélectionnée."
+  }
 }

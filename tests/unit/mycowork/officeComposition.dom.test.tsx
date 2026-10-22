@@ -95,7 +95,7 @@ describe('OfficeCompositionSlot', () => {
     // 主布局：返回、步骤条、待选页数
     expect(screen.getByRole('button', { name: '返回对话' })).toBeInTheDocument();
     expect(screen.getByText('选版式')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '还有 1 页待选' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回 · 还有 1 页待选' })).toBeInTheDocument();
     // Steps 从 1 起：还有页待选时高亮第 2 步“选版式”，第 1 步已完成
     const steps = document.querySelectorAll('.arco-steps-item');
     expect(steps[0]?.className).toContain('arco-steps-item-finish');

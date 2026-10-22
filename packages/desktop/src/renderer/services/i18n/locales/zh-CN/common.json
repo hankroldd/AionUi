@@ -210,7 +210,7 @@
   "aiAssistant": "AI 助手",
   "reviewSources": {
     "title": "原始需求对照",
-    "hint": "可选，最多10条，总计20000字符。",
+    "hint": "可选：选择原会话中的需求，与这一版对照；最多 10 条，共 20000 字符。",
     "conversation": "选择会话",
     "loadError": "暂时无法读取消息，请重试。",
     "lookupError": "暂时无法确认这条需求，请稍后重试。",

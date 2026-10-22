@@ -205,7 +205,7 @@
   "aiAssistant": "AI 助手",
   "reviewSources": {
     "title": "原始需求對照",
-    "hint": "選填，最多10則，合計20000字元。",
+    "hint": "選填：選擇原對話中的需求，與這一版對照；最多 10 則，共 20000 字元。",
     "conversation": "選擇需求所在對話",
     "loadError": "暫時無法讀取訊息，請重試。",
     "lookupError": "暫時無法確認這則需求，請稍後重試。",

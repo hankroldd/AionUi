@@ -5,7 +5,7 @@
  * 关联：review-loop.md §7c，D329。
  */
 import React, { useState } from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { createInstance } from 'i18next';
 import { I18nextProvider } from 'react-i18next';
@@ -13,14 +13,15 @@ import type { ReviewSourceChoice } from '@mycowork/ui';
 import { ReviewSourceSelector } from '@/renderer/components/workspace/ReviewSourceSelector';
 import zhCommon from '@/renderer/services/i18n/locales/zh-CN/common.json';
 
-const api = vi.hoisted(() => ({ page: vi.fn(), fetch: vi.fn(), changed: vi.fn(), pending: vi.fn() }));
+const api = vi.hoisted(() => ({
+  page: vi.fn(),
+  fetch: vi.fn(),
+  changed: vi.fn(),
+  pending: vi.fn(),
+  conversations: [] as { id: string; name: string; modified_at: number }[],
+}));
 vi.mock('@/renderer/hooks/context/ConversationHistoryContext', () => ({
-  useConversationHistoryContext: () => ({
-    conversations: [
-      { id: 'conversation-a', name: '虚构甲会话', modified_at: 1 },
-      { id: 'conversation-b', name: '虚构乙会话', modified_at: 2 },
-    ],
-  }),
+  useConversationHistoryContext: () => ({ conversations: api.conversations }),
 }));
 vi.mock('@/renderer/utils/chat/messagePagination', () => ({ loadConversationMessagePage: api.page }));
 
@@ -106,6 +107,10 @@ beforeAll(async () => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  api.conversations = [
+    { id: 'conversation-a', name: '虚构甲会话', modified_at: 1 },
+    { id: 'conversation-b', name: '虚构乙会话', modified_at: 2 },
+  ];
   vi.stubGlobal('fetch', api.fetch);
   api.page.mockResolvedValue(page());
   api.fetch.mockResolvedValue(response());
@@ -122,12 +127,38 @@ it('starts empty and reads nothing until the user chooses a conversation', () =>
   expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
 });
 
+it('keeps distinct dates beside identical long names and searches by the displayed name', async () => {
+  const name = '虚构完整结构专利稿会话名称'.repeat(8);
+  api.conversations = [
+    { id: 'conversation-a', name, modified_at: Date.parse('2026-10-22T23:41:00+08:00') },
+    { id: 'conversation-b', name, modified_at: Date.parse('2026-10-22T23:26:00+08:00') },
+  ];
+  render(<Screen />);
+  const select = screen.getByRole('combobox', { name: '选择会话' });
+  fireEvent.click(select);
+  const options = await screen.findAllByRole('option');
+  expect(options).toHaveLength(2);
+  for (const [index, option] of options.entries()) {
+    const title = within(option).getByText(name, { exact: true });
+    expect(title).toHaveClass('truncate');
+    expect(title).toHaveAttribute('title', name);
+    const date = within(option).getByText(new Date(api.conversations[index]!.modified_at).toLocaleString());
+    expect(date).toHaveClass('w-180px', 'shrink-0', 'whitespace-nowrap');
+  }
+  const input = select.querySelector('input');
+  expect(input).not.toBeNull();
+  fireEvent.change(input!, { target: { value: '完整结构专利稿' } });
+  expect(await screen.findAllByRole('option')).toHaveLength(2);
+  fireEvent.click(screen.getAllByRole('option')[1]!);
+  await waitFor(() => expect(api.page).toHaveBeenCalledWith('conversation-b', { limit: 50, contentMode: 'compact' }));
+});
+
 it('looks up the logical message identity with the owner header and a same-origin cookie before adding it', async () => {
   render(<Screen />);
   await chooseConversation();
   await chooseMessage();
   await waitFor(() =>
-    expect(api.changed).toHaveBeenCalledWith([{ submission_id: submission(), label: '虚构甲会话: 虚构会议原始事实' }])
+    expect(api.changed).toHaveBeenCalledWith([{ submission_id: submission(), label: '虚构会议原始事实' }])
   );
   expect(api.fetch).toHaveBeenCalledWith(
     '/bridge/v1/tasks/lookup?conversation_id=conversation-a&message_id=message-a',
@@ -138,6 +169,7 @@ it('looks up the logical message identity with the owner header and a same-origi
     }
   );
   expect(screen.getByRole('checkbox', { name: '虚构会议原始事实' })).toBeChecked();
+  expect(screen.getByTitle('虚构会议原始事实')).toHaveClass('line-clamp-2');
 });
 
 it('only shows visible user text and loads one older cursor page after an explicit click', async () => {

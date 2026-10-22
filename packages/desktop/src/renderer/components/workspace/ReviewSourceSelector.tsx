@@ -189,11 +189,7 @@ export function ReviewSourceSelector({ ownerKey, disabled, value, onChange, onPe
         latest.value.some((choice) => choice.submission_id === run.submission_id)
       )
         return;
-      const name = conversations.find((conversation) => conversation.id === conversationId)?.name ?? '';
-      latest.onChange([
-        ...latest.value,
-        { submission_id: run.submission_id, label: `${name}: ${summary(message.content.content)}` },
-      ]);
+      latest.onChange([...latest.value, { submission_id: run.submission_id, label: summary(message.content.content) }]);
     } catch {
       if (valid()) setError(t('common.reviewSources.lookupError'));
     } finally {
@@ -211,11 +207,21 @@ export function ReviewSourceSelector({ ownerKey, disabled, value, onChange, onPe
         disabled={blocked}
         value={conversationId || undefined}
         showSearch
+        filterOption={(input, option) =>
+          (option.props as { title: string }).title.toLocaleLowerCase().includes(input.toLocaleLowerCase())
+        }
         onChange={chooseConversation}
       >
         {conversations.map((conversation) => (
-          <Select.Option key={conversation.id} value={conversation.id}>
-            {conversation.name} · {new Date(conversation.modified_at).toLocaleString()}
+          <Select.Option key={conversation.id} value={conversation.id} title={conversation.name}>
+            <div className='flex w-full min-w-0 items-center gap-8px'>
+              <span className='min-w-0 flex-1 truncate' title={conversation.name}>
+                {conversation.name}
+              </span>
+              <span className='w-180px shrink-0 whitespace-nowrap text-12px text-t-secondary'>
+                {new Date(conversation.modified_at).toLocaleString()}
+              </span>
+            </div>
           </Select.Option>
         ))}
       </Select>
@@ -253,8 +259,11 @@ export function ReviewSourceSelector({ ownerKey, disabled, value, onChange, onPe
           <div>{t('common.reviewSources.selected', { count: value.length })}</div>
           {value.map((choice) => (
             <div key={choice.submission_id} className='flex items-center gap-8px'>
-              <span className='break-all flex-1'>{choice.label}</span>
+              <span className='min-w-0 flex-1 break-all line-clamp-2' title={choice.label}>
+                {choice.label}
+              </span>
               <Button
+                className='shrink-0'
                 disabled={blocked || Boolean(pending)}
                 onClick={() => onChange(value.filter((item) => item.submission_id !== choice.submission_id))}
                 aria-label={t('common.reviewSources.remove', { label: choice.label })}

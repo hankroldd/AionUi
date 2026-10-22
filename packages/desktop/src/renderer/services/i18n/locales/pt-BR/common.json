@@ -202,5 +202,19 @@
   },
   "selectedCount": "{{count}} selecionado(s)",
   "selectedSkills": "Habilidades selecionadas",
-  "aiAssistant": "Assistente de IA"
+  "aiAssistant": "Assistente de IA",
+  "reviewSources": {
+    "title": "Solicitações originais",
+    "hint": "Opcional: até 10 solicitações e 20.000 caracteres no total.",
+    "conversation": "Escolha uma conversa",
+    "loadError": "Não foi possível carregar as mensagens. Tente novamente.",
+    "lookupError": "Não foi possível verificar esta solicitação. Tente mais tarde.",
+    "unavailable": "Esta mensagem não tem um envio de escritório aceito e único e não pode ser selecionada.",
+    "empty": "Nenhuma mensagem de usuário selecionável nesta página.",
+    "earlier": "Carregar mensagens anteriores",
+    "selected": "Selecionadas: {{count}} / 10",
+    "remove": "Remover: {{label}}",
+    "clear": "Limpar solicitações selecionadas",
+    "noConversations": "Não há conversas carregadas disponíveis para selecionar."
+  }
 }

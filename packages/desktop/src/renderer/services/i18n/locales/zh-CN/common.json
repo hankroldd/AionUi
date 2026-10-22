@@ -207,5 +207,19 @@
   },
   "selectedCount": "已选 {{count}}",
   "selectedSkills": "已选技能",
-  "aiAssistant": "AI 助手"
+  "aiAssistant": "AI 助手",
+  "reviewSources": {
+    "title": "原始需求对照",
+    "hint": "可选，最多10条，总计20000字符。",
+    "conversation": "选择会话",
+    "loadError": "暂时无法读取消息，请重试。",
+    "lookupError": "暂时无法确认这条需求，请稍后重试。",
+    "unavailable": "这条消息没有唯一的已受理办公提交，暂不能选用。",
+    "empty": "这一页没有可选择的用户原话。",
+    "earlier": "加载更早消息",
+    "selected": "已选 {{count}} / 10 条",
+    "remove": "移除：{{label}}",
+    "clear": "清空已选需求",
+    "noConversations": "当前没有可选择的已加载会话。"
+  }
 }

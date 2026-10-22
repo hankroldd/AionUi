@@ -202,5 +202,19 @@
   },
   "selectedCount": "已選 {{count}}",
   "selectedSkills": "已選技能",
-  "aiAssistant": "AI 助手"
+  "aiAssistant": "AI 助手",
+  "reviewSources": {
+    "title": "原始需求對照",
+    "hint": "選填，最多10則，合計20000字元。",
+    "conversation": "選擇需求所在對話",
+    "loadError": "暫時無法讀取訊息，請重試。",
+    "lookupError": "暫時無法確認這則需求，請稍後重試。",
+    "unavailable": "這則訊息沒有唯一且已受理的辦公提交，暫時無法選用。",
+    "empty": "這一頁沒有可選擇的使用者原話。",
+    "earlier": "載入更早的訊息",
+    "selected": "已選 {{count}} / 10 則",
+    "remove": "移除：{{label}}",
+    "clear": "清空已選需求",
+    "noConversations": "目前沒有可選擇的已載入對話。"
+  }
 }

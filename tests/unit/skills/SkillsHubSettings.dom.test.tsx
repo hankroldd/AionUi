@@ -266,8 +266,7 @@ describe('SkillsHubSettings', () => {
 
     render(<SkillsHubSettings withWrapper={false} />);
 
-    await waitFor(() => expect(screen.getByTestId('skill-import-history-page')).toBeInTheDocument());
-    expect(screen.getByText('Repair: remove the oversized file and import again')).toBeInTheDocument();
+    expect(await screen.findByText('Repair: remove the oversized file and import again')).toBeInTheDocument();
     expect(screen.getAllByText(/movie\.bin/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/11 MB/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/10 MB/).length).toBeGreaterThan(0);

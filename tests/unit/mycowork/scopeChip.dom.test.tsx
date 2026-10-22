@@ -115,7 +115,10 @@ describe('ScopeChip', () => {
     await openDialog();
     expect(screen.getByTestId('mycowork-scope-summary')).toHaveTextContent(/^尚未选择$/);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('textbox', { name: SEARCH })));
-    expect(fetchMock).toHaveBeenCalledWith('/bridge/v1/scopes', expect.objectContaining({ credentials: 'same-origin' }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/bridge/v1/scopes',
+      expect.objectContaining({ credentials: 'same-origin' })
+    );
   });
 
   it('lists sources with partial-processing counts', async () => {
@@ -178,7 +181,7 @@ describe('ScopeChip', () => {
     render(<ScopeChip lang='zh-CN' />);
     await openDialog();
     expect(
-      await screen.findByText('网络不太稳定，没能连上服务；已自动重试，请稍后再试。已保存的内容不受影响。'),
+      await screen.findByText('网络不太稳定，没能连上服务；已自动重试，请稍后再试。已保存的内容不受影响。')
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     expect(await screen.findByText('产品知识库')).toBeInTheDocument();
@@ -328,6 +331,26 @@ describe('ScopeChip', () => {
     fireEvent.click(screen.getByRole('button', { name: '应用到本轮' }));
     expect(await screen.findByRole('button', { name: '资料范围：产品知识库' })).toBeInTheDocument();
     expect(scopePlanRequest(getScope())?.excludes).toBeUndefined();
+  });
+
+  it('A571: searching by the knowledge base name still lists its files with exclude buttons', async () => {
+    route();
+    render(<ScopeChip lang='zh-CN' />);
+    await openDialog();
+    fireEvent.change(await screen.findByLabelText(SEARCH), { target: { value: '产品知识' } });
+    tick(await screen.findByText('产品知识库').then(() => '产品知识库'));
+    fireEvent.click(await screen.findByRole('button', { name: '挑选文件' }));
+    expect(await screen.findByRole('button', { name: '排除 竞品周报.md' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '排除 价格带.xlsx' })).toBeInTheDocument();
+  });
+
+  it('A571: a knowledge base with no files shows an empty state instead of a blank list', async () => {
+    route(CATALOG, []);
+    render(<ScopeChip lang='zh-CN' />);
+    await openDialog();
+    tick(await screen.findByText('产品知识库').then(() => '产品知识库'));
+    fireEvent.click(await screen.findByRole('button', { name: '挑选文件' }));
+    expect(await screen.findByText('这个知识库里还没有可挑选的文件')).toBeInTheDocument();
   });
 
   it('a draft with malformed excludes is rejected', () => {

@@ -1,6 +1,6 @@
 /**
  * 文件：renderer/mycowork-office-agents.ts
- * 职责：[mycowork] A567（D325）：首页助手列表只给办公引擎（Aion CLI）助手与本部署放开登录态的编程 agent；首页默认助手固定为办公场景助手，
+ * 职责：[mycowork] A567（D326）：首页助手列表只给办公引擎（Aion CLI）助手与本部署放开登录态的编程 agent；首页默认助手固定为办公场景助手，
  *       选过别的助手不被记成默认。
  * 边界：纯函数；放开清单在界面构建时由 MYCOWORK_SANDBOX_AGENTS 注入（与 aioncore 隔离包装同一变量、同一白名单 codex、claude，D148、D260），
  *       未注入（测试栈、单元测试、未知构建）= 不放开任何编程 agent。只管界面能不能选，登录态隔离仍归 aioncore-sandboxed.sh。

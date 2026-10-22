@@ -49,7 +49,10 @@ export const acpCategory = (kind: string | undefined, title: string | undefined)
     ? 'exec'
     : title?.startsWith('mcp__')
       ? 'mcp'
-      : kind === 'edit' || /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(title ?? '')
+      : kind === 'edit' ||
+          kind === 'delete' ||
+          kind === 'move' ||
+          /^(Write|Edit|MultiEdit|NotebookEdit)$/.test(title ?? '')
         ? 'edit'
         : undefined;
 

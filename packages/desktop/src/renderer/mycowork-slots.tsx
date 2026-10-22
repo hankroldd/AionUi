@@ -264,6 +264,7 @@ export {
   ConversationFilesToggle,
   ConversationFilesEmpty,
   conversationFilePath,
+  resourceCitationId,
   conversationRootLabel,
 } from '@mycowork/ui';
 
@@ -295,7 +296,7 @@ export function useMyCoworkConversationFiles(
   return useConversationWorkspace(ownerKey, projectId, conversationId, turns);
 }
 
-export { MyCoworkWorkspaceFileLinkSlot } from './mycowork-file-link';
+export { MyCoworkWorkspaceFileLinkSlot, MyCoworkResourceCitationSlot } from './mycowork-file-link';
 
 /** ADR-0031：会话内共用一次模板读取，成功模板工具及结束事件刷新，不轮询。 */
 export const MyCoworkTemplateConfirmationProvider: React.FC<{

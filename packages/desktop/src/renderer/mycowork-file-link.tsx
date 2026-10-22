@@ -15,7 +15,28 @@ import {
 import { useOptionalPreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 import { classifyPreviewError, previewErrorToI18nKey } from '@/renderer/utils/previewError';
 import { useOwnerKey } from '@/renderer/mycowork-resource-navigation';
-import { ConversationFileLink, TemplateConfirmationAction } from '@mycowork/ui';
+import { ConversationFileLink, ResourceCitationLink, TemplateConfirmationAction } from '@mycowork/ui';
+
+/** [mycowork] Resource citations remain tied to the current authenticated conversation. */
+export const MyCoworkResourceCitationSlot: React.FC<{ resourceId: string; children?: React.ReactNode }> = ({
+  resourceId,
+  children,
+}) => {
+  const conversationId = useCurrentConversation();
+  const ownerKey = useOwnerKey();
+  const { i18n } = useTranslation();
+  if (!conversationId || !ownerKey) return <>{children}</>;
+  return (
+    <ResourceCitationLink
+      key={`${ownerKey}:${conversationId}:${resourceId}`}
+      conversationId={conversationId}
+      resourceId={resourceId}
+      lang={i18n.language}
+    >
+      {children}
+    </ResourceCitationLink>
+  );
+};
 
 /** Open an explicit workspace-relative link with the exact same payload gate as the Explorer. */
 export const MyCoworkWorkspaceFileLinkSlot: React.FC<{ relativePath: string; children?: React.ReactNode }> = ({

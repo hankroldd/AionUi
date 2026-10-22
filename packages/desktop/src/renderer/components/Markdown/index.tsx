@@ -26,7 +26,12 @@ import ShadowView from './ShadowView';
 import { MARKDOWN_REMARK_PLUGINS, MarkdownTable, MarkdownTd } from './markdownComponents';
 import { resolveLocalFileLinkPath, resolveLocalFileLinkReference } from './markdownUtils';
 import type { LocalFileLinkReference } from './markdownUtils';
-import { conversationFilePath, MyCoworkWorkspaceFileLinkSlot } from '@/renderer/mycowork-slots';
+import {
+  conversationFilePath,
+  resourceCitationId,
+  MyCoworkResourceCitationSlot,
+  MyCoworkWorkspaceFileLinkSlot,
+} from '@/renderer/mycowork-slots';
 
 const isLocalFilePath = (src: string): boolean => {
   if (src.startsWith('http://') || src.startsWith('https://')) return false;
@@ -111,6 +116,13 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
         a: ({ node: _node, ...rest }: Record<string, unknown>) => {
           const anchorProps = rest as React.AnchorHTMLAttributes<HTMLAnchorElement>;
           const rawHref = typeof anchorProps.href === 'string' ? anchorProps.href : '';
+          const resourceId = resourceCitationId(rawHref);
+          if (resourceId)
+            return (
+              <MyCoworkResourceCitationSlot resourceId={resourceId}>
+                {anchorProps.children}
+              </MyCoworkResourceCitationSlot>
+            );
           const workspacePath = conversationFilePath(rawHref);
           if (workspacePath)
             return (
@@ -155,7 +167,9 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
               remarkPlugins={MARKDOWN_REMARK_PLUGINS}
               rehypePlugins={rehypePlugins}
               components={components}
-              urlTransform={(url) => (resolveLocalFileLinkPath(url) ? url : defaultUrlTransform(url))}
+              urlTransform={(url) =>
+                resourceCitationId(url) || resolveLocalFileLinkPath(url) ? url : defaultUrlTransform(url)
+              }
             >
               {normalizedChildren}
             </ReactMarkdown>

@@ -1,6 +1,6 @@
 /**
  * 文件/职责：测试 P09“采用本主题整套页型（N 页）”（MyCowork PR05 D322）：决策详情带 theme_pages 且页数对得上时出现，
- * 按 theme_pages 顺序逐页提交（已是该页型的跳过）、全部成功回到对话；某页失败即停、说明第几页、不回到对话；页数对不上不出现。
+ * 按 theme_pages 顺序逐页提交（已是该页型的跳过）、全部成功回到对话；某页失败即停、说明第几页、不回到对话；页数或某页内容关系对不上不出现。
  * [mycowork] ADR-0011. Only the Bridge boundary is mocked (fetch), reusing the stateful fake Bridge of templateBrowseFixture.
  */
 
@@ -20,7 +20,11 @@ vi.mock('react-router-dom', () => ({
   useParams: () => ({ decisionId: 'dec_1' }),
 }));
 
-const tp = (id: string) => ({ asset_id: id, title: `页型 ${id}`, structure: id, relation: 'parallel', fields: [] });
+/** 'p2:summary' 给出与计划不同的内容关系；缺省与夹具计划相同（parallel）。 */
+const tp = (spec: string) => {
+  const [id = spec, relation = 'parallel'] = spec.split(':');
+  return { asset_id: id, title: `页型 ${id}`, structure: id, relation, fields: [] };
+};
 /** Bridge GET adds theme_pages; choices returns only the persisted decision. */
 function serveWithThemePages(s: Server, ids: string[]) {
   const posts = serve(s);
@@ -136,6 +140,22 @@ describe('P09 adopt the theme page set (D322)', () => {
         ],
       },
       ['p1', 'p2', 'p3']
+    );
+    render(<OfficeCompositionSlot />);
+    expect(await screen.findByRole('button', { name: '全部采用首选' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /采用本主题整套页型/ })).toBeNull();
+  });
+
+  it('is not offered when a theme page does not match the planned relation of its page', async () => {
+    serveWithThemePages(
+      {
+        pages: [
+          { no: 1, cands: ['a1'] },
+          { no: 2, cands: ['b1'] },
+          { no: 3, cands: ['c1'] },
+        ],
+      },
+      ['p1', 'p2:summary', 'p3']
     );
     render(<OfficeCompositionSlot />);
     expect(await screen.findByRole('button', { name: '全部采用首选' })).toBeInTheDocument();

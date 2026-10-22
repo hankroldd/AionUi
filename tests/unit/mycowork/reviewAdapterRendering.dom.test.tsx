@@ -61,6 +61,7 @@ function image(page: number, changes: Record<string, unknown> = {}) {
   return {
     id: `view-${page}`,
     conversation_id: execution.conversation_id,
+    backend_turn_id: execution.turn_id,
     type: 'tool_call',
     content: {
       name: 'ViewImage',
@@ -119,6 +120,15 @@ it('accepts only after both pages succeed through the actual public read and anc
 it('does not borrow a page from before the ACK or after the next user message', async () => {
   api.messages.mockResolvedValue({
     items: [image(2), ack, image(1), finish, { ...ack, id: 'later-user' }, image(2)],
+    has_more_after: false,
+  });
+  const { result } = renderHook(() => useReviewAdapter());
+  expect((await result.current.observe(execution, review)).renderingVerifiedFrom).toBeNull();
+});
+
+it('does not borrow an image from a different backend turn', async () => {
+  api.messages.mockResolvedValue({
+    items: [ack, image(1), { ...image(2), backend_turn_id: 'different-turn' }, finish],
     has_more_after: false,
   });
   const { result } = renderHook(() => useReviewAdapter());

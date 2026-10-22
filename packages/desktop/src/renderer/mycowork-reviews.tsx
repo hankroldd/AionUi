@@ -128,6 +128,15 @@ function viewedImage(tool: IMessageToolCall['content']): string | undefined {
     : undefined;
 }
 
+function candidateReport(tool: IMessageToolCall['content']): string | undefined {
+  return (tool.name === 'review_report_candidate' || tool.name === 'mcp__mycowork_bridge_review_report_candidate') &&
+    tool.status === 'completed' &&
+    !tool.error &&
+    typeof tool.output === 'string'
+    ? tool.output
+    : undefined;
+}
+
 async function outputs(execution: ReviewExecution, images: string[], check: CheckOwner) {
   if (!execution.message_id || !execution.turn_id) throw new Error('review_turn_unknown');
   const conversation_id = apiId(execution.conversation_id);
@@ -162,13 +171,15 @@ async function outputs(execution: ReviewExecution, images: string[], check: Chec
     for (const item of items) {
       if (item.conversation_id !== execution.conversation_id) throw new Error('review_message_scope_mismatch');
       if (item.position === 'right') return result;
-      if (item.type === 'tool_call') {
+      if (item.type === 'tool_call' && item.backend_turn_id === execution.turn_id) {
         const path = viewedImage(item.content);
         if (path) {
           result.viewed.add(path);
           if (result.renderingVerifiedFrom === null && images.every((image) => result.viewed.has(image)))
             result.renderingVerifiedFrom = result.texts.length;
         }
+        const report = candidateReport(item.content);
+        if (report !== undefined) result.texts.push(report);
       }
       if (
         item.position === 'left' &&

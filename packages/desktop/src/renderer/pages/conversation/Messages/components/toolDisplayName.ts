@@ -24,6 +24,7 @@ const labels: Record<string, I18nKey> = {
   research_search_arxiv: 'messages.toolNames.research_search_arxiv',
   ExecCommand: 'messages.toolNames.ExecCommand',
   template_select: 'messages.toolNames.template_select',
+  review_report_candidate: 'messages.toolNames.review_report_candidate',
 };
 
 /** 未知工具保留原名，避免把未知动作包装成已知业务操作。 */

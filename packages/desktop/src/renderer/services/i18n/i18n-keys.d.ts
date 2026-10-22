@@ -1304,6 +1304,7 @@ export type I18nKey =
   | 'messages.toolNames.office_register_output'
   | 'messages.toolNames.read'
   | 'messages.toolNames.research_search_arxiv'
+  | 'messages.toolNames.review_report_candidate'
   | 'messages.toolNames.search'
   | 'messages.toolNames.skill_read'
   | 'messages.toolNames.template_recommend'

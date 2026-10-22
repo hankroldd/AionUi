@@ -137,6 +137,7 @@
     "memory_suggest": "Prepare a memory suggestion",
     "research_search_arxiv": "Search research papers",
     "ExecCommand": "Run a command",
-    "template_select": "Select the template"
+    "template_select": "Select the template",
+    "review_report_candidate": "Prepare review findings"
   }
 }

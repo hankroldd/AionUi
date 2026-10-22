@@ -318,6 +318,10 @@ it('未知工具名不包装为已知动作，普通命令不推断为安全复�
   expect(toolDisplayNameKey('mcp__other__office_copy_to_workspace')).toBeUndefined();
   expect(toolDisplayNameKey('toString')).toBeUndefined();
   expect(toolDisplayNameKey('ExecCommand')).toBe('messages.toolNames.ExecCommand');
+  expect(toolDisplayNameKey('review_report_candidate')).toBe('messages.toolNames.review_report_candidate');
+  expect(toolDisplayNameKey('mcp__mycowork_bridge_review_report_candidate')).toBe(
+    'messages.toolNames.review_report_candidate'
+  );
   render(inSession(MYCOWORK, <MessagePermission message={card('unknown_write', 'mcp')} />));
   expect(screen.getByText('mcp wants to use: unknown_write')).toBeVisible();
 });

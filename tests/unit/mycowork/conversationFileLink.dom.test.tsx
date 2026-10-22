@@ -7,6 +7,8 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import MarkdownView from '@/renderer/components/Markdown';
+import MessageToolGroupSummary from '@/renderer/pages/conversation/Messages/components/MessageToolGroupSummary';
+import { MessageListProvider } from '@/renderer/pages/conversation/Messages/hooks';
 import { createPortal } from 'react-dom';
 import { ConversationFileLink, conversationFilePath, templateReviewHref } from '@mycowork/ui';
 import {
@@ -28,9 +30,13 @@ const h = vi.hoisted(() => ({
 }));
 vi.mock('@/common', () => ({
   ipcBridge: {
+    database: { getConversationMessage: { invoke: vi.fn() } },
     project: { get: { invoke: h.project } },
     fs: { getContentMetadata: { invoke: h.metadata }, readContent: { invoke: h.read } },
   },
+}));
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({ status: 'authenticated', user: { id: 'owner-a' } }),
 }));
 vi.mock('@/renderer/components/Markdown/ShadowView', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -58,7 +64,76 @@ beforeEach(() => {
   h.browser.mockReset();
   h.external.mockReset().mockResolvedValue(undefined);
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+const filled = {
+  id: 'fill-result',
+  conversation_id: 'c1',
+  type: 'tool_call' as const,
+  content: {
+    call_id: 'fill-result',
+    name: 'office_fill_template',
+    status: 'completed' as const,
+    output: JSON.stringify({
+      output_id: 'out_result',
+      resource_id: 'res_result',
+      relative_path: 'deck/c1/最终稿.pptx',
+    }),
+  },
+};
+
+it('固定成品与同文件 Markdown 只保留一份完整卡和清单，普通文字入口仍打开原预览', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        resource_id: 'res_result',
+        pending_confirmations: [{ field: 'amount', category: 'amount', reason: '待核对' }],
+      }),
+    })
+  );
+  const { container } = render(
+    <MessageListProvider value={[filled]}>
+      <MessageToolGroupSummary messages={[filled]} />
+      <MarkdownView>{'[最终稿.pptx](deck/c1/最终稿.pptx)'}</MarkdownView>
+    </MessageListProvider>
+  );
+  expect(await screen.findAllByRole('button', { name: /待你确认（1 条）/ })).toHaveLength(1);
+  expect(container.querySelectorAll('.mcw-conversation-file-card')).toHaveLength(1);
+  const buttons = screen.getAllByRole('button', { name: '最终稿.pptx' });
+  expect(buttons).toHaveLength(2);
+  fireEvent.click(screen.getByText('最终稿.pptx', { selector: 'button' }));
+  await waitFor(() =>
+    expect(h.open).toHaveBeenCalledWith(
+      '',
+      'ppt',
+      expect.objectContaining({
+        fileRef: { kind: 'project', pe_id: 'pe-current', relative_path: 'deck/c1/最终稿.pptx' },
+      })
+    )
+  );
+});
+
+it.each([
+  ['普通工具', { ...filled, content: { ...filled.content, name: 'read' } }],
+  ['业务错误', { ...filled, content: { ...filled.content, output: '{"error":{"code":"INVALID_ARGUMENT"}}' } }],
+  ['截断', { ...filled, content: { ...filled.content, _compact: { truncated: true } } }],
+  ['隐藏', { ...filled, hidden: true }],
+  ['未知', { ...filled, content: { ...filled.content, output: '{}' } }],
+])('%s结果不能把 Markdown 文件卡降成文字', (_label, result) => {
+  const { container } = render(
+    <MessageListProvider value={[result]}>
+      <MarkdownView>{'[最终稿.pptx](deck/c1/最终稿.pptx)'}</MarkdownView>
+    </MessageListProvider>
+  );
+  expect(container.querySelectorAll('.mcw-conversation-file-card')).toHaveLength(1);
+  expect(screen.getByRole('button', { name: '最终稿.pptx' })).toHaveTextContent('PPTX · 点击预览');
+});
 
 describe('安全相对文件链接', () => {
   it.each([

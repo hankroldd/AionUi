@@ -8,6 +8,7 @@ import { Message } from '@arco-design/web-react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { ToolMessage } from '@/common/chat/normalizeToolCall';
+import { useMessageList } from '@/renderer/pages/conversation/Messages/hooks';
 import { getCurrentProject, useCurrentProject } from '@/renderer/pages/conversation/explorer/currentProjectStore';
 import {
   getCurrentConversation,
@@ -16,10 +17,16 @@ import {
 import { useOptionalPreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 import { classifyPreviewError, previewErrorToI18nKey } from '@/renderer/utils/previewError';
 import { useOwnerKey } from '@/renderer/mycowork-resource-navigation';
-import { ConversationFileLink, FillResultFile, ResourceCitationLink, TemplateConfirmationAction } from '@mycowork/ui';
+import {
+  ConversationFileLink,
+  FillResultFile,
+  fillResultPath,
+  ResourceCitationLink,
+  TemplateConfirmationAction,
+} from '@mycowork/ui';
 
 const renderFillFile = (relativePath: string) => (
-  <MyCoworkWorkspaceFileLinkSlot relativePath={relativePath}>
+  <MyCoworkWorkspaceFileLinkSlot relativePath={relativePath} fixedResult>
     {relativePath.split('/').pop()}
   </MyCoworkWorkspaceFileLinkSlot>
 );
@@ -62,14 +69,16 @@ export const MyCoworkResourceCitationSlot: React.FC<{ resourceId: string; childr
 };
 
 /** Open an explicit workspace-relative link with the exact same payload gate as the Explorer. */
-export const MyCoworkWorkspaceFileLinkSlot: React.FC<{ relativePath: string; children?: React.ReactNode }> = ({
-  relativePath,
-  children,
-}) => {
+export const MyCoworkWorkspaceFileLinkSlot: React.FC<{
+  relativePath: string;
+  children?: React.ReactNode;
+  fixedResult?: boolean;
+}> = ({ relativePath, children, fixedResult }) => {
   const projectId = useCurrentProject();
   const conversationId = useCurrentConversation();
   const preview = useOptionalPreviewContext();
   const ownerKey = useOwnerKey();
+  const messages = useMessageList();
   const generation = useRef(0);
   useEffect(() => {
     generation.current += 1;
@@ -96,10 +105,29 @@ export const MyCoworkWorkspaceFileLinkSlot: React.FC<{ relativePath: string; chi
       if (current()) Message.error(t(previewErrorToI18nKey(classifyPreviewError(error))));
     }
   };
+  const disabled = !projectId || !conversationId || !preview;
+  if (!fixedResult && conversationId && messages.some((item) => fillResultPath(item, conversationId) === relativePath))
+    return (
+      <button
+        type='button'
+        disabled={disabled}
+        onClick={() => void open()}
+        style={{
+          border: 0,
+          padding: 0,
+          background: 'none',
+          color: 'inherit',
+          textDecoration: 'underline',
+          font: 'inherit',
+        }}
+      >
+        {children}
+      </button>
+    );
   return (
     <>
       <ConversationFileLink
-        disabled={!projectId || !conversationId || !preview}
+        disabled={disabled}
         onOpen={() => void open()}
         fileName={relativePath.split('/').pop()}
         lang={i18n.language}
@@ -108,11 +136,7 @@ export const MyCoworkWorkspaceFileLinkSlot: React.FC<{ relativePath: string; chi
       >
         {children}
       </ConversationFileLink>
-      <TemplateConfirmationAction
-        relativePath={relativePath}
-        disabled={!projectId || !conversationId || !preview}
-        lang={i18n.language}
-      />
+      <TemplateConfirmationAction relativePath={relativePath} disabled={disabled} lang={i18n.language} />
     </>
   );
 };

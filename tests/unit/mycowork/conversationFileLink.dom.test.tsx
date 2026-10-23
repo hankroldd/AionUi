@@ -103,7 +103,7 @@ it('固定成品与同文件 Markdown 只保留一份完整卡和清单，普通
       <MarkdownView>{'[最终稿.pptx](deck/c1/最终稿.pptx)'}</MarkdownView>
     </MessageListProvider>
   );
-  expect(await screen.findAllByRole('button', { name: /待你确认（1 条）/ })).toHaveLength(1);
+  expect(await screen.findAllByRole('button', { name: /生成时待确认（1 条）/ })).toHaveLength(1);
   expect(container.querySelectorAll('.mcw-conversation-file-card')).toHaveLength(1);
   const buttons = screen.getAllByRole('button', { name: '最终稿.pptx' });
   expect(buttons).toHaveLength(2);

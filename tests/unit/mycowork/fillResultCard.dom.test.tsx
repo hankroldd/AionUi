@@ -97,7 +97,7 @@ describe('持久填充结果的固定成品入口', () => {
       'false'
     );
     expect(await screen.findByText('交付文件')).toBeVisible();
-    const pendingToggle = screen.getByRole('button', { name: /待你确认（1 条）/ });
+    const pendingToggle = screen.getByRole('button', { name: /生成时待确认（1 条）/ });
     expect(pendingToggle).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(pendingToggle);
     expect(screen.getByText('第 6 页 · 子项 2：代价没有依据，已写待确认')).toBeVisible();

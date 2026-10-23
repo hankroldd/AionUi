@@ -1,6 +1,6 @@
 /**
  * 文件：tests/unit/mycowork/fillPendingCard.dom.test.tsx
- * 职责：验证 D322 成品文件卡片下方的“待你确认（N 条）”：数据来自 output-resource 带回的 pending_confirmations（一次填充工具结果原样），
+ * 职责：验证 D322 成品文件卡片下方的“生成时待确认（N 条）”：数据来自 output-resource 带回的 pending_confirmations（一次填充工具结果原样），
  *       按类别分组、每条带页码与子项、可折叠、“复制清单”写入剪贴板；没有清单或不是交付文件时不出现。
  * 边界：只替换 HTTP 传输与剪贴板；卡片、角色判定与清单组件走真实实现。
  */
@@ -47,9 +47,10 @@ describe('成品卡片下方的待确认清单', () => {
   it('按类别分组、每条带页码与子项；可折叠；复制清单是同样内容的纯文本', async () => {
     h.fetch.mockResolvedValue(reply(200, { resource_id: 'res_1', pending_confirmations: PENDING }));
     card();
-    const toggle = await screen.findByRole('button', { name: /待你确认（4 条）/ });
+    const toggle = await screen.findByRole('button', { name: /生成时待确认（4 条）/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    expect(screen.getByText('后续修改不会自动更新此清单，请结合当前文件复核。')).toBeVisible();
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     const groups = screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'));
@@ -60,13 +61,15 @@ describe('成品卡片下方的待确认清单', () => {
     fireEvent.click(screen.getByRole('button', { name: '复制清单' }));
     await waitFor(() => expect(h.write).toHaveBeenCalledTimes(1));
     const text = String(h.write.mock.calls[0]?.[0]);
-    expect(text.split('\n')[0]).toBe('待你确认（4 条）');
+    expect(text.split('\n')[0]).toBe('生成时待确认（4 条）');
+    expect(text).toContain('后续修改不会自动更新此清单，请结合当前文件复核。');
     expect(text).toContain('【金额与分档】\n- 第 6 页 · 子项 2：旧稿未分档、只有总额 30 万元');
     expect(text).toContain('【标题】\n- 第 5 页 · 子项 1：标题已截断：超过 32 字');
     expect(await screen.findByRole('button', { name: '已复制' })).toBeVisible();
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    expect(screen.getByText('后续修改不会自动更新此清单，请结合当前文件复核。')).toBeVisible();
   });
 
   it('交付文件没有清单（不是一次填充的成品）时不出现', async () => {

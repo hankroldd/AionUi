@@ -107,7 +107,7 @@ describe('P09 candidate preview', () => {
     expect(frame.getAttribute('sandbox')).toBe('allow-scripts'); // 无 allow-same-origin：脚本读不到宿主 cookie 与页面
     expect(frame.getAttribute('srcdoc')).toContain('三项成果（虚构）');
     expect(frame.getAttribute('src')).toBeNull();
-    expect(screen.getByText('近似预览，与 PowerPoint 里的实际效果可能有差别')).toBeInTheDocument();
+    expect(screen.getByText('近似预览，与 Office 软件里的实际效果可能有差别')).toBeInTheDocument();
     expect(screen.queryByText('预览待渲染')).toBeNull();
     expect(previewCalls('a1')).toBe(1);
   });
@@ -118,7 +118,7 @@ describe('P09 candidate preview', () => {
     expect(await screen.findByText('没有可预览的文件')).toBeInTheDocument();
     expect(document.querySelector('iframe')).toBeNull();
     expect(document.querySelector('.arco-skeleton-image')).toBeNull();
-    expect(screen.queryByText('近似预览，与 PowerPoint 里的实际效果可能有差别')).toBeNull();
+    expect(screen.queryByText('近似预览，与 Office 软件里的实际效果可能有差别')).toBeNull();
   });
 
   it('shows loading, then a failure with retry that fetches again and recovers', async () => {

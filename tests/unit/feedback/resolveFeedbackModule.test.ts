@@ -65,6 +65,10 @@ describe('resolveFeedbackModule', () => {
       // Substitute params with plausible values so prefix matching applies.
       const concrete = routePath.replace(/:[^/]+/g, 'sample-id');
       if (moduleLess.has(concrete)) continue;
+      if (routePath.startsWith('/office/')) {
+        expect(resolveFeedbackModule(concrete), `MyCowork page ${routePath} has no native module`).toBeUndefined();
+        continue;
+      }
       expect(resolveFeedbackModule(concrete), `route ${routePath} has no feedback module`).toBeDefined();
     }
   });

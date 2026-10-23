@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
@@ -198,21 +198,34 @@ describe('AssistantSelectionArea', () => {
     expect(screen.getByTestId('assistant-overflow-user-review')).toBeInTheDocument();
   });
 
-  it('reports the real assistant id when a pill is selected', () => {
+  it('reports the real assistant id and keeps overflow closed after selection or explicit close', () => {
     const onSelectAssistant = vi.fn();
-
-    render(
-      <AssistantSelectionArea
-        selectedAssistantId='bare-aionrs'
-        assistants={assistants()}
-        localeKey='en-US'
-        onSelectAssistant={onSelectAssistant}
-      />
-    );
-
-    fireEvent.click(screen.getByTestId('preset-pill-builtin-writer'));
-
-    expect(onSelectAssistant).toHaveBeenCalledWith('builtin-writer');
+    vi.useFakeTimers();
+    try {
+      render(
+        <AssistantSelectionArea
+          selectedAssistantId='bare-aionrs'
+          assistants={manyAssistants()}
+          localeKey='en-US'
+          onSelectAssistant={onSelectAssistant}
+        />
+      );
+      const pill = screen.getByTestId('preset-pill-user-research');
+      fireEvent.mouseEnter(pill);
+      fireEvent.click(pill);
+      act(() => vi.advanceTimersByTime(120));
+      expect(onSelectAssistant.mock.calls).toEqual([['user-research']]);
+      expect(screen.queryByTestId('assistant-overflow-panel')).not.toBeInTheDocument();
+      const more = screen.getByTestId('assistant-more-btn');
+      fireEvent.mouseEnter(more);
+      fireEvent.click(more);
+      expect(screen.getByTestId('assistant-overflow-panel')).toBeInTheDocument();
+      fireEvent.click(more);
+      act(() => vi.advanceTimersByTime(120));
+      expect(screen.queryByTestId('assistant-overflow-panel')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('orders assistant pills by group then sort_order before applying overflow', () => {

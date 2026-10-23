@@ -4,7 +4,7 @@
  * 边界：不复用旧助手、Skill、文件或会话；未知响应不重投，空闲不代表审查成功。
  * 关联：PR10 E1；review-loop.md §7；全局只读 hook 由部署执行方保证。
  */
-import { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import type { ReviewAdapter, ReviewObservation } from '@mycowork/ui';
 import { ReviewCreationNotStarted } from '@mycowork/ui';
 import type { Review, ReviewExecution, ReviewSession } from '@mycowork/contracts';
@@ -14,6 +14,7 @@ import type { ISessionMcpServer, TProviderWithModel } from '@/common/config/stor
 import { useOwnerKey } from '@/renderer/mycowork-resource-navigation';
 import { safeModel, useReviewModelSelector, type ReviewModel } from '@/renderer/mycowork-review-model-selector';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
+import { ReviewSourceSelector } from '@/renderer/components/workspace/ReviewSourceSelector';
 
 type CheckOwner = () => void;
 type MessagePage = Awaited<ReturnType<typeof ipcBridge.database.getConversationMessages.invoke>>;
@@ -324,6 +325,7 @@ export function useReviewAdapter(): ReviewAdapter {
     };
     return {
       renderModelSelector,
+      renderSourceSelector: (options) => <ReviewSourceSelector key={ownerKey} ownerKey={ownerKey} {...options} />,
       async create(session) {
         return createSelected(session, selected, instance.models, capture());
       },

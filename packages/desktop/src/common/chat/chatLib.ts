@@ -114,6 +114,8 @@ interface IMessage<T extends TMessageType, Content extends Record<string, any>> 
    * reload), and backends without turn-anchored forks.
    */
   backend_turn_id?: string;
+  /** Runtime correlation for transient permission/ask cards; not a fork anchor. */
+  runtime_turn_id?: string;
 }
 
 export type CronMessageMeta = {
@@ -1126,6 +1128,9 @@ export const transformMessage = (message: IResponseMessage): TMessage | undefine
   // entry exactly like history-loaded rows (see isForkEnabled).
   if (transformed && message.backend_turn_id) {
     transformed.backend_turn_id = message.backend_turn_id;
+  }
+  if (transformed && (transformed.type === 'permission' || transformed.type === 'ask') && message.turn_id) {
+    transformed.runtime_turn_id = message.turn_id;
   }
   return transformed;
 };

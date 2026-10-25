@@ -14,7 +14,7 @@ import MobileActionSheet, {
   useAttachEntry,
 } from '@/renderer/components/chat/MobileActionSheet';
 import { RESEND_EVENT, userMessageText, type ResendDetail } from '@/renderer/mycowork-resend';
-import { useMessageList } from '@/renderer/pages/conversation/Messages/hooks';
+import { useMessageList, useUpdateMessageList } from '@/renderer/pages/conversation/Messages/hooks';
 import SendBox, { type SendBoxSubmitHandle } from '@/renderer/components/chat/SendBox';
 import ThoughtDisplay from '@/renderer/components/chat/ThoughtDisplay';
 import FileAttachButton from '@/renderer/components/media/FileAttachButton';
@@ -444,13 +444,32 @@ const AionrsSendBox: React.FC<{
   const templateSubmitRef = useRef<SendBoxSubmitHandle>(null);
   // [mycowork] A532：“重新发送本轮”——把本会话最后一条用户文本原样走现有发送链路再发一次（不编辑、不重新生成）
   const messageList = useMessageList();
-  const waitingForConfirmation =
-    !teamRuntime &&
-    !teamSendMessage &&
-    !teamPermission &&
-    messageList.some(
-      (message) => message.conversation_id === conversation_id && (message.type === 'permission' || message.type === 'ask')
-    );
+  const updateMessageList = useUpdateMessageList();
+  const standalone = !teamRuntime && !teamSendMessage && !teamPermission;
+  const hasConfirmation = messageList.some(
+    (message) => message.conversation_id === conversation_id && (message.type === 'permission' || message.type === 'ask')
+  );
+  const [stoppedTurn, setStoppedTurn] = useState<{
+    conversationId: string;
+    turnId: string;
+    legacyCallIds: Set<string>;
+  } | null>(null);
+  const waitingForConfirmation = standalone && hasConfirmation;
+  useEffect(() => {
+    if (!standalone || !stoppedTurn || stoppedTurn.conversationId !== conversation_id) return;
+    // Clear only the acknowledged stop's cards, including late frames carrying its runtime turn.
+    updateMessageList((list) => {
+      const next = list.filter((message) => {
+        if (message.conversation_id !== conversation_id || (message.type !== 'permission' && message.type !== 'ask'))
+          return true;
+        const callId = message.type === 'permission' ? message.content.call_id : message.content.request_id;
+        return message.runtime_turn_id
+          ? message.runtime_turn_id !== stoppedTurn.turnId
+          : !stoppedTurn.legacyCallIds.has(callId);
+      });
+      return next.length === list.length ? list : next;
+    });
+  }, [conversation_id, messageList, standalone, stoppedTurn, updateMessageList]);
   const lastUserText = useMemo((): string => {
     const last = messageList.findLast((m) => m.type === 'text' && m.position === 'right');
     return last?.type === 'text' && typeof last.content.content === 'string' ? userMessageText(last.content.content) : '';
@@ -835,6 +854,15 @@ const AionrsSendBox: React.FC<{
       resetActiveExecution('stop');
       return;
     }
+    const legacyCallIds = new Set(
+      messageList.flatMap((message) => {
+        if (message.conversation_id !== conversation_id || message.runtime_turn_id) return [];
+        if (message.type === 'permission') return [message.content.call_id];
+        if (message.type === 'ask') return [message.content.request_id];
+        return [];
+      })
+    );
+    const rememberStoppedTurn = () => setStoppedTurn({ conversationId: conversation_id, turnId, legacyCallIds });
     runtimeView.markStopRequested(turnId);
     if (persistentDraft.enabled) {
       try {
@@ -853,6 +881,7 @@ const AionrsSendBox: React.FC<{
             }); // A513：已登记的结果（推定），固定版本在右侧预览。
           }
           if (!stopped.stop_confirmed) { Message.warning('此步骤未确认完成，请检查任务状态；不会停止后来的轮次。'); return; }
+          rememberStoppedTurn();
           resetState(); resetActiveExecution('stop'); return;
         }
       } catch { Message.warning('停止请求尚未确认，此步骤未确认完成，请检查任务状态。'); return; }
@@ -860,6 +889,8 @@ const AionrsSendBox: React.FC<{
     try {
       const result = await ipcBridge.conversation.stop.invoke({ conversation_id, turn_id: turnId });
       runtimeView.markStopAcknowledged(turnId, result.runtime);
+      if (result.runtime.turn_id !== turnId && (result.runtime.turn_id !== null || !result.runtime.is_processing))
+        rememberStoppedTurn();
     } catch (error) {
       console.warn('[AionrsSendBox] stop request failed', error);
       runtimeView.resetLocalGate('stop_failed');

@@ -6,8 +6,13 @@ import { BackendHttpError } from '@/common/adapter/httpBridge';
 import AionrsSendBox from '@/renderer/pages/conversation/platforms/aionrs/AionrsSendBox';
 import type { AionrsModelSelection } from '@/renderer/pages/conversation/platforms/aionrs/useAionrsModelSelection';
 import type { TeamSendBoxRuntime } from '@/renderer/pages/team/components/teamSendRuntime';
-import type { IMessagePermission } from '@/common/chat/chatLib';
-import { MessageListProvider, useUpdateMessageList } from '@/renderer/pages/conversation/Messages/hooks';
+import type { IMessagePermission, TMessage } from '@/common/chat/chatLib';
+import { transformMessage } from '@/common/chat/chatLib';
+import {
+  MessageListProvider,
+  useMessageList,
+  useUpdateMessageList,
+} from '@/renderer/pages/conversation/Messages/hooks';
 import { removePermissionMessage } from '@/renderer/pages/conversation/Messages/usePendingConfirmationsRecovery';
 
 const {
@@ -26,6 +31,8 @@ const {
   draftContentRef,
   runtimeViewIsProcessingRef,
   aionrsActivity,
+  runtimeSnapshot,
+  stopInvokeMock,
 } = vi.hoisted(() => ({
   ensureConversationRuntimeMock: vi.fn().mockResolvedValue({ recovered: false, config_options: [], runtime: null }),
   sendMessageInvokeMock: vi.fn().mockResolvedValue(undefined),
@@ -42,6 +49,15 @@ const {
   draftContentRef: { current: '' },
   runtimeViewIsProcessingRef: { current: false },
   aionrsActivity: { running: false, thought: { subject: '', description: '' } },
+  runtimeSnapshot: {
+    state: 'idle',
+    activeTurnId: null as string | null,
+    hasBackendRuntime: false,
+    localSubmitting: false,
+    localStopping: false,
+    pendingConfirmations: 0,
+  },
+  stopInvokeMock: vi.fn(),
 }));
 
 vi.mock('@/common', () => ({
@@ -51,7 +67,7 @@ vi.mock('@/common', () => ({
         invoke: sendMessageInvokeMock,
       },
       stop: {
-        invoke: vi.fn().mockResolvedValue(undefined),
+        invoke: stopInvokeMock,
       },
     },
   },
@@ -74,6 +90,7 @@ vi.mock('@/renderer/components/chat/SendBox', () => ({
     onSelectedSessionsChange,
     crossSessionEnabled,
     isTeamConversation,
+    onStop,
   }: {
     onSend: (message: string) => Promise<void>;
     onChange?: (value: string) => void;
@@ -90,6 +107,7 @@ vi.mock('@/renderer/components/chat/SendBox', () => ({
     onSelectedSessionsChange?: (sessions: Array<{ id: string }>) => void;
     crossSessionEnabled?: boolean;
     isTeamConversation?: boolean;
+    onStop?: () => Promise<void>;
   }) => {
     sendBoxPropsSpy({
       active,
@@ -102,6 +120,7 @@ vi.mock('@/renderer/components/chat/SendBox', () => ({
       onSelectedSessionsChange,
       crossSessionEnabled,
       isTeamConversation,
+      onStop,
     });
     return (
       <div>
@@ -216,10 +235,15 @@ vi.mock('@/renderer/pages/conversation/runtime/useConversationRuntimeView', () =
     get isProcessing() {
       return runtimeViewIsProcessingRef.current;
     },
-    state: 'idle',
+    state: runtimeSnapshot.state,
+    activeTurnId: runtimeSnapshot.activeTurnId,
+    view: runtimeSnapshot,
     markSendStarted: markSendStartedMock,
     markSendAccepted: markSendAcceptedMock,
     markSendFailed: markSendFailedMock,
+    markStopRequested: vi.fn(),
+    markStopAcknowledged: vi.fn(),
+    resetLocalGate: vi.fn(),
   }),
 }));
 vi.mock('@/renderer/pages/conversation/utils/conversationCache', () => ({
@@ -314,10 +338,15 @@ const pendingConfirmation: IMessagePermission = {
   content: { id: 'call-1', call_id: 'call-1', description: 'Copy file', options: [] },
 };
 
-function renderConfirmationSendBox(teamRuntime?: TeamSendBoxRuntime, confirmations = [pendingConfirmation]) {
+function renderConfirmationSendBox(
+  teamRuntime?: TeamSendBoxRuntime,
+  confirmations: TMessage[] = [pendingConfirmation]
+) {
   let updateMessages: ReturnType<typeof useUpdateMessageList>;
+  let currentMessages: TMessage[] = [];
   const CaptureUpdates: React.FC = () => {
     updateMessages = useUpdateMessageList();
+    currentMessages = useMessageList();
     return null;
   };
   const view = render(
@@ -328,8 +357,15 @@ function renderConfirmationSendBox(teamRuntime?: TeamSendBoxRuntime, confirmatio
   );
   return {
     ...view,
-    addConfirmation: () => act(() => updateMessages((list) => [...list, pendingConfirmation])),
+    pendingCards: () => currentMessages.filter((message) => message.type === 'permission' || message.type === 'ask'),
+    refresh: () => act(() => updateMessages((list) => [...list])),
+    addConfirmation: (message: TMessage = pendingConfirmation) =>
+      act(() => updateMessages((list) => [...list, message])),
     removeConfirmation: () => act(() => updateMessages((list) => removePermissionMessage(list, { id: 'call-1' }))),
+    stop: () =>
+      act(async () => {
+        await sendBoxPropsSpy.mock.calls.at(-1)?.[0].onStop();
+      }),
   };
 }
 
@@ -342,6 +378,24 @@ describe('AionrsSendBox', () => {
     runtimeViewIsProcessingRef.current = false;
     aionrsActivity.running = false;
     aionrsActivity.thought = { subject: '', description: '' };
+    Object.assign(runtimeSnapshot, {
+      state: 'idle',
+      activeTurnId: null,
+      hasBackendRuntime: false,
+      localSubmitting: false,
+      localStopping: false,
+      pendingConfirmations: 0,
+    });
+    stopInvokeMock.mockReset().mockResolvedValue({
+      runtime: {
+        state: 'idle',
+        can_send_message: true,
+        has_task: true,
+        is_processing: false,
+        pending_confirmations: 0,
+        turn_id: null,
+      },
+    });
   });
 
   it('shows a static confirmation hint instead of a running thought until the answer arrives', () => {
@@ -366,16 +420,117 @@ describe('AionrsSendBox', () => {
   });
 
   it('does not display a waiting hint for another conversation', () => {
+    runtimeSnapshot.hasBackendRuntime = true;
     aionrsActivity.running = true;
-    renderConfirmationSendBox(undefined, [{ ...pendingConfirmation, conversation_id: 'conv-2' }]);
+    const view = renderConfirmationSendBox(undefined, [{ ...pendingConfirmation, conversation_id: 'conv-2' }]);
     expect(screen.queryByText(/messages.toolActivity.waitingForConfirmation/)).toBeNull();
     expect(screen.getByRole('progressbar')).toBeVisible();
+    expect(view.pendingCards()).toHaveLength(1);
   });
 
   it('preserves the existing team failure status when a confirmation card is present', () => {
-    renderConfirmationSendBox({ loading: false, statusText: 'Team failed' } as TeamSendBoxRuntime);
+    runtimeSnapshot.hasBackendRuntime = true;
+    const view = renderConfirmationSendBox({ loading: false, statusText: 'Team failed' } as TeamSendBoxRuntime);
     expect(screen.getByText('Team failed')).toBeVisible();
     expect(screen.queryByText(/messages.toolActivity.waitingForConfirmation/)).toBeNull();
+    expect(view.pendingCards()).toHaveLength(1);
+  });
+
+  it('removes only the confirmed stopped turn cards, including a late approval', async () => {
+    Object.assign(runtimeSnapshot, { state: 'running', activeTurnId: 'turn-1', hasBackendRuntime: true });
+    runtimeViewIsProcessingRef.current = true;
+    const view = renderConfirmationSendBox(undefined, [
+      { ...pendingConfirmation, runtime_turn_id: 'turn-1' },
+      {
+        id: 'ask-1',
+        conversation_id: 'conv-1',
+        type: 'ask',
+        runtime_turn_id: 'turn-1',
+        content: { session_id: 'conv-1', request_id: 'ask-1', questions: [] },
+      },
+    ]);
+    expect(view.pendingCards()).toHaveLength(2);
+
+    await view.stop();
+    expect(view.pendingCards()).toHaveLength(0);
+    expect(screen.queryByText(/messages.toolActivity.waitingForConfirmation/)).toBeNull();
+
+    view.addConfirmation({ ...pendingConfirmation, id: 'late-card', runtime_turn_id: 'turn-1' });
+    expect(view.pendingCards()).toHaveLength(0);
+    view.addConfirmation({ ...pendingConfirmation, id: 'new-card', runtime_turn_id: 'turn-2' });
+    expect(view.pendingCards()).toHaveLength(1);
+  });
+
+  it('only clears captured untagged cards and preserves unknown cards after stopping', async () => {
+    runtimeSnapshot.activeTurnId = 'turn-1';
+    let completeStop!: (result: unknown) => void;
+    stopInvokeMock.mockReturnValue(
+      new Promise((resolve) => {
+        completeStop = resolve;
+      })
+    );
+    const view = renderConfirmationSendBox();
+    const stopping = sendBoxPropsSpy.mock.calls.at(-1)?.[0].onStop();
+    view.addConfirmation({
+      ...pendingConfirmation,
+      id: 'unknown-card',
+      content: { ...pendingConfirmation.content, call_id: 'new-call' },
+    });
+    await act(async () => {
+      completeStop({ runtime: { turn_id: null, is_processing: false } });
+      await stopping;
+    });
+    expect(view.pendingCards()).toHaveLength(1);
+    view.addConfirmation({ ...pendingConfirmation, id: 'recovered-known-card' });
+    expect(view.pendingCards()).toHaveLength(1);
+  });
+
+  it.each(['live', 'recovered'])('preserves a real %s card while this tab still has an old idle snapshot', (origin) => {
+    runtimeSnapshot.hasBackendRuntime = true;
+    const message = { ...pendingConfirmation, ...(origin === 'live' ? { runtime_turn_id: 'remote-turn' } : {}) };
+    const view = renderConfirmationSendBox(undefined, origin === 'recovered' ? [message] : []);
+    if (origin === 'live') view.addConfirmation(message);
+    expect(view.pendingCards()).toHaveLength(1);
+    expect(screen.getByText(/messages.toolActivity.waitingForConfirmation/)).toBeVisible();
+    view.refresh();
+    expect(view.pendingCards()).toHaveLength(1);
+  });
+
+  it('does not clear cards when the stop response still reports the target turn active', async () => {
+    runtimeSnapshot.activeTurnId = 'turn-1';
+    stopInvokeMock.mockResolvedValue({ runtime: { state: 'cancelling', is_processing: true, turn_id: 'turn-1' } });
+    const view = renderConfirmationSendBox();
+    await view.stop();
+    expect(view.pendingCards()).toHaveLength(1);
+  });
+
+  it.each(['permission', 'ask'])('keeps the live runtime turn separate from the %s fork anchor', (type) => {
+    const message = transformMessage({
+      type,
+      conversation_id: 'conv-1',
+      msg_id: 'msg-1',
+      turn_id: 'live-turn',
+      backend_turn_id: 'fork-turn',
+      data:
+        type === 'permission'
+          ? pendingConfirmation.content
+          : { session_id: 'conv-1', request_id: 'ask-1', questions: [] },
+    });
+    expect(message?.runtime_turn_id).toBe('live-turn');
+    expect(message?.backend_turn_id).toBe('fork-turn');
+  });
+
+  it.each(['submitting', 'active'])('keeps the next turn approval while the new turn is %s', (phase) => {
+    Object.assign(runtimeSnapshot, {
+      hasBackendRuntime: true,
+      activeTurnId: phase === 'active' ? 'turn-new' : null,
+      localSubmitting: phase === 'submitting',
+      state: phase === 'active' ? 'running' : 'starting',
+    });
+    runtimeViewIsProcessingRef.current = true;
+    const view = renderConfirmationSendBox();
+    expect(view.pendingCards()).toHaveLength(1);
+    expect(screen.getByText(/messages.toolActivity.waitingForConfirmation/)).toBeVisible();
   });
 
   it('does not warm up team session when draft content changes', async () => {

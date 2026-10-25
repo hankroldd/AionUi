@@ -454,7 +454,17 @@ const AionrsSendBox: React.FC<{
     turnId: string;
     legacyCallIds: Set<string>;
   } | null>(null);
+  const pendingStop = useRef<typeof stoppedTurn>(null);
   const waitingForConfirmation = standalone && hasConfirmation;
+  useEffect(() => {
+    const requested = pendingStop.current;
+    if (
+      !requested || !officeRun?.stop_confirmed || requested.conversationId !== conversation_id ||
+      officeRun.conversation_id !== requested.conversationId || officeRun.turn_id !== requested.turnId
+    ) return;
+    pendingStop.current = null;
+    setStoppedTurn(requested);
+  }, [conversation_id, officeRun?.conversation_id, officeRun?.turn_id, officeRun?.stop_confirmed]);
   useEffect(() => {
     if (!standalone || !stoppedTurn || stoppedTurn.conversationId !== conversation_id) return;
     // Clear only the acknowledged stop's cards, including late frames carrying its runtime turn.
@@ -862,7 +872,12 @@ const AionrsSendBox: React.FC<{
         return [];
       })
     );
-    const rememberStoppedTurn = () => setStoppedTurn({ conversationId: conversation_id, turnId, legacyCallIds });
+    const stopRequest = { conversationId: conversation_id, turnId, legacyCallIds };
+    pendingStop.current = stopRequest;
+    const rememberStoppedTurn = () => {
+      if (pendingStop.current === stopRequest) pendingStop.current = null;
+      setStoppedTurn(stopRequest);
+    };
     runtimeView.markStopRequested(turnId);
     if (persistentDraft.enabled) {
       try {

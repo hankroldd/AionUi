@@ -14,6 +14,7 @@ import {
   useUpdateMessageList,
 } from '@/renderer/pages/conversation/Messages/hooks';
 import { removePermissionMessage } from '@/renderer/pages/conversation/Messages/usePendingConfirmationsRecovery';
+import type { TaskRun } from '@mycowork/contracts';
 
 const {
   ensureConversationRuntimeMock,
@@ -33,6 +34,7 @@ const {
   aionrsActivity,
   runtimeSnapshot,
   stopInvokeMock,
+  recoveredRun,
 } = vi.hoisted(() => ({
   ensureConversationRuntimeMock: vi.fn().mockResolvedValue({ recovered: false, config_options: [], runtime: null }),
   sendMessageInvokeMock: vi.fn().mockResolvedValue(undefined),
@@ -58,6 +60,14 @@ const {
     pendingConfirmations: 0,
   },
   stopInvokeMock: vi.fn(),
+  recoveredRun: { current: undefined as ((run: TaskRun, ended: boolean) => void) | undefined },
+}));
+
+vi.mock('@/renderer/mycowork-task-recovery', () => ({
+  useOfficeTaskRecovery: ({ onRecovered }: { onRecovered: (run: TaskRun, ended: boolean) => void }) => {
+    recoveredRun.current = onRecovered;
+    return { invalidate: vi.fn() };
+  },
 }));
 
 vi.mock('@/common', () => ({
@@ -502,6 +512,28 @@ describe('AionrsSendBox', () => {
     const view = renderConfirmationSendBox();
     await view.stop();
     expect(view.pendingCards()).toHaveLength(1);
+  });
+
+  it('clears the requested turn when its stop is confirmed later by the existing task observer', async () => {
+    runtimeSnapshot.activeTurnId = 'turn-1';
+    stopInvokeMock.mockResolvedValue({ runtime: { state: 'cancelling', is_processing: true, turn_id: 'turn-1' } });
+    const view = renderConfirmationSendBox(undefined, [
+      { ...pendingConfirmation, runtime_turn_id: 'turn-1' },
+      { ...pendingConfirmation, id: 'remote-card', runtime_turn_id: 'turn-2' },
+    ]);
+    await view.stop();
+    expect(view.pendingCards()).toHaveLength(2);
+
+    const confirmed = {
+      conversation_id: 'conv-1',
+      turn_id: 'turn-2',
+      status: 'cancelled',
+      stop_confirmed: true,
+    } as TaskRun;
+    await act(() => recoveredRun.current?.(confirmed, true));
+    expect(view.pendingCards()).toHaveLength(2);
+    await act(() => recoveredRun.current?.({ ...confirmed, turn_id: 'turn-1' }, true));
+    expect(view.pendingCards().map((message) => message.id)).toEqual(['remote-card']);
   });
 
   it.each(['permission', 'ask'])('keeps the live runtime turn separate from the %s fork anchor', (type) => {

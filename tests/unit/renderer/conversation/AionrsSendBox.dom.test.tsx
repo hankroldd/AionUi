@@ -6,6 +6,9 @@ import { BackendHttpError } from '@/common/adapter/httpBridge';
 import AionrsSendBox from '@/renderer/pages/conversation/platforms/aionrs/AionrsSendBox';
 import type { AionrsModelSelection } from '@/renderer/pages/conversation/platforms/aionrs/useAionrsModelSelection';
 import type { TeamSendBoxRuntime } from '@/renderer/pages/team/components/teamSendRuntime';
+import type { IMessagePermission } from '@/common/chat/chatLib';
+import { MessageListProvider, useUpdateMessageList } from '@/renderer/pages/conversation/Messages/hooks';
+import { removePermissionMessage } from '@/renderer/pages/conversation/Messages/usePendingConfirmationsRecovery';
 
 const {
   ensureConversationRuntimeMock,
@@ -22,6 +25,7 @@ const {
   draftMutateMock,
   draftContentRef,
   runtimeViewIsProcessingRef,
+  aionrsActivity,
 } = vi.hoisted(() => ({
   ensureConversationRuntimeMock: vi.fn().mockResolvedValue({ recovered: false, config_options: [], runtime: null }),
   sendMessageInvokeMock: vi.fn().mockResolvedValue(undefined),
@@ -37,6 +41,7 @@ const {
   draftMutateMock: vi.fn(),
   draftContentRef: { current: '' },
   runtimeViewIsProcessingRef: { current: false },
+  aionrsActivity: { running: false, thought: { subject: '', description: '' } },
 }));
 
 vi.mock('@/common', () => ({
@@ -128,7 +133,6 @@ vi.mock('@/renderer/components/chat/MobileActionSheet', () => ({
   default: () => null,
   useAttachEntry: () => ({ entries: [], hiddenFileInput: null }),
 }));
-vi.mock('@/renderer/components/chat/ThoughtDisplay', () => ({ default: () => null }));
 vi.mock('@/renderer/components/media/FileAttachButton', () => ({ default: () => null }));
 vi.mock('@/renderer/components/media/FilePreview', () => ({ default: () => null }));
 vi.mock('@/renderer/components/media/HorizontalFileList', () => ({
@@ -262,6 +266,7 @@ vi.mock('@arco-design/web-react', () => ({
     success: vi.fn(),
   },
   Tag: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+  Spin: () => <span role='progressbar' />,
   Button: ({
     children,
     onClick,
@@ -286,8 +291,8 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('@/renderer/pages/conversation/platforms/aionrs/useAionrsMessage', () => ({
   useAionrsMessage: () => ({
-    thought: { subject: '', description: '' },
-    running: false,
+    thought: aionrsActivity.thought,
+    running: aionrsActivity.running,
     setActiveMsgId: vi.fn(),
     setWaitingResponse: vi.fn(),
     resetState: vi.fn(),
@@ -302,6 +307,32 @@ const modelSelection = {
   },
 } as AionrsModelSelection;
 
+const pendingConfirmation: IMessagePermission = {
+  id: 'permission-1',
+  conversation_id: 'conv-1',
+  type: 'permission',
+  content: { id: 'call-1', call_id: 'call-1', description: 'Copy file', options: [] },
+};
+
+function renderConfirmationSendBox(teamRuntime?: TeamSendBoxRuntime, confirmations = [pendingConfirmation]) {
+  let updateMessages: ReturnType<typeof useUpdateMessageList>;
+  const CaptureUpdates: React.FC = () => {
+    updateMessages = useUpdateMessageList();
+    return null;
+  };
+  const view = render(
+    <MessageListProvider value={confirmations}>
+      <CaptureUpdates />
+      <AionrsSendBox conversation_id='conv-1' modelSelection={modelSelection} teamRuntime={teamRuntime} />
+    </MessageListProvider>
+  );
+  return {
+    ...view,
+    addConfirmation: () => act(() => updateMessages((list) => [...list, pendingConfirmation])),
+    removeConfirmation: () => act(() => updateMessages((list) => removePermissionMessage(list, { id: 'call-1' }))),
+  };
+}
+
 describe('AionrsSendBox', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -309,6 +340,42 @@ describe('AionrsSendBox', () => {
     useTeamPermissionMock.mockReturnValue(null);
     draftContentRef.current = '';
     runtimeViewIsProcessingRef.current = false;
+    aionrsActivity.running = false;
+    aionrsActivity.thought = { subject: '', description: '' };
+  });
+
+  it('shows a static confirmation hint instead of a running thought until the answer arrives', () => {
+    aionrsActivity.running = true;
+    aionrsActivity.thought = { subject: 'Copying file', description: 'Preparing a working copy' };
+    const view = renderConfirmationSendBox(undefined, []);
+    expect(screen.getByRole('progressbar')).toBeVisible();
+    view.addConfirmation();
+    expect(screen.getByText(/messages.toolActivity.waitingForConfirmation/)).toBeVisible();
+    expect(screen.getByText(/messages.toolActivity.confirmationHint/)).toBeVisible();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+
+    view.removeConfirmation();
+    expect(screen.getByText('Copying file')).toBeVisible();
+    expect(screen.getByRole('progressbar')).toBeVisible();
+  });
+
+  it('shows a recovered confirmation card even without a running thought', () => {
+    renderConfirmationSendBox();
+    expect(screen.getByText(/messages.toolActivity.waitingForConfirmation/)).toBeVisible();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+
+  it('does not display a waiting hint for another conversation', () => {
+    aionrsActivity.running = true;
+    renderConfirmationSendBox(undefined, [{ ...pendingConfirmation, conversation_id: 'conv-2' }]);
+    expect(screen.queryByText(/messages.toolActivity.waitingForConfirmation/)).toBeNull();
+    expect(screen.getByRole('progressbar')).toBeVisible();
+  });
+
+  it('preserves the existing team failure status when a confirmation card is present', () => {
+    renderConfirmationSendBox({ loading: false, statusText: 'Team failed' } as TeamSendBoxRuntime);
+    expect(screen.getByText('Team failed')).toBeVisible();
+    expect(screen.queryByText(/messages.toolActivity.waitingForConfirmation/)).toBeNull();
   });
 
   it('does not warm up team session when draft content changes', async () => {

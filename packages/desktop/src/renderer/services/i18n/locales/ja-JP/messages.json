@@ -103,7 +103,9 @@
     "running": "Running",
     "failed": "An operation failed",
     "canceled": "Canceled",
-    "pending": "Waiting to run"
+    "pending": "Waiting to run",
+    "waitingForConfirmation": "確認を待っています",
+    "confirmationHint": "上の確認カードで選択してください"
   },
   "toolDetail": {
     "input": "Full input",

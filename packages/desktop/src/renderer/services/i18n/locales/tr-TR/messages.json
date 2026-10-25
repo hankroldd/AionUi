@@ -103,7 +103,9 @@
     "running": "Running",
     "failed": "An operation failed",
     "canceled": "Canceled",
-    "pending": "Waiting to run"
+    "pending": "Waiting to run",
+    "waitingForConfirmation": "Onayınız bekleniyor",
+    "confirmationHint": "Yukarıdaki onay kartından bir seçenek seçin"
   },
   "toolDetail": {
     "input": "Full input",

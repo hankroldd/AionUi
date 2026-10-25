@@ -104,7 +104,9 @@
     "running": "正在执行",
     "failed": "有操作失败",
     "canceled": "已取消",
-    "pending": "等待执行"
+    "pending": "等待执行",
+    "waitingForConfirmation": "等待你确认",
+    "confirmationHint": "请在上方的确认卡中选择"
   },
   "toolDetail": {
     "input": "完整参数",

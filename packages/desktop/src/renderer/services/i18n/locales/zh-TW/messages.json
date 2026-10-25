@@ -103,7 +103,9 @@
     "running": "Running",
     "failed": "An operation failed",
     "canceled": "Canceled",
-    "pending": "Waiting to run"
+    "pending": "Waiting to run",
+    "waitingForConfirmation": "等待你確認",
+    "confirmationHint": "請在上方的確認卡中選擇"
   },
   "toolDetail": {
     "input": "Full input",

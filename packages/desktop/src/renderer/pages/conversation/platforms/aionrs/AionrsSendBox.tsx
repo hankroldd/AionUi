@@ -444,6 +444,13 @@ const AionrsSendBox: React.FC<{
   const templateSubmitRef = useRef<SendBoxSubmitHandle>(null);
   // [mycowork] A532：“重新发送本轮”——把本会话最后一条用户文本原样走现有发送链路再发一次（不编辑、不重新生成）
   const messageList = useMessageList();
+  const waitingForConfirmation =
+    !teamRuntime &&
+    !teamSendMessage &&
+    !teamPermission &&
+    messageList.some(
+      (message) => message.conversation_id === conversation_id && (message.type === 'permission' || message.type === 'ask')
+    );
   const lastUserText = useMemo((): string => {
     const last = messageList.findLast((m) => m.type === 'text' && m.position === 'right');
     return last?.type === 'text' && typeof last.content.content === 'string' ? userMessageText(last.content.content) : '';
@@ -916,9 +923,13 @@ const AionrsSendBox: React.FC<{
         onClear={clear}
       />
       <ThoughtDisplay
-        thought={thought}
-        running={teamRuntime?.loading ?? running}
-        statusText={teamRuntime?.statusText}
+        thought={waitingForConfirmation ? undefined : thought}
+        running={waitingForConfirmation ? false : (teamRuntime?.loading ?? running)}
+        statusText={
+          waitingForConfirmation
+            ? `${t('messages.toolActivity.waitingForConfirmation')} · ${t('messages.toolActivity.confirmationHint')}`
+            : teamRuntime?.statusText
+        }
         externalElapsedSource={Boolean(teamRuntime) || turnStartedAtMs != null}
         startedAtMs={teamRuntime ? (teamRuntime.startedAtMs ?? null) : turnStartedAtMs}
         onStop={effectiveHandleStop}

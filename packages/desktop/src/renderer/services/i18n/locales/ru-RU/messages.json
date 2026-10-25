@@ -107,7 +107,9 @@
     "running": "Running",
     "failed": "An operation failed",
     "canceled": "Canceled",
-    "pending": "Waiting to run"
+    "pending": "Waiting to run",
+    "waitingForConfirmation": "Ожидание вашего подтверждения",
+    "confirmationHint": "Выберите вариант в карточке подтверждения выше"
   },
   "toolDetail": {
     "input": "Full input",

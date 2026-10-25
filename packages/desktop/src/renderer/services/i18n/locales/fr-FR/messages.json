@@ -103,7 +103,9 @@
     "running": "Running",
     "failed": "An operation failed",
     "canceled": "Canceled",
-    "pending": "Waiting to run"
+    "pending": "Waiting to run",
+    "waitingForConfirmation": "En attente de votre confirmation",
+    "confirmationHint": "Choisissez une option dans la carte de confirmation ci-dessus"
   },
   "toolDetail": {
     "input": "Full input",

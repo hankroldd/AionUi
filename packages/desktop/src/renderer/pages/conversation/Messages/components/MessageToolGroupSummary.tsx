@@ -11,12 +11,14 @@ import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import { getAcpImageFileName } from '@/common/chat/acpToolCallOutput';
 import type { NormalizedToolCall, NormalizedToolStatus, ToolMessage } from '@/common/chat/normalizeToolCall';
-import { normalizeToolMessages, hasRunningToolMessages } from '@/common/chat/normalizeToolCall';
+import { normalizeToolMessages } from '@/common/chat/normalizeToolCall';
 import LocalImageView from '@/renderer/components/media/LocalImageView';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { downloadFileFromPath } from '@/renderer/utils/file/download';
 import { MyCoworkCitedRevisionSlot } from '@/renderer/mycowork-cited-revision'; // [mycowork] R014
 import { MyCoworkFillResultFileSlot } from '@/renderer/mycowork-file-link'; // [mycowork] R032
 import { toolDisplayNameKey } from './toolDisplayName';
+import { useMessageList } from '../hooks';
 import './MessageToolGroupSummary.css';
 
 const statusToBadge = (status: NormalizedToolStatus): BadgeProps['status'] => {
@@ -35,7 +37,10 @@ const statusToBadge = (status: NormalizedToolStatus): BadgeProps['status'] => {
   }
 };
 
-const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
+const ToolItemDetail: React.FC<{ item: NormalizedToolCall; waitingForConfirmation?: boolean }> = ({
+  item,
+  waitingForConfirmation,
+}) => {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [fullItem, setFullItem] = useState<NormalizedToolCall | null>(null);
@@ -86,7 +91,10 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
     <div className='flex flex-col'>
       {messageContext}
       <div className='flex flex-row color-#86909C gap-12px items-center'>
-        <Badge status={statusToBadge(item.status)} className={item.status === 'running' ? 'badge-breathing' : ''} />
+        <Badge
+          status={waitingForConfirmation ? 'default' : statusToBadge(item.status)}
+          className={item.status === 'running' && !waitingForConfirmation ? 'badge-breathing' : ''}
+        />
         <Button
           type='text'
           htmlType='button'
@@ -104,6 +112,9 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
           </span>
           {hasDetail && (expanded ? <IconDown style={{ fontSize: 12 }} /> : <IconRight style={{ fontSize: 12 }} />)}
         </Button>
+        {waitingForConfirmation && (
+          <span className='text-12px text-t-secondary'>{t('messages.toolActivity.waitingForConfirmation')}</span>
+        )}
         <MyCoworkCitedRevisionSlot name={displayItem.name} output={displayItem.output} />
       </div>
       {expanded && hasDetail && (
@@ -155,12 +166,42 @@ const ToolItemDetail: React.FC<{ item: NormalizedToolCall }> = ({ item }) => {
 
 const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messages }) => {
   const { t } = useTranslation();
-  const hasRunning = hasRunningToolMessages(messages);
+  const list = useMessageList();
+  const conversation = useConversationContextSafe();
   const [showMore, setShowMore] = useState(false);
-  const tools = useMemo(() => normalizeToolMessages(messages), [messages]);
+  const confirmations = useMemo(
+    () => list.filter((message) => message.type === 'permission' || message.type === 'ask'),
+    [list]
+  );
+  const tools = useMemo(
+    () =>
+      messages.flatMap((message) =>
+        normalizeToolMessages([message]).map((item) => ({
+          ...item,
+          waitingForConfirmation:
+            (item.status === 'running' || item.status === 'pending') &&
+            confirmations.some((confirmation) => {
+              if (
+                confirmation.conversation_id !== message.conversation_id ||
+                message.conversation_id !== conversation?.conversation_id
+              )
+                return false;
+              const callId =
+                confirmation.type === 'permission' ? confirmation.content?.call_id : confirmation.content?.request_id;
+              return (
+                Boolean(callId) &&
+                (item.key === callId || (conversation?.type === 'aionrs' && item.key === `aionrs-${callId}`))
+              );
+            }),
+        }))
+      ),
+    [messages, confirmations, conversation?.conversation_id, conversation?.type]
+  );
+  const hasRunning = tools.some((item) => item.status === 'running' && !item.waitingForConfirmation);
+  const hasConfirmation = tools.some((item) => item.waitingForConfirmation);
   const hasError = tools.some((item) => item.status === 'error');
   const hasCanceled = tools.some((item) => item.status === 'canceled');
-  const hasPending = tools.some((item) => item.status === 'pending');
+  const hasPending = tools.some((item) => item.status === 'pending' && !item.waitingForConfirmation);
 
   return (
     <div className='tool-group-summary'>
@@ -179,6 +220,11 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
           {t('messages.toolActivity.label')} {tools.length > 0 ? `· ${tools.length}` : ''}
         </span>
         {hasRunning && <span>{t('messages.toolActivity.running')}</span>}
+        {hasConfirmation && (
+          <span title={t('messages.toolActivity.confirmationHint')}>
+            {t('messages.toolActivity.waitingForConfirmation')}
+          </span>
+        )}
         {hasError && <span className='text-danger'>{t('messages.toolActivity.failed')}</span>}
         {hasCanceled && <span>{t('messages.toolActivity.canceled')}</span>}
         {!hasRunning && hasPending && <span>{t('messages.toolActivity.pending')}</span>}
@@ -192,7 +238,7 @@ const MessageToolGroupSummary: React.FC<{ messages: ToolMessage[] }> = ({ messag
       {showMore && (
         <div className='tool-group-summary__body'>
           {tools.map((item) => (
-            <ToolItemDetail key={item.key} item={item} />
+            <ToolItemDetail key={item.key} item={item} waitingForConfirmation={item.waitingForConfirmation} />
           ))}
         </div>
       )}

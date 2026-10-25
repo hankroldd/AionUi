@@ -103,7 +103,9 @@
     "running": "Running",
     "failed": "An operation failed",
     "canceled": "Canceled",
-    "pending": "Waiting to run"
+    "pending": "Waiting to run",
+    "waitingForConfirmation": "در انتظار تأیید شما",
+    "confirmationHint": "لطفاً در کارت تأیید بالا یک گزینه را انتخاب کنید"
   },
   "toolDetail": {
     "input": "Full input",

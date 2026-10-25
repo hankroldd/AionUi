@@ -104,7 +104,9 @@
     "running": "Running",
     "failed": "An operation failed",
     "canceled": "Canceled",
-    "pending": "Waiting to run"
+    "pending": "Waiting to run",
+    "waitingForConfirmation": "Waiting for your confirmation",
+    "confirmationHint": "Please choose in the confirmation card above"
   },
   "toolDetail": {
     "input": "Full input",

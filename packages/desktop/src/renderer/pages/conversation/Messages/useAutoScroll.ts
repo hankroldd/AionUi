@@ -5,7 +5,9 @@
  */
 
 /**
- * useAutoScroll - Auto-scroll hook for a plain scroll container
+ * 文件：Messages/useAutoScroll.ts
+ * 职责：保持消息底部跟随、明确跳转与预览分屏时的操作位置。
+ * 关联：navigation-intent §15、ADR-0032；只补偿本消息滚动区。
  *
  * Strategy:
  * - Track whether the user has intentionally scrolled away from the bottom.
@@ -35,7 +37,8 @@ interface UseAutoScrollReturn {
   handleContentRef: (ref: HTMLDivElement | null) => void;
   handleScroll: (e: React.UIEvent<HTMLDivElement>) => void;
   handleWheel: (e: React.WheelEvent<HTMLDivElement>) => void;
-  handlePointerDown: () => void;
+  handlePointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
+  handleKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void;
   showScrollButton: boolean;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
   scrollElementIntoView: (element: HTMLElement | null, options?: ScrollElementIntoViewOptions) => void;
@@ -59,6 +62,14 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
   const initialScrollDoneRef = useRef(false);
   const pendingAutoFollowFrameRef = useRef<number | null>(null);
   const userInputActiveRef = useRef(false);
+  const readingAnchorRef = useRef<{ element: HTMLElement; offset: number; width: number } | null>(null);
+
+  const cancelAutoFollow = useCallback(() => {
+    if (pendingAutoFollowFrameRef.current !== null) {
+      cancelAnimationFrame(pendingAutoFollowFrameRef.current);
+      pendingAutoFollowFrameRef.current = null;
+    }
+  }, []);
 
   const markProgrammaticScroll = useCallback(() => {
     lastProgrammaticScrollTimeRef.current = Date.now();
@@ -124,6 +135,8 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     (element: HTMLElement | null, options?: ScrollElementIntoViewOptions) => {
       if (!element) return;
 
+      readingAnchorRef.current = null;
+      cancelAutoFollow();
       userScrolledRef.current = false;
       setShowScrollButton(false);
       markProgrammaticScroll();
@@ -133,24 +146,22 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
         inline: 'nearest',
       });
     },
-    [markProgrammaticScroll]
+    [cancelAutoFollow, markProgrammaticScroll]
   );
 
   const handleScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
       const target = e.currentTarget;
+      if (readingAnchorRef.current && (target.clientWidth === 0 || target.clientHeight === 0)) return;
       const currentScrollTop = target.scrollTop;
       const timeSinceGuard = Date.now() - lastProgrammaticScrollTimeRef.current;
       const delta = currentScrollTop - lastScrollTopRef.current;
       const bottomGap = getBottomGap(target);
       const pinnedToBottom = bottomGap <= FOLLOW_BOTTOM_THRESHOLD_PX;
 
-      if (
-        !pinnedToBottom &&
-        Math.abs(delta) > 2 &&
-        (userInputActiveRef.current || timeSinceGuard >= PROGRAMMATIC_SCROLL_GUARD_MS)
-      ) {
-        userScrolledRef.current = true;
+      if (Math.abs(delta) > 2 && (userInputActiveRef.current || timeSinceGuard >= PROGRAMMATIC_SCROLL_GUARD_MS)) {
+        readingAnchorRef.current = null;
+        if (!pinnedToBottom) userScrolledRef.current = true;
       }
 
       if (pinnedToBottom) {
@@ -168,17 +179,70 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     if (Math.abs(e.deltaY) > 0 || Math.abs(e.deltaX) > 0) {
       userInputActiveRef.current = true;
+      readingAnchorRef.current = null;
     }
   }, []);
 
-  const handlePointerDown = useCallback(() => {
-    userInputActiveRef.current = true;
-  }, []);
+  const captureReadingAnchor = useCallback(
+    (target: EventTarget | null) => {
+      const element = target instanceof Element ? target.closest<HTMLElement>('button, a, [role="button"]') : null;
+      readingAnchorRef.current =
+        element && scrollerEl?.contains(element)
+          ? {
+              element,
+              offset: element.getBoundingClientRect().top - scrollerEl.getBoundingClientRect().top,
+              width: scrollerEl.clientWidth,
+            }
+          : null;
+      if (readingAnchorRef.current) cancelAutoFollow();
+    },
+    [cancelAutoFollow, scrollerEl]
+  );
+
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      userInputActiveRef.current = true;
+      captureReadingAnchor(event.target);
+    },
+    [captureReadingAnchor]
+  );
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        userInputActiveRef.current = true;
+        captureReadingAnchor(event.target);
+      } else if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) {
+        userInputActiveRef.current = true;
+        readingAnchorRef.current = null;
+      }
+    },
+    [captureReadingAnchor]
+  );
 
   useEffect(() => {
     if (!scrollerEl || !contentEl) return;
 
     const observer = new ResizeObserver(() => {
+      const anchor = readingAnchorRef.current;
+      if (anchor && !scrollerEl.contains(anchor.element)) readingAnchorRef.current = null;
+      if (anchor && (scrollerEl.clientWidth === 0 || scrollerEl.clientHeight === 0)) {
+        anchor.width = 0;
+        return;
+      }
+      if (anchor && readingAnchorRef.current && anchor.width !== scrollerEl.clientWidth) {
+        cancelAutoFollow();
+        userInputActiveRef.current = false;
+        markProgrammaticScroll();
+        const rect = anchor.element.getBoundingClientRect();
+        const offset = Math.max(0, Math.min(anchor.offset, scrollerEl.clientHeight - rect.height));
+        scrollerEl.scrollTop += rect.top - scrollerEl.getBoundingClientRect().top - offset;
+        anchor.width = scrollerEl.clientWidth;
+        lastScrollTopRef.current = scrollerEl.scrollTop;
+        userScrolledRef.current = true;
+        updateBottomState(scrollerEl);
+        return;
+      }
       scheduleAutoFollow();
       updateBottomState(scrollerEl);
     });
@@ -187,7 +251,7 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     observer.observe(contentEl);
 
     return () => observer.disconnect();
-  }, [contentEl, scheduleAutoFollow, scrollerEl, updateBottomState]);
+  }, [cancelAutoFollow, contentEl, markProgrammaticScroll, scheduleAutoFollow, scrollerEl, updateBottomState]);
 
   useEffect(() => {
     if (!scrollerEl || initialScrollDoneRef.current || itemCount === 0) return;
@@ -206,6 +270,7 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     const previousLastMessage = previousLastMessageRef.current;
     const isNewMessage = currentListLength > previousLength;
     const isLastMessageUpdated = currentListLength > 0 && lastMessage !== previousLastMessage;
+    if (lastMessage?.conversation_id !== previousLastMessage?.conversation_id) readingAnchorRef.current = null;
 
     previousListLengthRef.current = currentListLength;
     previousLastMessageRef.current = lastMessage;
@@ -222,6 +287,7 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
       return;
     }
 
+    readingAnchorRef.current = null;
     userScrolledRef.current = false;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -239,9 +305,11 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
   }, []);
 
   const hideScrollButton = useCallback(() => {
+    readingAnchorRef.current = null;
+    cancelAutoFollow();
     userScrolledRef.current = false;
     setShowScrollButton(false);
-  }, []);
+  }, [cancelAutoFollow]);
 
   return {
     handleScrollerRef,
@@ -249,6 +317,7 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     handleScroll,
     handleWheel,
     handlePointerDown,
+    handleKeyDown,
     showScrollButton,
     scrollToBottom,
     scrollElementIntoView,

@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/**
+ * 文件：Messages/MessageList.tsx
+ * 职责：呈现会话消息，将鼠标和键盘操作交给原滚动机制保持位置。
+ * 关联：navigation-intent §15、ADR-0032。
+ */
 import type { IConversationArtifact } from '@/common/adapter/ipcBridge';
 import type { IMessageAcpToolCall, IMessageToolCall, IMessageToolGroup, TMessage } from '@/common/chat/chatLib';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
@@ -518,6 +523,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     handleScroll,
     handleWheel,
     handlePointerDown,
+    handleKeyDown,
     showScrollButton,
     scrollToBottom,
     scrollElementIntoView,
@@ -746,6 +752,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
             className='flex-1 h-full overflow-y-auto pb-10px box-border -mx-20px px-20px'
             style={{ overflowAnchor: 'none' }}
             onPointerDown={handlePointerDown}
+            onKeyDown={handleKeyDown}
             onScroll={handleMessageListScroll}
             onWheel={handleWheel}
           >

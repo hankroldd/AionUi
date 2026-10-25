@@ -187,14 +187,17 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
   const captureReadingAnchor = useCallback(
     (target: EventTarget | null) => {
       const element = target instanceof Element ? target.closest<HTMLElement>('button, a, [role="button"]') : null;
-      readingAnchorRef.current =
-        element && scrollerEl?.contains(element)
-          ? {
-              element,
-              offset: element.getBoundingClientRect().top - scrollerEl.getBoundingClientRect().top,
-              width: scrollerEl.clientWidth,
-            }
-          : null;
+      if (element && scrollerEl?.contains(element)) {
+        if (readingAnchorRef.current?.element !== element) {
+          readingAnchorRef.current = {
+            element,
+            offset: element.getBoundingClientRect().top - scrollerEl.getBoundingClientRect().top,
+            width: scrollerEl.clientWidth,
+          };
+        }
+      } else {
+        readingAnchorRef.current = null;
+      }
       if (readingAnchorRef.current && scrollerEl) {
         // 聚焦已改变位置时，迟到的 scroll 不应被当成激活后的人工滚动。
         lastScrollTopRef.current = scrollerEl.scrollTop;
@@ -204,13 +207,19 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     [cancelAutoFollow, scrollerEl]
   );
 
-  const handlePointerDown = useCallback(() => {
-    userInputActiveRef.current = true;
-  }, []);
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      userInputActiveRef.current = true;
+      readingAnchorRef.current = null;
+      captureReadingAnchor(event.target);
+    },
+    [captureReadingAnchor]
+  );
 
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       userInputActiveRef.current = true;
+      if (event.detail === 0) readingAnchorRef.current = null;
       captureReadingAnchor(event.target);
     },
     [captureReadingAnchor]

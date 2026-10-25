@@ -287,6 +287,9 @@ describe('MessageList streaming scroll behavior', () => {
     { key: ' ', before: 282, reflow: 303 },
     { key: 'semantic click', before: 409, reflow: 176 },
     { key: 'mouse click', before: 409, reflow: 176 },
+    { key: 'mouse focus shift', before: 409, reflow: 303 },
+    { key: 'mouse then Enter', before: 409, reflow: 303 },
+    { key: 'mouse then semantic', before: 409, reflow: 303 },
   ])('$key 激活真实文件按钮后，延迟的聚焦 scroll 不丢失当前位置', async ({ key, before, reflow }) => {
     render(
       <Wrapper
@@ -311,10 +314,13 @@ describe('MessageList streaming scroll behavior', () => {
     scroller.scrollTop = 600;
     fireEvent.scroll(scroller);
 
-    button.focus();
-    // 浏览器聚焦时先改变 scrollTop，scroll 通知可晚于紧接着的按键；jsdom 不计算该布局。
-    scroller.scrollTop = 700;
-    let buttonTop = before + 700 - 120;
+    const startsWithMouse = key === 'mouse focus shift' || key.startsWith('mouse then');
+    if (!startsWithMouse) {
+      button.focus();
+      // 浏览器聚焦时先改变 scrollTop，scroll 通知可晚于紧接着的按键；jsdom 不计算该布局。
+      scroller.scrollTop = 700;
+    }
+    let buttonTop = before + scroller.scrollTop - 120;
     button.getBoundingClientRect = () => new DOMRect(0, 120 + buttonTop - scroller.scrollTop, 420, 92);
     preview.open.mockImplementation(() => {
       fireEvent.scroll(scroller);
@@ -325,11 +331,45 @@ describe('MessageList streaming scroll behavior', () => {
 
     vi.useRealTimers();
     const user = userEvent.setup();
-    if (key === 'semantic click') act(() => button.click());
+    const clickDetails: number[] = [];
+    button.addEventListener('click', (event) => clickDetails.push(event.detail));
+    if (startsWithMouse) {
+      button.addEventListener(
+        'focus',
+        () => {
+          scroller.scrollTop += 127;
+        },
+        { once: true }
+      );
+      await user.pointer({ keys: '[MouseLeft>]', target: button });
+      expect(button.getBoundingClientRect().top).toBe(282);
+      await user.pointer({ keys: '[/MouseLeft]', target: button });
+    } else if (key === 'semantic click') act(() => button.click());
     else if (key === 'mouse click') await user.click(button);
     else await user.keyboard(key);
 
     expect(preview.open).toHaveBeenCalledTimes(1);
     expect(button.getBoundingClientRect().top).toBe(before);
+    if (key.startsWith('mouse then')) {
+      Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 900 });
+      buttonTop -= reflow;
+      act(() => resizeObserverCallback?.([], {} as ResizeObserver));
+      button.blur();
+      button.addEventListener(
+        'focus',
+        () => {
+          scroller.scrollTop += 127;
+        },
+        { once: true }
+      );
+      button.focus();
+      expect(button.getBoundingClientRect().top).toBe(282);
+      if (key === 'mouse then Enter') await user.keyboard('{Enter}');
+      else act(() => button.click());
+      expect(clickDetails[0]).toBeGreaterThan(0);
+      expect(clickDetails[1]).toBe(0);
+      expect(preview.open).toHaveBeenCalledTimes(2);
+      expect(button.getBoundingClientRect().top).toBe(282);
+    }
   });
 });

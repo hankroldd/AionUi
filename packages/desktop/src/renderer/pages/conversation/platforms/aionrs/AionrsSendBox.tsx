@@ -447,7 +447,8 @@ const AionrsSendBox: React.FC<{
   const updateMessageList = useUpdateMessageList();
   const standalone = !teamRuntime && !teamSendMessage && !teamPermission;
   const hasConfirmation = messageList.some(
-    (message) => message.conversation_id === conversation_id && (message.type === 'permission' || message.type === 'ask')
+    (message) =>
+      message.conversation_id === conversation_id && (message.type === 'permission' || message.type === 'ask')
   );
   const [stoppedTurn, setStoppedTurn] = useState<{
     conversationId: string;
@@ -459,9 +460,13 @@ const AionrsSendBox: React.FC<{
   useEffect(() => {
     const requested = pendingStop.current;
     if (
-      !requested || !officeRun?.stop_confirmed || requested.conversationId !== conversation_id ||
-      officeRun.conversation_id !== requested.conversationId || officeRun.turn_id !== requested.turnId
-    ) return;
+      !requested ||
+      !officeRun?.stop_confirmed ||
+      requested.conversationId !== conversation_id ||
+      officeRun.conversation_id !== requested.conversationId ||
+      officeRun.turn_id !== requested.turnId
+    )
+      return;
     pendingStop.current = null;
     setStoppedTurn(requested);
   }, [conversation_id, officeRun?.conversation_id, officeRun?.turn_id, officeRun?.stop_confirmed]);
@@ -969,13 +974,13 @@ const AionrsSendBox: React.FC<{
         onClear={clear}
       />
       <ThoughtDisplay
-        thought={waitingForConfirmation ? undefined : thought}
-        running={waitingForConfirmation ? false : (teamRuntime?.loading ?? running)}
-        statusText={
-          waitingForConfirmation
-            ? `${t('messages.toolActivity.waitingForConfirmation')} · ${t('messages.toolActivity.confirmationHint')}`
-            : teamRuntime?.statusText
-        }
+          thought={waitingForConfirmation ? undefined : thought}
+          running={waitingForConfirmation ? false : (teamRuntime?.loading ?? running)}
+          statusText={
+            waitingForConfirmation
+              ? `${t('messages.toolActivity.waitingForConfirmation')} · ${t('messages.toolActivity.confirmationHint')}`
+              : teamRuntime?.statusText
+          }
         externalElapsedSource={Boolean(teamRuntime) || turnStartedAtMs != null}
         startedAtMs={teamRuntime ? (teamRuntime.startedAtMs ?? null) : turnStartedAtMs}
         onStop={effectiveHandleStop}

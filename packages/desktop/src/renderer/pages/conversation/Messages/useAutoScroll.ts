@@ -38,6 +38,7 @@ interface UseAutoScrollReturn {
   handleScroll: (e: React.UIEvent<HTMLDivElement>) => void;
   handleWheel: (e: React.WheelEvent<HTMLDivElement>) => void;
   handlePointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
+  handleClick: (event: React.MouseEvent<HTMLDivElement>) => void;
   handleKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void;
   showScrollButton: boolean;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
@@ -194,31 +195,33 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
               width: scrollerEl.clientWidth,
             }
           : null;
-      if (readingAnchorRef.current) cancelAutoFollow();
+      if (readingAnchorRef.current && scrollerEl) {
+        // 聚焦已改变位置时，迟到的 scroll 不应被当成激活后的人工滚动。
+        lastScrollTopRef.current = scrollerEl.scrollTop;
+        cancelAutoFollow();
+      }
     },
     [cancelAutoFollow, scrollerEl]
   );
 
-  const handlePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerDown = useCallback(() => {
+    userInputActiveRef.current = true;
+  }, []);
+
+  const handleClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
       userInputActiveRef.current = true;
       captureReadingAnchor(event.target);
     },
     [captureReadingAnchor]
   );
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        userInputActiveRef.current = true;
-        captureReadingAnchor(event.target);
-      } else if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) {
-        userInputActiveRef.current = true;
-        readingAnchorRef.current = null;
-      }
-    },
-    [captureReadingAnchor]
-  );
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) {
+      userInputActiveRef.current = true;
+      readingAnchorRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!scrollerEl || !contentEl) return;
@@ -317,6 +320,7 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     handleScroll,
     handleWheel,
     handlePointerDown,
+    handleClick,
     handleKeyDown,
     showScrollButton,
     scrollToBottom,

@@ -523,6 +523,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     handleScroll,
     handleWheel,
     handlePointerDown,
+    handleClick,
     handleKeyDown,
     showScrollButton,
     scrollToBottom,
@@ -752,6 +753,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
             className='flex-1 h-full overflow-y-auto pb-10px box-border -mx-20px px-20px'
             style={{ overflowAnchor: 'none' }}
             onPointerDown={handlePointerDown}
+            onClickCapture={handleClick}
             onKeyDown={handleKeyDown}
             onScroll={handleMessageListScroll}
             onWheel={handleWheel}

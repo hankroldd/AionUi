@@ -9,7 +9,7 @@
  * 边界：真实滚动 hook；仅用独立浏览器记录的矩形变化替代 jsdom 布局。
  * 关联：navigation-intent §15、ADR-0032。
  */
-import type { KeyboardEvent, PointerEvent, UIEvent } from 'react';
+import type { KeyboardEvent, MouseEvent, UIEvent } from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TMessage } from '@/common/chat/chatLib';
@@ -80,14 +80,14 @@ function readingPositionFixture() {
       vi.runAllTimers();
     });
   };
-  const pointer = () =>
+  const activate = () =>
     act(() =>
-      view.result.current.handlePointerDown({
+      view.result.current.handleClick({
         target: label,
         currentTarget: scroller,
-      } as unknown as PointerEvent<HTMLDivElement>)
+      } as unknown as MouseEvent<HTMLDivElement>)
     );
-  return { ...view, scroller, button, label, pointer, reflow };
+  return { ...view, scroller, button, label, activate, reflow };
 }
 describe('分屏滚动锚点', () => {
   beforeEach(() => {
@@ -103,7 +103,7 @@ describe('分屏滚动锚点', () => {
   });
   it('鼠标打开和关闭分屏保持实际按钮位置，程序 scroll 不取消锚点', () => {
     const view = readingPositionFixture();
-    view.pointer();
+    view.activate();
     view.reflow(500, 176);
     expect(view.button.getBoundingClientRect().top).toBe(409);
     fireScroll(view.result.current.handleScroll, view.scroller, view.scroller.scrollTop);
@@ -111,22 +111,9 @@ describe('分屏滚动锚点', () => {
     expect(view.button.getBoundingClientRect().top).toBe(409);
   });
 
-  it.each(['Enter', ' '])('键盘%s打开分屏时以实际按钮为锚点', (key) => {
-    const view = readingPositionFixture();
-    act(() =>
-      view.result.current.handleKeyDown({
-        key,
-        target: view.label,
-        currentTarget: view.scroller,
-      } as unknown as KeyboardEvent<HTMLDivElement>)
-    );
-    view.reflow(500, 176);
-    expect(view.button.getBoundingClientRect().top).toBe(409);
-  });
-
   it.each(['wheel', 'scroll', 'jump', 'send', 'PageDown'])('%s 后不拉回旧操作锚点', (action) => {
     const view = readingPositionFixture();
-    view.pointer();
+    view.activate();
     act(() => {
       if (action === 'wheel')
         view.result.current.handleWheel({ deltaX: 0, deltaY: -80 } as React.WheelEvent<HTMLDivElement>);
@@ -147,7 +134,7 @@ describe('分屏滚动锚点', () => {
 
   it('展开隐藏后的零尺寸不丢失锚点，还原到原宽度仍恢复位置', () => {
     const view = readingPositionFixture();
-    view.pointer();
+    view.activate();
     view.reflow(500, 176);
     view.reflow(0, 0, 0);
     vi.advanceTimersByTime(200);
@@ -162,14 +149,14 @@ describe('分屏滚动锚点', () => {
       view.result.current.hideScrollButton();
       resizeObserverCallback?.([], {} as ResizeObserver);
     });
-    view.pointer();
+    view.activate();
     view.reflow(500, 176);
     expect(view.button.getBoundingClientRect().top).toBe(409);
   });
 
   it('操作按钮移除后不再使用旧节点的位置', () => {
     const view = readingPositionFixture();
-    view.pointer();
+    view.activate();
     view.button.remove();
     view.reflow(500, 176);
     expect(view.scroller.scrollTop).toBe(600);

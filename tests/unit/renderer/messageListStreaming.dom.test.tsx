@@ -4,14 +4,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/**
+ * 文件：tests/unit/renderer/messageListStreaming.dom.test.tsx
+ * 职责：验证实际消息滚动容器的流式跟随及 Arco 文件按钮键盘定位。
+ * 边界：保留真实 Button、MessageList 和滚动 hook，仅替代浏览器几何与外部消息内容。
+ */
 import React, { type PropsWithChildren } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Button } from '@arco-design/web-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IMessageText } from '@/common/chat/chatLib';
+import type { IMessageText, TMessage } from '@/common/chat/chatLib';
 import { MessageListProvider } from '@/renderer/pages/conversation/Messages/hooks';
 import MessageList from '@/renderer/pages/conversation/Messages/MessageList';
 
 let resizeObserverCallback: ResizeObserverCallback | null = null;
+const preview = vi.hoisted(() => ({ open: vi.fn() }));
 
 class ResizeObserverMock {
   constructor(callback: ResizeObserverCallback) {
@@ -40,7 +48,8 @@ vi.mock('react-router-dom', () => ({
   }),
 }));
 
-vi.mock('@arco-design/web-react', () => ({
+vi.mock('@arco-design/web-react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@arco-design/web-react')>()),
   Image: {
     PreviewGroup: ({ children }: PropsWithChildren) => <>{children}</>,
   },
@@ -102,9 +111,14 @@ vi.mock('@/renderer/pages/conversation/Messages/components/MessageSkillSuggest',
   default: () => <div>skill_suggest</div>,
 }));
 
-vi.mock('@/renderer/pages/conversation/Messages/components/MessageToolGroupSummary', () => ({
-  default: () => <div>tool_summary</div>,
+vi.mock('@/renderer/mycowork-file-link', () => ({
+  MyCoworkFillResultFileSlot: () => (
+    <Button aria-label='交付文件.pptx' onClick={() => preview.open()}>
+      <span>交付文件.pptx</span>
+    </Button>
+  ),
 }));
+vi.mock('@/renderer/mycowork-cited-revision', () => ({ MyCoworkCitedRevisionSlot: (): null => null }));
 
 vi.mock('@/renderer/pages/conversation/Messages/MessageFileChanges', () => ({
   __esModule: true,
@@ -118,6 +132,8 @@ vi.mock('@/renderer/pages/conversation/Messages/components/SelectionReplyButton'
 
 vi.mock('@icon-park/react', () => ({
   Down: () => <span>down</span>,
+  Right: () => <span>right</span>,
+  Checklist: () => <span>checklist</span>,
 }));
 
 function createTextMessage(content: string): IMessageText {
@@ -134,7 +150,7 @@ function createTextMessage(content: string): IMessageText {
   };
 }
 
-function Wrapper({ children, messages }: PropsWithChildren<{ messages: IMessageText[] }>): JSX.Element {
+function Wrapper({ children, messages }: PropsWithChildren<{ messages: TMessage[] }>): JSX.Element {
   return <MessageListProvider value={messages}>{children}</MessageListProvider>;
 }
 
@@ -186,6 +202,7 @@ describe('MessageList streaming scroll behavior', () => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => window.setTimeout(() => callback(0), 0));
     vi.stubGlobal('cancelAnimationFrame', (handle: number) => window.clearTimeout(handle));
     resizeObserverCallback = null;
+    preview.open.mockReset();
   });
 
   afterEach(() => {
@@ -263,5 +280,56 @@ describe('MessageList streaming scroll behavior', () => {
     flushResizeObserver();
 
     expect(scroller.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { key: '{Enter}', before: 409, reflow: 176 },
+    { key: ' ', before: 282, reflow: 303 },
+    { key: 'semantic click', before: 409, reflow: 176 },
+    { key: 'mouse click', before: 409, reflow: 176 },
+  ])('$key 激活真实文件按钮后，延迟的聚焦 scroll 不丢失当前位置', async ({ key, before, reflow }) => {
+    render(
+      <Wrapper
+        messages={[
+          {
+            ...createTextMessage(''),
+            type: 'tool_call',
+            content: { call_id: 'fill', name: 'office_fill_template', args: {}, status: 'completed', output: '{}' },
+          },
+        ]}
+      >
+        <MessageList />
+      </Wrapper>
+    );
+    const scroller = screen.getByTestId('message-list-scroller') as HTMLDivElement;
+    const button = screen.getByRole('button', { name: '交付文件.pptx' });
+    setScrollableMetrics(scroller, { clientHeight: 420, scrollHeight: 2000 });
+    Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 900 });
+    scroller.getBoundingClientRect = () => new DOMRect(0, 120, scroller.clientWidth, 420);
+    act(() => vi.runAllTimers());
+    vi.advanceTimersByTime(200);
+    scroller.scrollTop = 600;
+    fireEvent.scroll(scroller);
+
+    button.focus();
+    // 浏览器聚焦时先改变 scrollTop，scroll 通知可晚于紧接着的按键；jsdom 不计算该布局。
+    scroller.scrollTop = 700;
+    let buttonTop = before + 700 - 120;
+    button.getBoundingClientRect = () => new DOMRect(0, 120 + buttonTop - scroller.scrollTop, 420, 92);
+    preview.open.mockImplementation(() => {
+      fireEvent.scroll(scroller);
+      Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 500 });
+      buttonTop += reflow;
+      resizeObserverCallback?.([], {} as ResizeObserver);
+    });
+
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    if (key === 'semantic click') act(() => button.click());
+    else if (key === 'mouse click') await user.click(button);
+    else await user.keyboard(key);
+
+    expect(preview.open).toHaveBeenCalledTimes(1);
+    expect(button.getBoundingClientRect().top).toBe(before);
   });
 });

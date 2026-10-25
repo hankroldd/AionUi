@@ -70,6 +70,7 @@ vi.mock('@/renderer/pages/conversation/Preview', () => ({
 
 vi.mock('@/renderer/pages/conversation/Messages/hooks', () => ({
   useMessageList: () => [],
+  useUpdateMessageList: () => vi.fn(),
 }));
 
 vi.mock('@/renderer/hooks/file/useConversationExport', () => ({

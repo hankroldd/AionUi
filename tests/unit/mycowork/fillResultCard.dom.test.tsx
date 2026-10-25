@@ -158,6 +158,53 @@ describe('持久填充结果的固定成品入口', () => {
     expect(h.getMessage).toHaveBeenCalledTimes(1);
   });
 
+  it('等值截断消息刷新保留已读卡片与正在打开的预览', async () => {
+    let finish!: (value: unknown) => void;
+    h.project.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const compact = () => message(output, { _compact: { truncated: true } });
+    const view = render(<MessageToolGroupSummary messages={[compact()]} />);
+    fireEvent.click(await screen.findByRole('button', { name }));
+    await waitFor(() => expect(h.project).toHaveBeenCalledTimes(1));
+    view.rerender(<MessageToolGroupSummary messages={[compact()]} />);
+    expect(screen.getByRole('button', { name })).toBeVisible();
+    await act(async () => finish({ project_id: 'p1', explorer: { workspace_pe_id: 'pe1' } }));
+    await waitFor(() => expect(h.preview).toHaveBeenCalledTimes(1));
+    expect(h.getMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('同一消息内容真正改变时不沿用旧卡片或打开结果', async () => {
+    let finishProject!: (value: unknown) => void;
+    let finishMessage!: (value: ToolMessage) => void;
+    h.project.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishProject = resolve;
+        })
+    );
+    h.getMessage.mockResolvedValueOnce(message()).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishMessage = resolve;
+        })
+    );
+    const view = render(<MessageToolGroupSummary messages={[message(output, { _compact: { truncated: true } })]} />);
+    fireEvent.click(await screen.findByRole('button', { name }));
+    await waitFor(() => expect(h.project).toHaveBeenCalledTimes(1));
+    const changed = { ...output, output_id: 'out_changed', resource_id: 'res_changed' };
+    view.rerender(<MessageToolGroupSummary messages={[message(changed, { _compact: { truncated: true } })]} />);
+    expect(screen.queryByRole('button', { name })).toBeNull();
+    await act(async () => finishProject({ project_id: 'p1', explorer: { workspace_pe_id: 'pe1' } }));
+    expect(h.preview).not.toHaveBeenCalled();
+    await act(async () => finishMessage(message(changed)));
+    expect(await screen.findByRole('button', { name })).toBeVisible();
+    expect(h.getMessage).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     ['业务错误也 completed', { error: { code: 'INVALID_ARGUMENT', message: '金额未知' } }, {}],
     ['失败', output, { status: 'error' }],

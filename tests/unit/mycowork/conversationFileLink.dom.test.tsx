@@ -80,12 +80,15 @@ const filled = {
     output: JSON.stringify({
       output_id: 'out_result',
       resource_id: 'res_result',
+      revision_id: 'rev_result',
       relative_path: 'deck/c1/最终稿.pptx',
     }),
   },
 };
 
-it('固定成品与同文件 Markdown 只保留一份完整卡和清单，普通文字入口仍打开原预览', async () => {
+const answer = { id: 'answer', conversation_id: 'c1', type: 'text' as const, content: { content: '已完成' } };
+
+it('固定成品与后续同文件 Markdown 只保留一份完整卡和清单，文字入口打开同一固定版本', async () => {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockResolvedValue({
@@ -98,9 +101,9 @@ it('固定成品与同文件 Markdown 只保留一份完整卡和清单，普通
     })
   );
   const { container } = render(
-    <MessageListProvider value={[filled]}>
+    <MessageListProvider value={[filled, answer]}>
       <MessageToolGroupSummary messages={[filled]} />
-      <MarkdownView>{'[最终稿.pptx](deck/c1/最终稿.pptx)'}</MarkdownView>
+      <MarkdownView messageId='answer'>{'[最终稿.pptx](deck/c1/最终稿.pptx)'}</MarkdownView>
     </MessageListProvider>
   );
   expect(await screen.findAllByRole('button', { name: /生成时待确认（1 条）/ })).toHaveLength(1);
@@ -112,11 +115,9 @@ it('固定成品与同文件 Markdown 只保留一份完整卡和清单，普通
   fireEvent.click(link as HTMLElement);
   await waitFor(() =>
     expect(h.open).toHaveBeenCalledWith(
-      '',
-      'ppt',
-      expect.objectContaining({
-        fileRef: { kind: 'project', pe_id: 'pe-current', relative_path: 'deck/c1/最终稿.pptx' },
-      })
+      'res_result/rev_result',
+      'mycowork-result',
+      expect.objectContaining({ file_name: '最终稿.pptx', editable: false })
     )
   );
 });
@@ -129,8 +130,8 @@ it.each([
   ['未知', { ...filled, content: { ...filled.content, output: '{}' } }],
 ])('%s结果不能把 Markdown 文件卡降成文字', (_label, result) => {
   const { container } = render(
-    <MessageListProvider value={[result]}>
-      <MarkdownView>{'[最终稿.pptx](deck/c1/最终稿.pptx)'}</MarkdownView>
+    <MessageListProvider value={[result, answer]}>
+      <MarkdownView messageId='answer'>{'[最终稿.pptx](deck/c1/最终稿.pptx)'}</MarkdownView>
     </MessageListProvider>
   );
   expect(container.querySelectorAll('.mcw-conversation-file-card')).toHaveLength(1);

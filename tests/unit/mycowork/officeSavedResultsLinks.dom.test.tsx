@@ -1,6 +1,6 @@
 /**
  * [mycowork] A513 切片 2（R068）。文件：tests/unit/mycowork/officeSavedResultsLinks.dom.test.tsx
- * 职责：结果入口交出固定版本；原生正文读取与下载均使用该版本，失败不回退当前内容。
+ * 职责：结果入口交出固定版本；排版预览与下载均使用该版本，失败不回退当前内容。
  * 边界：仅替换 HTTP，不替换 SavedResults、SavedResultPreview 或版本客户端。
  */
 import '@arco-design/web-react/lib/_util/react-19-adapter';
@@ -96,42 +96,21 @@ it('切换结果时迟到的旧版本不会覆盖新版本', async () => {
     '/bridge/v1/resources/res_other/revisions/rev_other/content'
   );
 });
-it.each(['docx', 'pptx'])('Office %s 读取固定版本结构，不读当前预览', async (extension) => {
-  const fetcher = vi.fn(
-    async (_url: string) =>
-      new Response(
-        JSON.stringify({
-          root: {
-            type: 'root',
-            path: '/',
-            children:
-              extension === 'docx'
-                ? [{ type: 'paragraph', path: '/body/p[1]', text: '已保存的 Office 正文', children: [] }]
-                : [
-                    {
-                      type: 'slide',
-                      path: '/slide[1]',
-                      children: [
-                        { type: 'shape', path: '/slide[1]/shape[1]', text: '已保存的 Office 正文', children: [] },
-                      ],
-                    },
-                  ],
-          },
-          truncated: false,
-        })
-      )
-  );
+it.each(['docx', 'pptx', 'xlsx'])('Office %s 渲染固定版本，不读当前预览', async (extension) => {
+  const html = '<html><body><p>已保存的 Office 正文</p></body></html>';
+  const fetcher = vi.fn(async (_url: string) => new Response(html));
   vi.stubGlobal('fetch', fetcher);
-  render(<SavedResultPreview identity='res_saved/rev_saved' fileName={`结果.${extension}`} lang='zh-CN' />);
-  expect(await screen.findByText('已保存的 Office 正文')).toBeInTheDocument();
-  expect(fetcher.mock.calls).toHaveLength(1);
-  const request = new URL(fetcher.mock.calls[0]![0], 'http://localhost');
-  expect(request.pathname).toBe('/bridge/v1/resources/res_saved/office/structure');
-  expect(Object.fromEntries(request.searchParams)).toEqual({
-    path: extension === 'docx' ? '/body' : '/',
-    depth: '1',
-    revision_id: 'rev_saved',
-  });
+  const view = render(
+    <SavedResultPreview identity='res_saved/rev_saved' fileName={`结果.${extension}`} lang='zh-CN' />
+  );
+  await waitFor(() => expect(view.container.querySelector('iframe')).not.toBeNull());
+  const frame = view.container.querySelector('iframe')!;
+  expect(frame).toHaveAttribute('srcdoc', expect.stringContaining(html));
+  expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+    '/bridge/v1/resources/res_saved/office/html?revision_id=rev_saved',
+  ]);
+  expect(screen.getAllByRole('link', { name: '下载这一版' })).toHaveLength(1);
   expect(screen.getByRole('link', { name: '下载这一版' })).toHaveAttribute('href', contentUrl);
 });
 it.each(['txt', 'docx'])('固定 %s 版本 404 显示失败且不读取当前内容', async (extension) => {

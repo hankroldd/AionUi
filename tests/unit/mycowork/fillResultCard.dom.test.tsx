@@ -64,7 +64,7 @@ const name = '青禾建设决策.pptx';
 const pending = [
   { field: 'items[2].step[3]', slide: 6, item: '2', category: 'missing', reason: '代价没有依据，已写待确认' },
 ];
-const output = { output_id: 'out_result', resource_id: 'res_result', relative_path: path };
+const output = { output_id: 'out_result', resource_id: 'res_result', revision_id: 'rev_result', relative_path: path };
 const message = (body: unknown = output, content: Record<string, unknown> = {}): ToolMessage =>
   ({
     id: 'fill-message',
@@ -101,7 +101,8 @@ afterEach(() => {
 });
 
 describe('持久填充结果的固定成品入口', () => {
-  it('没有任何模型 Markdown，工具折叠时仍显示成品与原样清单，点击走原 Explorer 预览', async () => {
+  it('没有任何模型 Markdown，工具折叠时仍显示成品与原样清单，清理工作副本后点击仍打开已保存固定版本', async () => {
+    h.metadata.mockRejectedValue(new Error('File not found'));
     render(
       <MessageToolGroupSummary
         messages={[message(output, { output: JSON.stringify(output) + '\n【人工修改提示】已保存新版本' })]}
@@ -123,15 +124,13 @@ describe('持久填充结果的固定成品入口', () => {
     fireEvent.click(card);
     await waitFor(() =>
       expect(h.preview).toHaveBeenCalledWith(
-        '',
-        'ppt',
-        expect.objectContaining({
-          fileRef: { kind: 'project', pe_id: 'pe1', relative_path: path },
-        })
+        'res_result/rev_result',
+        'mycowork-result',
+        expect.objectContaining({ file_name: name, editable: false })
       )
     );
-    expect(h.project).toHaveBeenCalledWith({ project_id: 'p1' });
-    expect(h.metadata).toHaveBeenCalledWith({ file: { kind: 'project', pe_id: 'pe1', relative_path: path } });
+    expect(h.project).not.toHaveBeenCalled();
+    expect(h.metadata).not.toHaveBeenCalled();
     expect(h.readContent).not.toHaveBeenCalled();
   });
 
@@ -176,8 +175,8 @@ describe('持久填充结果的固定成品入口', () => {
 
   it('首次挂出的成品卡快速打开后，等值刷新仍完成预览', async () => {
     h.openOnMount = true;
-    let finish!: (value: unknown) => void;
-    h.project.mockImplementationOnce(
+    let finish!: (value: ToolMessage) => void;
+    h.getMessage.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           finish = resolve;
@@ -185,15 +184,16 @@ describe('持久填充结果的固定成品入口', () => {
     );
     const compact = () => message(output, { _compact: { truncated: true } });
     const view = render(<MessageToolGroupSummary messages={[compact()]} />);
-    expect(await screen.findByRole('button', { name })).toBeVisible();
-    await waitFor(() => expect(h.project).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(h.getMessage).toHaveBeenCalledTimes(1));
     view.rerender(<MessageToolGroupSummary messages={[compact()]} />);
-    await act(async () => finish({ project_id: 'p1', explorer: { workspace_pe_id: 'pe1' } }));
-    await waitFor(() => expect(h.preview).toHaveBeenCalledTimes(1));
-    expect(h.getMessage).toHaveBeenCalledTimes(1);
+    await act(async () => finish(message()));
+    expect(await screen.findByRole('button', { name })).toBeVisible();
+    expect(h.preview).toHaveBeenCalledTimes(1);
+    expect(h.preview).toHaveBeenCalledWith('res_result/rev_result', 'mycowork-result', expect.any(Object));
   });
 
-  it('等值截断消息刷新保留已读卡片与正在打开的预览', async () => {
+  it('普通工作稿首次挂出立即点击，首个 effect 不取消异步预览', async () => {
+    h.openOnMount = true;
     let finish!: (value: unknown) => void;
     h.project.mockImplementationOnce(
       () =>
@@ -201,15 +201,28 @@ describe('持久填充结果的固定成品入口', () => {
           finish = resolve;
         })
     );
-    const compact = () => message(output, { _compact: { truncated: true } });
-    const view = render(<MessageToolGroupSummary messages={[compact()]} />);
+    render(<MyCoworkWorkspaceFileLinkSlot relativePath={path}>{name}</MyCoworkWorkspaceFileLinkSlot>);
+    await waitFor(() => expect(h.project).toHaveBeenCalledTimes(1));
+    await act(async () => finish({ project_id: 'p1', explorer: { workspace_pe_id: 'pe1' } }));
+    await waitFor(() => expect(h.preview).toHaveBeenCalledTimes(1));
+  });
+
+  it('普通工作稿等值刷新保留正在打开的预览', async () => {
+    let finish!: (value: unknown) => void;
+    h.project.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const card = () => <MyCoworkWorkspaceFileLinkSlot relativePath={path}>{name}</MyCoworkWorkspaceFileLinkSlot>;
+    const view = render(card());
     fireEvent.click(await screen.findByRole('button', { name }));
     await waitFor(() => expect(h.project).toHaveBeenCalledTimes(1));
-    view.rerender(<MessageToolGroupSummary messages={[compact()]} />);
+    view.rerender(card());
     expect(screen.getByRole('button', { name })).toBeVisible();
     await act(async () => finish({ project_id: 'p1', explorer: { workspace_pe_id: 'pe1' } }));
     await waitFor(() => expect(h.preview).toHaveBeenCalledTimes(1));
-    expect(h.getMessage).toHaveBeenCalledTimes(1);
   });
 
   it.each(['卸载', '切换账号'])('%s后丢弃迟到的项目查询结果', async (change) => {
@@ -220,11 +233,7 @@ describe('持久填充结果的固定成品入口', () => {
           finish = resolve;
         })
     );
-    const card = () => (
-      <MyCoworkWorkspaceFileLinkSlot relativePath={path} fixedResult>
-        {name}
-      </MyCoworkWorkspaceFileLinkSlot>
-    );
+    const card = () => <MyCoworkWorkspaceFileLinkSlot relativePath={path}>{name}</MyCoworkWorkspaceFileLinkSlot>;
     const view = render(card());
     fireEvent.click(await screen.findByRole('button', { name }));
     await waitFor(() => expect(h.project).toHaveBeenCalledTimes(1));
@@ -238,39 +247,57 @@ describe('持久填充结果的固定成品入口', () => {
     expect(h.metadata).not.toHaveBeenCalled();
   });
 
-  it('同一消息内容真正改变时不沿用旧卡片或打开结果', async () => {
-    let finishProject!: (value: unknown) => void;
-    let finishMessage!: (value: ToolMessage) => void;
-    h.project.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishProject = resolve;
-        })
-    );
-    h.getMessage.mockResolvedValueOnce(message()).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishMessage = resolve;
-        })
-    );
+  it('同一消息内容真正改变时丢弃正在回读的旧结果', async () => {
+    let finishOld!: (value: ToolMessage) => void;
+    let finishNew!: (value: ToolMessage) => void;
+    h.getMessage
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishOld = resolve;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishNew = resolve;
+          })
+      );
     const view = render(<MessageToolGroupSummary messages={[message(output, { _compact: { truncated: true } })]} />);
-    fireEvent.click(await screen.findByRole('button', { name }));
-    await waitFor(() => expect(h.project).toHaveBeenCalledTimes(1));
-    const changed = { ...output, output_id: 'out_changed', resource_id: 'res_changed' };
+    await waitFor(() => expect(h.getMessage).toHaveBeenCalledTimes(1));
+    const changed = { ...output, output_id: 'out_changed', resource_id: 'res_changed', revision_id: 'rev_changed' };
     view.rerender(<MessageToolGroupSummary messages={[message(changed, { _compact: { truncated: true } })]} />);
+    await waitFor(() => expect(h.getMessage).toHaveBeenCalledTimes(2));
+    await act(async () => finishOld(message()));
     expect(screen.queryByRole('button', { name })).toBeNull();
-    await act(async () => finishProject({ project_id: 'p1', explorer: { workspace_pe_id: 'pe1' } }));
-    expect(h.preview).not.toHaveBeenCalled();
-    await act(async () => finishMessage(message(changed)));
-    expect(await screen.findByRole('button', { name })).toBeVisible();
-    expect(h.getMessage).toHaveBeenCalledTimes(2);
+    await act(async () => finishNew(message(changed)));
+    fireEvent.click(await screen.findByRole('button', { name }));
+    expect(h.preview).toHaveBeenCalledWith('res_changed/rev_changed', 'mycowork-result', expect.any(Object));
+    expect(h.preview).toHaveBeenCalledTimes(1);
+  });
+
+  it('登记输出使用输入路径和回执版本直接打开成品', async () => {
+    const registered = message(
+      { output_id: 'out_registered', resource_id: 'res_registered', revision_id: 'rev_registered' },
+      {
+        name: 'office_register_output',
+        input: { relative_path: path },
+      }
+    );
+    render(<MessageToolGroupSummary messages={[registered]} />);
+    fireEvent.click(await screen.findByRole('button', { name }));
+    expect(h.preview).toHaveBeenCalledWith('res_registered/rev_registered', 'mycowork-result', expect.any(Object));
+    expect(h.metadata).not.toHaveBeenCalled();
   });
 
   it.each([
     ['业务错误也 completed', { error: { code: 'INVALID_ARGUMENT', message: '金额未知' } }, {}],
     ['失败', output, { status: 'error' }],
     ['取消', output, { status: 'canceled' }],
-    ['缺成果标识', { resource_id: 'res_result', relative_path: path }, {}],
+    ['缺成果标识', { resource_id: 'res_result', revision_id: 'rev_result', relative_path: path }, {}],
+    ['缺版本标识', { ...output, revision_id: undefined }, {}],
+    ['非法版本标识', { ...output, revision_id: 'rev_bad/path' }, {}],
+    ['错误夹带成功字段', { ...output, error: { code: 'FAILED' } }, {}],
     ['非法资源标识', { ...output, resource_id: 'res_bad/path' }, {}],
     ['不同会话路径', { ...output, relative_path: 'deck/c2/青禾建设决策.pptx' }, {}],
     ['非填充工具', output, { name: 'read' }],

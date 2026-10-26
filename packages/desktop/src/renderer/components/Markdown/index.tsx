@@ -42,6 +42,7 @@ const isLocalFilePath = (src: string): boolean => {
 
 type MarkdownViewProps = {
   children: string;
+  messageId?: string;
   hiddenCodeCopyButton?: boolean;
   codeStyle?: React.CSSProperties;
   className?: string;
@@ -55,6 +56,7 @@ type MarkdownViewProps = {
 
 const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
   ({
+    messageId,
     hiddenCodeCopyButton,
     codeStyle,
     className,
@@ -129,7 +131,7 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
           const workspacePath = conversationFilePath(rawHref);
           if (workspacePath)
             return (
-              <MyCoworkWorkspaceFileLinkSlot relativePath={workspacePath}>
+              <MyCoworkWorkspaceFileLinkSlot relativePath={workspacePath} messageId={messageId}>
                 {anchorProps.children}
               </MyCoworkWorkspaceFileLinkSlot>
             );
@@ -157,7 +159,7 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
         },
         ...overrides,
       }),
-      [codeStyle, hiddenCodeCopyButton, handleLinkClick, onLocalFileLink, overrides]
+      [codeStyle, hiddenCodeCopyButton, handleLinkClick, onLocalFileLink, overrides, messageId]
     );
 
     const rehypePlugins = useMemo(() => (allowHtml ? [rehypeRaw, rehypeKatex] : [rehypeKatex]), [allowHtml]);

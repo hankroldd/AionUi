@@ -363,6 +363,7 @@ const MessageText: React.FC<{
             <CollapsibleContent maxHeight={200} defaultCollapsed={true}>
               <div data-testid='message-text-content'>
                 <MarkdownView
+                  messageId={message.id}
                   codeStyle={CODE_STYLE}
                   onLocalFileLink={handleLocalFileLink}
                 >{`\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``}</MarkdownView>
@@ -370,7 +371,7 @@ const MessageText: React.FC<{
             </CollapsibleContent>
           ) : (
             <div data-testid='message-text-content'>
-              <MarkdownView codeStyle={CODE_STYLE} onLocalFileLink={handleLocalFileLink}>
+              <MarkdownView messageId={message.id} codeStyle={CODE_STYLE} onLocalFileLink={handleLocalFileLink}>
                 {data}
               </MarkdownView>
             </div>

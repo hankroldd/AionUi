@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import i18n from 'i18next';
 import type { BranchAdapter, BranchAnchor, PreparedBranch, ScopedSession } from '@mycowork/ui';
 import { ipcBridge } from '@/common';
-import type { IProvider, TProviderWithModel } from '@/common/config/storage';
+import type { IProvider, ISessionMcpServer, TProviderWithModel } from '@/common/config/storage';
 import { isAionrsAssistant } from '@/common/types/agent/assistantTypes';
 import { useOwnerKey } from '@/renderer/mycowork-resource-navigation';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
@@ -26,6 +26,7 @@ type Selection = {
   assistantId: string;
   model: TProviderWithModel;
   skillIds: string[];
+  profileTokenSha256: string | null;
 };
 
 function fail(reason: string): never {
@@ -47,6 +48,39 @@ async function owned<T>(pending: Promise<T>, check: CheckOwner): Promise<T> {
     return await pending;
   } finally {
     check();
+  }
+}
+
+/** Keep the source token in this call only; the branch request receives its digest. */
+async function profileTokenSha256(servers: ISessionMcpServer[] | undefined, check: CheckOwner): Promise<string | null> {
+  if (servers === undefined) return null;
+  if (!Array.isArray(servers)) fail('BRANCH_PROFILE_UNAVAILABLE');
+  const matches = servers.filter((server) => server?.id === 'mycowork_bridge' || server?.name === 'mycowork_bridge');
+  if (matches.length === 0) return null;
+  const server = matches[0];
+  if (
+    matches.length !== 1 ||
+    server.id !== 'mycowork_bridge' ||
+    server.name !== 'mycowork_bridge' ||
+    server.transport?.type !== 'streamable_http' ||
+    typeof server.transport.url !== 'string' ||
+    !server.transport.url
+  )
+    fail('BRANCH_PROFILE_UNAVAILABLE');
+  const headers = Object.entries(server.transport.headers ?? {}).filter(
+    ([key]) => key.toLowerCase() === 'authorization'
+  );
+  const token =
+    headers.length === 1 && typeof headers[0][1] === 'string'
+      ? /^Bearer ([A-Za-z0-9_-]+)$/i.exec(headers[0][1])?.[1]
+      : undefined;
+  if (!token) fail('BRANCH_PROFILE_UNAVAILABLE');
+  try {
+    const digest = await owned(crypto.subtle.digest('SHA-256', new TextEncoder().encode(token)), check);
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  } catch {
+    check();
+    fail('BRANCH_PROFILE_UNAVAILABLE');
   }
 }
 
@@ -77,6 +111,7 @@ async function sourceSelection(anchor: BranchAnchor, check: CheckOwner): Promise
     assistantId,
     model: safeModel(conversation.model),
     skillIds: [...new Set(conversation.extra.skills ?? [])],
+    profileTokenSha256: await profileTokenSha256(conversation.extra.session_mcp_servers, check),
   };
 }
 
@@ -101,6 +136,7 @@ async function defaultSelection(modelList: IProvider[], catalog: Skill[], check:
     assistantId,
     model,
     skillIds: [...new Set([...defaults.skillIds, ...automatic])],
+    profileTokenSha256: null,
   };
 }
 
@@ -153,6 +189,7 @@ async function createConversation(
         },
       },
       extra: {
+        ...(session.system_prompt !== undefined ? { system_prompt: session.system_prompt } : {}),
         workspace: session.workspace,
         custom_workspace: true,
         selected_mcp_server_ids: [],
@@ -204,6 +241,7 @@ export function useBranchAdapter(): BranchAdapter {
           label: selection.label,
           content: selection.content,
           skills,
+          profileTokenSha256: selection.profileTokenSha256,
           createConversation: (id, session) => createConversation(id, session, selection, catalog, check),
         };
       },

@@ -25,6 +25,8 @@ export function setup(
     workspace?: string;
     skills?: { skill_id: string; content?: string }[];
     content?: string;
+    profileTokenSha256?: string | null;
+    systemPrompt?: string;
   } = {}
 ) {
   const calls: Call[] = [];
@@ -47,6 +49,7 @@ export function setup(
       label: '合成助手 · 合成模型',
       content: options.content ?? '仅所选消息',
       skills: options.skills ?? [{ skill_id: 'synthetic-skill', content: skillContent }],
+      ...(options.profileTokenSha256 === undefined ? {} : { profileTokenSha256: options.profileTokenSha256 }),
       createConversation,
     })),
     readWorkspace: vi.fn(async (id: string) => {
@@ -113,6 +116,7 @@ export function setup(
       if (stage === 'token')
         return json({
           workspace: '/synthetic/branch',
+          ...(options.systemPrompt === undefined ? {} : { system_prompt: options.systemPrompt }),
           session_mcp_server: {
             id: 'branch-mcp',
             name: 'Branch MCP',

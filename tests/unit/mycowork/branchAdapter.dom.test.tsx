@@ -5,6 +5,7 @@
  * 关联：PR10 C2/C3；renderer/mycowork-branches.tsx。
  */
 import React, { StrictMode } from 'react';
+import { createHash, webcrypto } from 'node:crypto';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -77,7 +78,14 @@ const source = () => ({
     session_mcp_servers: [{ id: 'old-mcp' }],
     acp_session_id: 'old-session',
     preset_rules: 'old-rules',
+    system_prompt: 'old-profile-must-not-be-copied',
   },
+});
+const profileToken = 'fixture-Profile_token-0123';
+const profileMcp = (headers: Record<string, string> = { Authorization: `Bearer ${profileToken}` }) => ({
+  id: 'mycowork_bridge',
+  name: 'mycowork_bridge',
+  transport: { type: 'streamable_http', url: '/bridge/mcp', headers },
 });
 const detail = () => ({
   id: 'assistant-fixture',
@@ -114,6 +122,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal('crypto', webcrypto);
   boundary.owner = 'fixture-owner';
   boundary.providers = [
     {
@@ -144,13 +153,17 @@ beforeEach(() => {
   boundary.skills.mockResolvedValue(catalog);
   boundary.readSkill.mockResolvedValue('# 虚构 Skill\r\n');
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 it('only the selected message becomes draft content; creation carries the new directory and Bridge MCP', async () => {
   const { result } = mount();
   const prepared = await result.current.prepare(anchor);
   boundary.get.mockRejectedValue(new Error('fixture lookup unavailable'));
-  const conversationId = await prepared.createConversation('new-fixture', session);
+  const system_prompt = 'fixture frozen writing rules';
+  const conversationId = await prepared.createConversation('new-fixture', { ...session, system_prompt });
   expect({ conversationId, content: prepared.content, skills: prepared.skills }).toEqual({
     conversationId: 'ack-fixture',
     content: '仅所选正文\r\n不包含其他消息',
@@ -172,6 +185,7 @@ it('only the selected message becomes draft content; creation carries the new di
       },
     },
     extra: {
+      system_prompt,
       workspace: session.workspace,
       custom_workspace: true,
       selected_mcp_server_ids: [],
@@ -197,11 +211,13 @@ it('version-only preparation uses assistant model defaults and only enabled auto
     prepared.skills.map((skill) => skill.skill_id)
   );
   expect({
+    profileTokenSha256: prepared.profileTokenSha256,
     label: prepared.label,
     content: prepared.content,
     ids: prepared.skills.map((item) => item.skill_id),
     workspace,
   }).toEqual({
+    profileTokenSha256: null,
     label: '虚构助手',
     content: '基于本分支工作目录中的所选文件版本继续处理。本会话不继承原会话的资料范围；不要自动执行。',
     ids: ['chosen', 'auto-keep'],
@@ -209,6 +225,46 @@ it('version-only preparation uses assistant model defaults and only enabled auto
   });
   expect(boundary.create.mock.calls[0]![0].model).toMatchObject({ id: 'fixture-provider', use_model: 'preferred' });
   expect(boundary.message).not.toHaveBeenCalled();
+  expect(boundary.create.mock.calls[0]![0].extra).not.toHaveProperty('system_prompt');
+});
+
+it('hashes only the exact source Bridge token and never forwards the bearer', async () => {
+  boundary.get.mockResolvedValue({
+    ...source(),
+    extra: {
+      ...source().extra,
+      session_mcp_servers: [{ id: 'unrelated' }, profileMcp({ authorization: `bEaReR ${profileToken}` })],
+    },
+  });
+  const { result } = mount();
+  const prepared = await result.current.prepare(anchor);
+  expect(prepared.profileTokenSha256).toBe(createHash('sha256').update(profileToken).digest('hex'));
+  await prepared.createConversation('new-fixture', session);
+  expect(JSON.stringify({ prepared, requests: boundary.create.mock.calls })).not.toContain(profileToken);
+});
+
+it.each([
+  ['multiple entries', [profileMcp(), profileMcp()]],
+  ['mismatched name', [{ ...profileMcp(), name: 'different-service' }]],
+  ['wrong transport', [{ ...profileMcp(), transport: { type: 'stdio' } }]],
+  ['missing authorization', [profileMcp({})]],
+  ['wrong scheme', [profileMcp({ Authorization: 'Basic fixture-secret' })]],
+  ['malformed bearer', [profileMcp({ Authorization: `Bearer ${profileToken} ` })]],
+  ['duplicate authorization', [profileMcp({ Authorization: 'Bearer first', authorization: 'Bearer second' })]],
+  ['invalid list', {}],
+])('rejects %s without exposing credentials or creating a conversation', async (_label, servers) => {
+  boundary.get.mockResolvedValue({ ...source(), extra: { ...source().extra, session_mcp_servers: servers } });
+  const { result } = mount();
+  await expect(result.current.prepare(anchor)).rejects.toMatchObject({
+    message: 'conversation.createFailed',
+    cause: { message: 'BRANCH_PROFILE_UNAVAILABLE' },
+  });
+  expect(boundary.create).not.toHaveBeenCalled();
+});
+
+it('a source without a Bridge MCP explicitly freezes no Profile', async () => {
+  const { result } = mount();
+  await expect(result.current.prepare(anchor)).resolves.toMatchObject({ profileTokenSha256: null });
 });
 
 it('an ACP source cannot be prepared as an aionrs branch', async () => {

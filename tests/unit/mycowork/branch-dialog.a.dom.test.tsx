@@ -15,6 +15,28 @@ afterEach(() => {
 });
 
 describe('分支创建的真实UI状态机', () => {
+  it('只提交来源令牌摘要，并把新系统提示交给会话而非草稿', async () => {
+    const digest = 'a'.repeat(64);
+    const systemPrompt = '冻结的虚构写作规则';
+    const s = setup({ profileTokenSha256: digest, systemPrompt });
+    mount(s.adapter);
+    await create();
+    await waitFor(() => expect(s.adapter.openConversation).toHaveBeenCalledOnce());
+    expect(s.calls.find((c) => c.path === '/bridge/v1/branches')!.body.profile_token_sha256).toBe(digest);
+    expect(s.createConversation.mock.calls[0]![1]).toMatchObject({ system_prompt: systemPrompt });
+    expect(s.calls.find((c) => c.path.includes('/drafts/'))!.body.state.content).toBe('仅所选消息');
+  });
+
+  it.each([null, undefined])('明确无规则和旧客户端未采集保留区别（%s）', async (profileTokenSha256) => {
+    const s = setup({ profileTokenSha256 });
+    mount(s.adapter);
+    await create();
+    await waitFor(() => expect(s.adapter.openConversation).toHaveBeenCalledOnce());
+    const request = s.calls.find((c) => c.path === '/bridge/v1/branches')!.body;
+    if (profileTokenSha256 === null) expect(request.profile_token_sha256).toBeNull();
+    else expect(request).not.toHaveProperty('profile_token_sha256');
+  });
+
   it('消息分支POST固定源计划并申请独立快照，后续令牌和绑定用返回计划及真实会话ID', async () => {
     const s = setup();
     mount(s.adapter);

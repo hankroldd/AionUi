@@ -81,7 +81,6 @@ export const MyCoworkWorkspaceFileLinkSlot: React.FC<{
   const messages = useMessageList();
   const generation = useRef(0);
   useEffect(() => {
-    generation.current += 1;
     return () => {
       generation.current += 1;
     };

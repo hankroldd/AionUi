@@ -26,7 +26,22 @@ const h = vi.hoisted(() => ({
   readContent: vi.fn(),
   preview: vi.fn(),
   owner: { current: 'owner-a' as string | undefined },
+  openOnMount: false,
 }));
+vi.mock('@mycowork/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@mycowork/ui')>();
+  const ReactActual = await import('react');
+  return {
+    ...actual,
+    ConversationFileLink: function MountFileLink(props: React.ComponentProps<typeof actual.ConversationFileLink>) {
+      ReactActual.useLayoutEffect(() => {
+        // A visible card can be opened before the host's first passive effect.
+        if (h.openOnMount) props.onOpen();
+      }, []);
+      return ReactActual.createElement(actual.ConversationFileLink, props);
+    },
+  };
+});
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'zh-CN' } }) }));
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({
   useAuth: () => ({ status: h.owner.current ? 'authenticated' : 'unauthenticated', user: { id: h.owner.current } }),
@@ -71,6 +86,7 @@ beforeEach(() => {
   setCurrentProject('p1');
   setCurrentConversation('c1');
   h.owner.current = 'owner-a';
+  h.openOnMount = false;
   h.fetch.mockReset().mockResolvedValue(reply({ resource_id: 'res_result', pending_confirmations: pending }));
   h.getMessage.mockReset().mockResolvedValue(message());
   h.project.mockReset().mockResolvedValue({ project_id: 'p1', explorer: { workspace_pe_id: 'pe1' } });
@@ -158,6 +174,25 @@ describe('持久填充结果的固定成品入口', () => {
     expect(h.getMessage).toHaveBeenCalledTimes(1);
   });
 
+  it('首次挂出的成品卡快速打开后，等值刷新仍完成预览', async () => {
+    h.openOnMount = true;
+    let finish!: (value: unknown) => void;
+    h.project.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const compact = () => message(output, { _compact: { truncated: true } });
+    const view = render(<MessageToolGroupSummary messages={[compact()]} />);
+    expect(await screen.findByRole('button', { name })).toBeVisible();
+    await waitFor(() => expect(h.project).toHaveBeenCalledTimes(1));
+    view.rerender(<MessageToolGroupSummary messages={[compact()]} />);
+    await act(async () => finish({ project_id: 'p1', explorer: { workspace_pe_id: 'pe1' } }));
+    await waitFor(() => expect(h.preview).toHaveBeenCalledTimes(1));
+    expect(h.getMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('等值截断消息刷新保留已读卡片与正在打开的预览', async () => {
     let finish!: (value: unknown) => void;
     h.project.mockImplementationOnce(
@@ -175,6 +210,32 @@ describe('持久填充结果的固定成品入口', () => {
     await act(async () => finish({ project_id: 'p1', explorer: { workspace_pe_id: 'pe1' } }));
     await waitFor(() => expect(h.preview).toHaveBeenCalledTimes(1));
     expect(h.getMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['卸载', '切换账号'])('%s后丢弃迟到的项目查询结果', async (change) => {
+    let finish!: (value: unknown) => void;
+    h.project.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const card = () => (
+      <MyCoworkWorkspaceFileLinkSlot relativePath={path} fixedResult>
+        {name}
+      </MyCoworkWorkspaceFileLinkSlot>
+    );
+    const view = render(card());
+    fireEvent.click(await screen.findByRole('button', { name }));
+    await waitFor(() => expect(h.project).toHaveBeenCalledTimes(1));
+    if (change === '卸载') view.unmount();
+    else {
+      h.owner.current = 'owner-b';
+      view.rerender(card());
+    }
+    await act(async () => finish({ project_id: 'p1', explorer: { workspace_pe_id: 'pe1' } }));
+    expect(h.preview).not.toHaveBeenCalled();
+    expect(h.metadata).not.toHaveBeenCalled();
   });
 
   it('同一消息内容真正改变时不沿用旧卡片或打开结果', async () => {

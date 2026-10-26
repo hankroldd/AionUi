@@ -21,6 +21,7 @@ vi.mock('@/renderer/hooks/context/AuthContext', () => ({
 }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({
+  useNavigationType: () => 'POP',
   useLocation: () => ({ state: null, pathname: '/' }),
   useNavigate: () => vi.fn(),
 }));

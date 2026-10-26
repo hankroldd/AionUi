@@ -6,6 +6,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetSpaceSnapshot } from '@mycowork/ui/pages/resources/space-snapshot.ts';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
 
@@ -19,6 +20,7 @@ vi.mock('@/renderer/hooks/context/AuthContext', () => ({
 }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({
+  useNavigationType: () => 'POP',
   useLocation: () => ({ state: null, pathname: '/' }),
   useNavigate: () => vi.fn(),
 }));
@@ -150,6 +152,7 @@ async function choose(dialog: HTMLElement, name = '新标签') {
   fireEvent.click(within(option).getByText(name));
 }
 beforeEach(() => {
+  resetSpaceSnapshot();
   savedView = {
     view_id: 'view_batch',
     name: '虚构分组',

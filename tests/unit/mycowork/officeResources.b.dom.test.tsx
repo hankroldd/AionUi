@@ -5,6 +5,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetSpaceSnapshot } from '@mycowork/ui/pages/resources/space-snapshot.ts';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { OfficeResourcesSlot } from '@/renderer/mycowork-slots';
 import { LayoutContext } from '@/renderer/hooks/context/LayoutContext';
@@ -16,12 +17,14 @@ vi.mock('@/renderer/hooks/context/AuthContext', () => ({
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock('react-router-dom', () => ({
+  useNavigationType: () => 'POP',
   useLocation: () => ({ state: null, pathname: '/', key: 'k' }),
   useNavigate: () => navigateMock,
 }));
 
 describe('OfficeResourcesSlot', () => {
   beforeEach(() => {
+    resetSpaceSnapshot();
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
     localStorage.clear();

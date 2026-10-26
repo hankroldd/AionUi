@@ -45,6 +45,7 @@ vi.mock('@/renderer/mycowork-secondary', () => ({
 vi.mock('i18next', () => ({ default: { language: 'zh-CN' } }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'zh-CN' } }) }));
 vi.mock('react-router-dom', () => ({
+  useNavigationType: () => 'POP',
   useInRouterContext: () => true,
   useLocation: () => ({ pathname: '/office/space', state: null }),
   useMatch: () => null,

@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { ipcBridge } from '@/common';
@@ -65,7 +65,8 @@ function useOfficeSidebar(id: string) {
 export const OfficeResourcesSlot: React.FC = () => {
   const { i18n: current } = useTranslation();
   const navigation = useOfficeSidebar(MYCOWORK_SPACE_SIDER_ID);
-  const { pathname } = useLocation();
+  const { pathname, key } = useLocation();
+  const action = useNavigationType();
   const navigate = useNavigate();
   const trash = /^\/office\/trash\/?$/.test(pathname);
   const { user, status } = useAuth();
@@ -74,7 +75,7 @@ export const OfficeResourcesSlot: React.FC = () => {
   const onSwitchScope = useResourceScopeSwitch(ownerKey);
   return (
     <ResourcesPage
-      key={`${status}:${user?.id ?? ''}`}
+      key={`${status}:${user?.id ?? ''}:${key}`}
       lang={current.language}
       {...navigation}
       trash={trash}
@@ -82,6 +83,7 @@ export const OfficeResourcesSlot: React.FC = () => {
         if (next !== trash) void navigate(next ? '/office/trash' : '/office/space');
       }}
       ownerKey={ownerKey}
+      historyEntry={{ key, action }}
       resolveConversationName={resolveOutputConversationName}
       onAskScope={onAskScope}
       onSwitchScope={onSwitchScope}

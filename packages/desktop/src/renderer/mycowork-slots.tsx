@@ -294,7 +294,15 @@ export function useMyCoworkConversationFiles(
       }
     });
   }, [ownerKey, conversationId, onFilesWritten]);
-  return useConversationWorkspace(ownerKey, projectId, conversationId, turns);
+  const files = useConversationWorkspace(ownerKey, projectId, conversationId, turns);
+  const directoriesKey = JSON.stringify(files.directories);
+  useEffect(() => {
+    if (!ownerKey || !conversationId || directoriesKey === '[]' || !onFilesWritten) return;
+    // One recovery task follows reveal's subscription microtask; this is neither polling nor a retry.
+    const timer = setTimeout(onFilesWritten, 0);
+    return () => clearTimeout(timer);
+  }, [ownerKey, projectId, conversationId, directoriesKey, onFilesWritten]);
+  return files;
 }
 
 export { MyCoworkWorkspaceFileLinkSlot, MyCoworkResourceCitationSlot } from './mycowork-file-link';

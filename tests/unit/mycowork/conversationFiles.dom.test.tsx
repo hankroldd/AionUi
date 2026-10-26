@@ -4,10 +4,12 @@
  * 边界：只替换 HTTP/IPC 传输；实际渲染 Explorer、主仓目录读取与筛选逻辑。
  */
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExplorerContainer } from '@/renderer/pages/conversation/explorer/ExplorerContainer';
+import { useMyCoworkConversationFiles } from '@/renderer/mycowork-slots';
+import type { DirRef } from '@/renderer/pages/conversation/explorer/explorerModel';
 import { peKey, refToKey, type Entry, type PeKey } from '@/renderer/pages/conversation/explorer/explorerModel';
 import {
   applyMonitorNotification,
@@ -118,6 +120,49 @@ afterEach(() => {
 });
 
 describe('本次对话文件入口', () => {
+  it('卸载时取消尚未执行的目录恢复，不刷新离开的页面', async () => {
+    h.fetch.mockResolvedValue(response(workspace('c1')));
+    const refreshed = vi.fn();
+    vi.useFakeTimers();
+    try {
+      const view = renderHook(() => useMyCoworkConversationFiles('p1', 'c1', refreshed));
+      await act(async () => {});
+      expect(view.result.current.directories).toEqual(['deck/c1']);
+      view.unmount();
+      await act(async () => vi.runAllTimersAsync());
+      expect(refreshed).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(['冷启动', '返回空间后重挂载'])('%s 自动恢复已展开会话目录的空基线', async (mode) => {
+    h.fetch.mockResolvedValue(response(workspace('c1')));
+    configureExplorerStore({
+      subscribe: async (refs) => ({
+        snapshots: refs.map((target) => ({
+          target,
+          entries: target.relative_path === 'deck/c1' ? [] : (snapshots[refToKey(target)] ?? []),
+        })),
+      }),
+      remount: h.remount,
+      unsubscribe: () => {},
+    });
+    if (mode === '返回空间后重挂载') {
+      const previous = mount();
+      await screen.findByText('本次对话文件');
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      previous.unmount();
+    }
+    h.remount.mockClear().mockImplementation(async (refs: DirRef[]) => ({
+      snapshots: refs.map((target) => ({ target, entries: snapshots[refToKey(target)] ?? [] })),
+    }));
+    mount();
+    expect(await screen.findByText('report-current.pptx')).toBeVisible();
+    expect(h.remount).toHaveBeenCalledTimes(1);
+    expect(h.remount).toHaveBeenCalledWith(expect.arrayContaining([{ pe_id: 'work', relative_path: 'deck/c1' }]));
+  });
+
   it('全部折叠后保留可重新展开的会话祖先，不误报暂无文件', async () => {
     h.fetch.mockResolvedValue(response(workspace('c1')));
     mount();
@@ -173,6 +218,9 @@ describe('本次对话文件入口', () => {
     '%s 成功后从原刷新端口重新读取当前文件树，不必等待下一轮',
     async (name) => {
       h.fetch.mockResolvedValue(response(workspace('c1')));
+      mount();
+      await screen.findByText('report-current.pptx');
+      await waitFor(() => expect(h.remount).toHaveBeenCalledTimes(1));
       h.remount.mockImplementation(async (refs: Array<{ pe_id: string; relative_path: string }>) => ({
         snapshots: refs.map((target) => ({
           target,
@@ -180,15 +228,14 @@ describe('本次对话文件入口', () => {
             target.relative_path === 'deck/c1' ? [file('copied-template.pptx')] : (snapshots[refToKey(target)] ?? []),
         })),
       }));
-      mount();
-      await screen.findByText('report-current.pptx');
       expect(screen.queryByText('copied-template.pptx')).toBeNull();
       await act(async () =>
         h.stream.forEach((fn) => fn({ conversation_id: 'c1', type: 'tool_call', data: { name, status: 'completed' } }))
       );
       expect(await screen.findByText('copied-template.pptx')).toBeVisible();
+      expect(h.remount).toHaveBeenCalledTimes(2);
       expect(h.remount).toHaveBeenCalledWith(expect.arrayContaining([{ pe_id: 'work', relative_path: 'deck/c1' }]));
-      expect(h.remount.mock.calls[0][0].every((ref: { pe_id: string }) => ref.pe_id === 'work')).toBe(true);
+      expect(h.remount.mock.calls[1][0].every((ref: { pe_id: string }) => ref.pe_id === 'work')).toBe(true);
     }
   );
 
@@ -213,6 +260,7 @@ describe('本次对话文件入口', () => {
       expect(subscribe.mock.calls.some(([refs]) => refs.some((ref) => ref.relative_path === 'deck/c1'))).toBe(true)
     );
     await act(async () => {}); // 让失败订阅退出 current，复现真实首次创建目录的状态。
+    await waitFor(() => expect(h.project).toHaveBeenCalledTimes(2));
     expect(screen.queryByText('copied-after-create.pptx')).toBeNull();
     exists = true;
     await act(async () =>
@@ -225,13 +273,16 @@ describe('本次对话文件入口', () => {
       )
     );
     expect(await screen.findByText('copied-after-create.pptx')).toBeVisible();
-    expect(h.project).toHaveBeenCalledTimes(2);
+    expect(h.project).toHaveBeenCalledTimes(3);
   });
 
-  it('其它会话、进行中、失败和只读工具不会刷新当前文件树', async () => {
+  it('稳定渲染、同目录 finish 重读、其它会话、进行中、失败和只读工具不重复刷新', async () => {
     h.fetch.mockResolvedValue(response(workspace('c1')));
     mount();
     await screen.findByText('report-current.pptx');
+    await waitFor(() => expect(h.remount).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: '显示全部' }));
+    fireEvent.click(screen.getByRole('button', { name: '仅本次对话' }));
     await act(async () => {
       for (const [conversation_id, name, status] of [
         ['c2', 'office_copy_to_workspace', 'completed'],
@@ -241,8 +292,11 @@ describe('本次对话文件入口', () => {
         ['c1', 'search', 'completed'],
       ])
         h.stream.forEach((fn) => fn({ conversation_id, type: 'tool_call', data: { name, status } }));
+      h.stream.forEach((fn) => fn({ conversation_id: 'c1', type: 'finish' }));
     });
-    expect(h.remount).not.toHaveBeenCalled();
+    await waitFor(() => expect(h.fetch).toHaveBeenCalledTimes(2));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(h.remount).toHaveBeenCalledTimes(1);
     expect(screen.getByText('report-current.pptx')).toBeVisible();
   });
 

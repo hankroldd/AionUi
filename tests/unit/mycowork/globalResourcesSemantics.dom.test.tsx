@@ -4,12 +4,13 @@
  * 边界：只替换Bridge HTTP；未交付动作不得以可点击占位出现，不验证真实设备或AI数据链。
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within, configure } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 import {
+  deferred,
   fetchMock,
   FIRST,
   fixture,
@@ -141,6 +142,37 @@ it('输入当帧清selection，清除全部条件保留source且恢复整库动�
   expect(screen.getByRole('checkbox', { name: '选择 第一页-1.md', exact: true })).not.toBeChecked();
   expect(writes()).toHaveLength(0);
 });
+it.each([
+  ['zh-CN', '正在加载知识库…', '还没有已授权的知识库'],
+  ['en-US', 'Loading knowledge bases…', 'No authorized knowledge base yet'],
+])('知识库目录未返回时显示加载提示，成功后显示目录（%s）', async (lang, loading, empty) => {
+  fixture(() => list(FIRST.slice(0, 2), 2));
+  const serve = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
+  const scopes = deferred<unknown>();
+  fetchMock.mockImplementation((url: string, init?: RequestInit) =>
+    url === '/bridge/v1/scopes' ? scopes.promise : serve(url, init)
+  );
+  render(<ResourcesPage lang={lang} />);
+  expect(screen.queryByText(empty)).toBeNull();
+  expect(screen.getByText(loading)).toBeInTheDocument();
+  await act(async () => scopes.resolve(await serve('/bridge/v1/scopes')));
+  expect(await screen.findByTestId('mycowork-nav-source-src_a')).toHaveTextContent('虚构甲库');
+  expect(screen.queryByText(loading)).toBeNull();
+  expect(screen.queryByText(empty)).toBeNull();
+});
+it('知识库目录成功返回空集合后才显示无授权知识库', async () => {
+  fixture(() => list(FIRST.slice(0, 2), 2));
+  const serve = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
+  const scopes = deferred<unknown>();
+  fetchMock.mockImplementation((url: string, init?: RequestInit) =>
+    url === '/bridge/v1/scopes' ? scopes.promise : serve(url, init)
+  );
+  render(<ResourcesPage lang='zh-CN' />);
+  expect(screen.queryByText('还没有已授权的知识库')).toBeNull();
+  await act(async () => scopes.resolve(reply(200, { sources: [], projects: [] })));
+  expect(await screen.findByText('还没有已授权的知识库')).toBeInTheDocument();
+  expect(screen.queryByText('正在加载知识库…')).toBeNull();
+});
 it('知识库目录首次读取失败：页面仍列出本人资料，点“重试”后重读目录，知识库导航出现', async () => {
   fixture(() => list(FIRST.slice(0, 2), 2));
   const serve = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
@@ -157,6 +189,8 @@ it('知识库目录首次读取失败：页面仍列出本人资料，点“重�
     within(alert).queryByRole('button', { name: '重试' })
   );
   expect(notice).toBeDefined();
+  expect(screen.queryByText('还没有已授权的知识库')).toBeNull();
+  expect(screen.queryByText('正在加载知识库…')).toBeNull();
   fireEvent.click(within(notice as HTMLElement).getByRole('button', { name: '重试' }));
   expect(await screen.findByTestId('mycowork-nav-source-src_a')).toHaveTextContent('虚构甲库');
   expect(scopes).toBe(2);

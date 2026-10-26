@@ -13,7 +13,10 @@ export function useSendFailure(lang: string | undefined) {
   const fail = useCallback((error: unknown) => setReason(error instanceof Error ? error.message : String(error)), []);
   const clear = useCallback(() => setReason(null), []);
   const notice = reason ? (
-    <div role='alert' className='flex items-start gap-8px mb-8px px-12px py-8px rd-8px b-1 b-solid b-[var(--color-danger-light-4)] text-13px'>
+    <div
+      role='alert'
+      className='flex items-start gap-8px mb-8px px-12px py-8px rd-8px b-1 b-solid b-[var(--color-danger-light-4)] text-13px'
+    >
       <span className='flex-1'>{reason}</span>
       <Button size='mini' type='text' onClick={clear}>
         {lang?.startsWith('zh') ? '关闭' : 'Dismiss'}

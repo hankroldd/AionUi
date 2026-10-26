@@ -51,13 +51,30 @@ function bridge(initial: object[]) {
     if (url === '/bridge/v1/edit-sessions' && method === 'GET') return reply(200, { items, next_page: null });
     if (url === '/bridge/v1/edit-sessions' && method === 'POST') return reply(200, full('eds_b', 'res_b', 'editing'));
     const one = /^\/bridge\/v1\/edit-sessions\/(\w+)$/.exec(url);
-    if (one) return reply(200, full(one[1] as string, one[1] === 'eds_a' ? 'res_a' : 'res_b', one[1] === 'eds_a' ? 'recovery_required' : 'editing'));
+    if (one)
+      return reply(
+        200,
+        full(
+          one[1] as string,
+          one[1] === 'eds_a' ? 'res_a' : 'res_b',
+          one[1] === 'eds_a' ? 'recovery_required' : 'editing'
+        )
+      );
     if (url.endsWith('/discard')) {
       items = items.filter((i) => !url.includes(String((i as { session_id: string }).session_id)));
       return reply(200, {});
     }
     const rev = /resources\/(\w+)\/revisions/.exec(url);
-    if (rev) return reply(200, { resource_id: rev[1], current_revision_id: 'rev_a', file_name: NAMES[rev[1] as string], items: [], page: 1, page_size: 50, total: 0 });
+    if (rev)
+      return reply(200, {
+        resource_id: rev[1],
+        current_revision_id: 'rev_a',
+        file_name: NAMES[rev[1] as string],
+        items: [],
+        page: 1,
+        page_size: 50,
+        total: 0,
+      });
     if (url.startsWith('/bridge/v1/resources?')) return reply(200, { page: 1, page_size: 50, total: 0, items: [] });
     if (url === '/bridge/v1/scopes') return reply(200, { sources: [], projects: [] });
     if (url === '/bridge/v1/tags') return reply(200, { tags: [] });
@@ -125,12 +142,15 @@ describe('空间页未结束的在线编辑', () => {
     render(<OfficeResourcesSlot />);
     await screen.findByText('方案.pptx');
     const original = fetchMock.getMockImplementation()!;
-    fetchMock.mockImplementation((url: string, init?: RequestInit) => url === '/bridge/v1/edit-sessions'
-      ? Promise.reject(new Error('network')) : original(url, init));
+    fetchMock.mockImplementation((url: string, init?: RequestInit) =>
+      url === '/bridge/v1/edit-sessions' ? Promise.reject(new Error('network')) : original(url, init)
+    );
     fireEvent(window, new Event('focus'));
     await screen.findByText('暂时无法更新在线编辑状态');
     expect(screen.getByText('方案.pptx')).toBeTruthy();
-    expect(screen.getByRole('link', { name: '查看版本' }).getAttribute('href')).toBe('#/office/resources/res_b/versions');
+    expect(screen.getByRole('link', { name: '查看版本' }).getAttribute('href')).toBe(
+      '#/office/resources/res_b/versions'
+    );
   });
 
   it('“回到编辑”进入该会话的编辑页', async () => {

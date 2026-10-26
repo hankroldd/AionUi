@@ -36,31 +36,62 @@ const reply = (status: number, body: unknown) => {
 };
 const counts = { total: 1, ready: 1, indexing: 0, failed: 0, unavailable: 0 };
 const rev = (id: string, over: object = {}) => ({
-  revision_id: id, parent_id: null, content_sha256: 'x', size: 1, created_at: '2026-10-08T01:00:00.000Z', origin: 'edit', current: false, ...over,
+  revision_id: id,
+  parent_id: null,
+  content_sha256: 'x',
+  size: 1,
+  created_at: '2026-10-08T01:00:00.000Z',
+  origin: 'edit',
+  current: false,
+  ...over,
 });
 const pub = (over: object = {}) => ({
-  publication_id: 'p1', resource_id: 'res_1', revision_id: 'rev_bbbbbbbb',
+  publication_id: 'p1',
+  resource_id: 'res_1',
+  revision_id: 'rev_bbbbbbbb',
   target: { kind: 'knowledge_base', source_id: 'src_q', file_name: '我的稿.md' },
-  status: 'published', error: null, published_resource_id: 'res_kb', accepted_at: 't', published_at: 't', created_at: 't', ...over,
+  status: 'published',
+  error: null,
+  published_resource_id: 'res_kb',
+  accepted_at: 't',
+  published_at: 't',
+  created_at: 't',
+  ...over,
 });
 function bridge(o: { pubs?: object[]; list?: object[] } = {}) {
   fetchMock.mockImplementation(async (url: string) => {
     if (url.endsWith('/revisions'))
       return reply(200, {
-        resource_id: 'res_1', current_revision_id: 'rev_bbbbbbbb', file_name: '我的稿.md',
+        resource_id: 'res_1',
+        current_revision_id: 'rev_bbbbbbbb',
+        file_name: '我的稿.md',
         items: [rev('rev_bbbbbbbb', { current: true }), rev('rev_aaaaaaaa', { origin: 'original' })],
-        page: 1, page_size: 50, total: 2,
+        page: 1,
+        page_size: 50,
+        total: 2,
       });
-    if (url.startsWith('/bridge/v1/publications?')) return reply(200, { items: o.pubs ?? [], page: 1, page_size: 50, total: 1 });
+    if (url.startsWith('/bridge/v1/publications?'))
+      return reply(200, { items: o.pubs ?? [], page: 1, page_size: 50, total: 1 });
     if (url === '/bridge/v1/scopes')
-      return reply(200, { sources: [{ source_id: 'src_q', name: '青禾库', provider: 'weknora', counts }], projects: [] });
+      return reply(200, {
+        sources: [{ source_id: 'src_q', name: '青禾库', provider: 'weknora', counts }],
+        projects: [],
+      });
     if (url.endsWith('/metadata')) return reply(200, { secret: false });
     if (url.includes('/changes?'))
       return reply(200, {
-        resource_id: 'res_1', from_revision_id: 'rev_aaaaaaaa', to_revision_id: 'rev_bbbbbbbb', format: 'md', compared_root: '/', status: 'complete',
-        coverage: { nodes_from: 1, nodes_to: 1, truncated: false, lists_truncated: false }, changes: [], unknown_parts: [],
+        resource_id: 'res_1',
+        from_revision_id: 'rev_aaaaaaaa',
+        to_revision_id: 'rev_bbbbbbbb',
+        format: 'md',
+        compared_root: '/',
+        status: 'complete',
+        coverage: { nodes_from: 1, nodes_to: 1, truncated: false, lists_truncated: false },
+        changes: [],
+        unknown_parts: [],
       });
-    if (url.endsWith('/office/html')) return { ...reply(200, null), text: async () => '<html><head></head><body></body></html>' };
+    if (url.endsWith('/office/html'))
+      return { ...reply(200, null), text: async () => '<html><head></head><body></body></html>' };
     if (url === '/bridge/v1/edit-sessions') return reply(200, { items: [], next_page: null });
     if (url === '/bridge/v1/tags') return reply(200, { tags: [] });
     if (url === '/bridge/v1/saved-views') return reply(200, { views: [] });
@@ -73,10 +104,26 @@ function bridge(o: { pubs?: object[]; list?: object[] } = {}) {
   });
 }
 const output = (linked: boolean) => ({
-  resource_id: 'res_o', file_name: '产物.md', source_id: null, origin: 'outputs', purpose: 'working', state: 'stored',
-  tag_ids: [], secret: false, can_mark_secret: true, updated_at: '2026-10-08T01:00:00.000Z', revision_count: 1,
+  resource_id: 'res_o',
+  file_name: '产物.md',
+  source_id: null,
+  origin: 'outputs',
+  purpose: 'working',
+  state: 'stored',
+  tag_ids: [],
+  secret: false,
+  can_mark_secret: true,
+  updated_at: '2026-10-08T01:00:00.000Z',
+  revision_count: 1,
   published_to: [
-    { publication_id: 'p1', source_id: 'src_q', status: 'published', has_published: true, linked_existing: linked, ...(linked ? { published_file_name: '库里的旧名.md' } : {}) },
+    {
+      publication_id: 'p1',
+      source_id: 'src_q',
+      status: 'published',
+      has_published: true,
+      linked_existing: linked,
+      ...(linked ? { published_file_name: '库里的旧名.md' } : {}),
+    },
   ],
 });
 
@@ -98,17 +145,25 @@ describe('A391 发布关联到库里已有同内容条目', () => {
     bridge({ pubs: [pub({ linked_existing: true, published_file_name: '库里的旧名.md' })] });
     watchPublication('p1', { kb: '青禾库', lang: 'zh-CN' });
     render(<OfficeVersionsSlot />);
-    expect(await screen.findByText('「青禾库」里已有内容相同的《库里的旧名.md》，这次没有另存一份；AI 引用的是库里那一份。')).toBeInTheDocument();
+    expect(
+      await screen.findByText('「青禾库」里已有内容相同的《库里的旧名.md》，这次没有另存一份；AI 引用的是库里那一份。')
+    ).toBeInTheDocument();
     expect(screen.queryByText('已发布到「青禾库」，AI 现在可以引用它')).toBeNull();
-    expect((await screen.findByTestId('version-publication-linked')).textContent).toBe('库里已有内容相同的《库里的旧名.md》，没有另存一份');
+    expect((await screen.findByTestId('version-publication-linked')).textContent).toBe(
+      '库里已有内容相同的《库里的旧名.md》，没有另存一份'
+    );
   });
 
   it('读不到那份的名字（null）时不写名字', async () => {
     bridge({ pubs: [pub({ linked_existing: true, published_file_name: null })] });
     watchPublication('p1', { kb: '青禾库', lang: 'zh-CN' });
     render(<OfficeVersionsSlot />);
-    expect(await screen.findByText('「青禾库」里已有内容相同的文件，这次没有另存一份；AI 引用的是库里那一份。')).toBeInTheDocument();
-    expect((await screen.findByTestId('version-publication-linked')).textContent).toBe('库里已有内容相同的文件，没有另存一份');
+    expect(
+      await screen.findByText('「青禾库」里已有内容相同的文件，这次没有另存一份；AI 引用的是库里那一份。')
+    ).toBeInTheDocument();
+    expect((await screen.findByTestId('version-publication-linked')).textContent).toBe(
+      '库里已有内容相同的文件，没有另存一份'
+    );
   });
 
   it('没有 linked_existing 时仍是原来的完成提示，也没有关联提示', async () => {
@@ -126,10 +181,12 @@ describe('A391 发布关联到库里已有同内容条目', () => {
     watchPublication('p1', { kb: 'Library', lang: 'en' });
     render(<OfficeVersionsSlot />);
     expect(
-      await screen.findByText('"Library" already has identical content, "old-name.md"; no second copy was saved. AI cites the one in the library.'),
+      await screen.findByText(
+        '"Library" already has identical content, "old-name.md"; no second copy was saved. AI cites the one in the library.'
+      )
     ).toBeInTheDocument();
     expect((await screen.findByTestId('version-publication-linked')).textContent).toBe(
-      'The library already has identical content, "old-name.md"; no second copy saved',
+      'The library already has identical content, "old-name.md"; no second copy saved'
     );
   });
 
@@ -138,7 +195,7 @@ describe('A391 发布关联到库里已有同内容条目', () => {
     watchPublication('p1', { kb: '青禾库', lang: 'zh-CN' });
     render(<OfficeResourcesSlot />);
     expect(
-      await screen.findByText('「青禾库」里已有内容相同的《库里的旧名.md》，这次没有另存一份；AI 引用的是库里那一份。'),
+      await screen.findByText('「青禾库」里已有内容相同的《库里的旧名.md》，这次没有另存一份；AI 引用的是库里那一份。')
     ).toBeInTheDocument();
   });
 

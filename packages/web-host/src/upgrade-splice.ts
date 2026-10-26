@@ -24,7 +24,10 @@ export function isWebSocketUpgrade(req: IncomingMessage): boolean {
     typeof up === 'string' &&
     up.trim().toLowerCase() === 'websocket' &&
     typeof conn === 'string' &&
-    conn.toLowerCase().split(',').some((t) => t.trim() === 'upgrade') &&
+    conn
+      .toLowerCase()
+      .split(',')
+      .some((t) => t.trim() === 'upgrade') &&
     typeof key === 'string' &&
     key.trim().length > 0
   );

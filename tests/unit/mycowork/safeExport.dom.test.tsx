@@ -195,7 +195,9 @@ describe('安全导出真实React与Arco流程', () => {
     render(<Harness />);
     accept();
     prepare();
-    await screen.findByText('资料服务暂不可用，请稍后重试；已保存的内容不受影响，手头的文件仍可打开和编辑，只是暂时不能语义检索。');
+    await screen.findByText(
+      '资料服务暂不可用，请稍后重试；已保存的内容不受影响，手头的文件仍可打开和编辑，只是暂时不能语义检索。'
+    );
     expect(requests).toHaveLength(1);
     expect(screen.queryByRole('button', { name: '确认以上影响并继续准备' })).toBeNull();
     expect(screen.getByTestId('safe-export-dialog')).not.toHaveTextContent('UPSTREAM_UNAVAILABLE');

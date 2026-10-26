@@ -15,8 +15,18 @@ vi.mock('@/common/adapter/httpBridge', () => ({ wsEmitter: () => ({ on: () => ()
 const { acceptOfficeRun } = await import('@/renderer/mycowork-task-send');
 
 const mk = (o: Partial<TaskRun>) =>
-  ({ run_id: 'r1', submission_id: 's1', created_at: '2026-10-21T00:00:00Z', conversation_id: 'c1', turn_id: 't1', status: 'running', turn_end: 'ok', ...o }) as TaskRun;
-const json = (run: TaskRun) => new Response(JSON.stringify(run), { status: 200, headers: { 'content-type': 'application/json' } });
+  ({
+    run_id: 'r1',
+    submission_id: 's1',
+    created_at: '2026-10-21T00:00:00Z',
+    conversation_id: 'c1',
+    turn_id: 't1',
+    status: 'running',
+    turn_end: 'ok',
+    ...o,
+  }) as TaskRun;
+const json = (run: TaskRun) =>
+  new Response(JSON.stringify(run), { status: 200, headers: { 'content-type': 'application/json' } });
 
 let release: (r: Response) => void;
 let handle: { setRun: (r: TaskRun | null) => void } | undefined;

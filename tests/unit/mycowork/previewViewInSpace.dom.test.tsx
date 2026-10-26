@@ -97,15 +97,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-
-const doc = { title: 'report.docx', file_name: 'report.docx', fileRef: { kind: 'project', pe_id: 'peA', relative_path: 'out/report.docx' } };
+const doc = {
+  title: 'report.docx',
+  file_name: 'report.docx',
+  fileRef: { kind: 'project', pe_id: 'peA', relative_path: 'out/report.docx' },
+};
 
 describe('preview "View in Space" (W4-6)', () => {
   it(
     'registered output: the button appears next to Edit, the lookup is a read-only GET, and clicking carries the one-time intent to Space',
     async () => {
       fetchMock.mockImplementation(async (url: string) =>
-        String(url).startsWith('/bridge/v1/conversations/conv_1/output-resource?') ? reply(200, { resource_id: 'res_9' }) : reply(404, {})
+        String(url).startsWith('/bridge/v1/conversations/conv_1/output-resource?')
+          ? reply(200, { resource_id: 'res_9' })
+          : reply(404, {})
       );
       openTab('', 'word', doc);
       const button = await screen.findByRole('button', { name: '在空间中查看' });
@@ -127,30 +132,38 @@ describe('preview "View in Space" (W4-6)', () => {
     ['not registered (404)', () => reply(404, { error: { code: 'NOT_FOUND', message: 'not found' } })],
     ['server error (500)', () => reply(500, { error: { code: 'INTERNAL', message: 'x' } })],
     ['network failure', () => Promise.reject(new TypeError('offline'))],
-  ])('%s: no button, Edit still there', async (_name, answer) => {
-    fetchMock.mockImplementation(async (url: string) => (String(url).includes('/output-resource') ? answer() : reply(404, {})));
-    openTab('', 'word', doc);
-    await screen.findByRole('button', { name: '编辑' });
-    await waitFor(() => expect(locateCalls()).toHaveLength(1));
-    await new Promise((r) => setTimeout(r, 50));
-    expect(screen.queryByRole('button', { name: '在空间中查看' })).toBeNull();
-  }, TIMEOUT_MS);
+  ])(
+    '%s: no button, Edit still there',
+    async (_name, answer) => {
+      fetchMock.mockImplementation(async (url: string) =>
+        String(url).includes('/output-resource') ? answer() : reply(404, {})
+      );
+      openTab('', 'word', doc);
+      await screen.findByRole('button', { name: '编辑' });
+      await waitFor(() => expect(locateCalls()).toHaveLength(1));
+      await new Promise((r) => setTimeout(r, 50));
+      expect(screen.queryByRole('button', { name: '在空间中查看' })).toBeNull();
+    },
+    TIMEOUT_MS
+  );
 
-  it('no relative path (a disk path outside the workspace): no lookup at all', async () => {
-    fetchMock.mockImplementation(async () => reply(404, {}));
-    openTab('x', 'code', { title: 'b.log', file_name: 'b.log', file_path: '/elsewhere/b.log' });
-    await screen.findByText('b.log');
-    expect(locateCalls()).toHaveLength(0);
-    expect(screen.queryByRole('button', { name: '在空间中查看' })).toBeNull();
-  }, TIMEOUT_MS);
+  it(
+    'no relative path (a disk path outside the workspace): no lookup at all',
+    async () => {
+      fetchMock.mockImplementation(async () => reply(404, {}));
+      openTab('x', 'code', { title: 'b.log', file_name: 'b.log', file_path: '/elsewhere/b.log' });
+      await screen.findByText('b.log');
+      expect(locateCalls()).toHaveLength(0);
+      expect(screen.queryByRole('button', { name: '在空间中查看' })).toBeNull();
+    },
+    TIMEOUT_MS
+  );
 });
 
 describe('PreviewEditButton lookup lifecycle (W4-6)', () => {
   const ok = (id: string) => reply(200, { resource_id: id });
   const nf = () => reply(404, { error: { code: 'NOT_FOUND', message: 'not found' } });
-  const mount = (path: string) => (
-    <PreviewEditButton lang='zh-CN' conversationId='conv_1' relativePath={path} />
-  );
+  const mount = (path: string) => <PreviewEditButton lang='zh-CN' conversationId='conv_1' relativePath={path} />;
   const lookups = () => locateCalls().length;
   afterEach(() => vi.useRealTimers());
 

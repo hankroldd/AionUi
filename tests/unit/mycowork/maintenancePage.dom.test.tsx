@@ -39,7 +39,14 @@ let sessions: () => ReturnType<typeof reply> = () => reply(200, { items: [], nex
 const DAY = 86_400_000;
 const MAINT = (last_backup: unknown, partial = false) => ({
   last_backup,
-  storage: { db_bytes: 2048, blobs_bytes: 5 * 1024 * 1024, workspaces_bytes: 100, total_bytes: 5 * 1024 * 1024 + 2148, partial, computed_at: 'x' },
+  storage: {
+    db_bytes: 2048,
+    blobs_bytes: 5 * 1024 * 1024,
+    workspaces_bytes: 100,
+    total_bytes: 5 * 1024 * 1024 + 2148,
+    partial,
+    computed_at: 'x',
+  },
 });
 let maint: () => ReturnType<typeof reply> = () => reply(200, MAINT(null));
 let instance: () => ReturnType<typeof reply> = () => reply(200, INSTANCE);
@@ -59,7 +66,13 @@ beforeEach(() => {
   instance = () => reply(200, INSTANCE);
   maint = () => reply(200, MAINT(null));
   // jsdom 没有 matchMedia，Arco Descriptions 订阅断点时需要
-  vi.stubGlobal('matchMedia', () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} }));
+  vi.stubGlobal('matchMedia', () => ({
+    matches: false,
+    addListener() {},
+    removeListener() {},
+    addEventListener() {},
+    removeEventListener() {},
+  }));
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (url: string) => {
     const u = String(url);
@@ -117,7 +130,15 @@ describe('P16 运行与维护（只读）', () => {
 
 describe('P16 切片 B：备份与存储', () => {
   it('新近的加密备份：相对与绝对时间、已加密、大小，无警告', async () => {
-    maint = () => reply(200, MAINT({ finished_at: new Date(Date.now() - 3 * 3600_000).toISOString(), encrypted: true, size_bytes: 3 * 1024 * 1024 }));
+    maint = () =>
+      reply(
+        200,
+        MAINT({
+          finished_at: new Date(Date.now() - 3 * 3600_000).toISOString(),
+          encrypted: true,
+          size_bytes: 3 * 1024 * 1024,
+        })
+      );
     render(page('/office/maintenance'));
     const box = await screen.findByTestId('maint-backup');
     await waitFor(() => expect(box.textContent).toContain('3 小时前'));
@@ -127,7 +148,11 @@ describe('P16 切片 B：备份与存储', () => {
   });
 
   it('未加密且超过 7 天：两条文字警告', async () => {
-    maint = () => reply(200, MAINT({ finished_at: new Date(Date.now() - 9 * DAY).toISOString(), encrypted: false, size_bytes: 10 }));
+    maint = () =>
+      reply(
+        200,
+        MAINT({ finished_at: new Date(Date.now() - 9 * DAY).toISOString(), encrypted: false, size_bytes: 10 })
+      );
     render(page('/office/maintenance'));
     const box = await screen.findByTestId('maint-backup');
     await waitFor(() => expect(box.textContent).toContain('9 天前'));

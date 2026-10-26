@@ -55,14 +55,12 @@ function deps(ready = true): GuidSendDeps {
 beforeEach(() => {
   sessionStorage.clear();
   edge.create.mockReset().mockResolvedValue({ id: 'conversation-a' });
-  edge.flush
-    .mockReset()
-    .mockResolvedValue({
-      revision: 3,
-      input_location: 'guid',
-      submission_id: 'submission-a',
-      state: { content: '虚构草稿', files: [], sessions: [] },
-    });
+  edge.flush.mockReset().mockResolvedValue({
+    revision: 3,
+    input_location: 'guid',
+    submission_id: 'submission-a',
+    state: { content: '虚构草稿', files: [], sessions: [] },
+  });
   edge.handoff.mockReset().mockResolvedValue(undefined);
 });
 

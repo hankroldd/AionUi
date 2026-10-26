@@ -114,7 +114,8 @@ function forward(
   const proxy = http.request(options, (proxyRes) => {
     const out = proxyRes.headers;
     // [mycowork] R061: cookies set over TLS are Secure (aioncore leaves the flag off)
-    if ((req.socket as { encrypted?: boolean }).encrypted && out['set-cookie']) out['set-cookie'] = secureCookies(out['set-cookie']);
+    if ((req.socket as { encrypted?: boolean }).encrypted && out['set-cookie'])
+      out['set-cookie'] = secureCookies(out['set-cookie']);
     res.writeHead(proxyRes.statusCode ?? 502, out);
     proxyRes.pipe(res);
   });
@@ -370,7 +371,12 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   const tlsPortActual = (tls_server?.address() as { port: number } | null)?.port;
 
   const actualPort = (tcp_server.address() as { port: number } | null)?.port ?? port;
-  const lanIP = allowRemote || tls_server ? (opts.tls?.host && opts.tls.host !== '0.0.0.0' ? opts.tls.host : (getLanIP() ?? undefined)) : undefined;
+  const lanIP =
+    allowRemote || tls_server
+      ? opts.tls?.host && opts.tls.host !== '0.0.0.0'
+        ? opts.tls.host
+        : (getLanIP() ?? undefined)
+      : undefined;
   const localUrl = `http://127.0.0.1:${actualPort}`;
   const networkUrl = networkUrlFor(lanIP, actualPort, tlsPortActual);
 

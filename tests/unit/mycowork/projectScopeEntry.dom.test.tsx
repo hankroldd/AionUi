@@ -119,7 +119,9 @@ describe('ProjectScopeSlot', () => {
     await openEntry();
     await screen.findByText('产品知识库');
     fireEvent.click(screen.getByRole('button', { name: '设为项目默认' }));
-    expect(await screen.findByText('未保存项目默认：没能连上服务，请稍后再试。已保存的内容不受影响。')).toBeInTheDocument();
+    expect(
+      await screen.findByText('未保存项目默认：没能连上服务，请稍后再试。已保存的内容不受影响。')
+    ).toBeInTheDocument();
   });
 
   it('cancel writes nothing', async () => {

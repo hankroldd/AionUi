@@ -36,12 +36,27 @@ const reply = (status: number, body: unknown) => {
 };
 const counts = { total: 1, ready: 1, indexing: 0, failed: 0, unavailable: 0 };
 const rev = (id: string, over: object = {}) => ({
-  revision_id: id, parent_id: null, content_sha256: 'x', size: 1, created_at: '2026-10-08T01:00:00.000Z', origin: 'edit', current: false, ...over,
+  revision_id: id,
+  parent_id: null,
+  content_sha256: 'x',
+  size: 1,
+  created_at: '2026-10-08T01:00:00.000Z',
+  origin: 'edit',
+  current: false,
+  ...over,
 });
 const pub = (status: string, over: object = {}) => ({
-  publication_id: 'p1', resource_id: 'res_1', revision_id: 'rev_bbbbbbbb',
+  publication_id: 'p1',
+  resource_id: 'res_1',
+  revision_id: 'rev_bbbbbbbb',
   target: { kind: 'knowledge_base', source_id: 'src_q', file_name: 'a.pptx' },
-  status, error: null, published_resource_id: null, accepted_at: 't', published_at: null, created_at: 't', ...over,
+  status,
+  error: null,
+  published_resource_id: null,
+  accepted_at: 't',
+  published_at: null,
+  created_at: 't',
+  ...over,
 });
 const calls = (method: string, part: string) =>
   fetchMock.mock.calls.filter(([url, init]) => (init?.method ?? 'GET') === method && String(url).includes(part));
@@ -59,21 +74,39 @@ function bridge(o: Opts = {}) {
       return o.revisions
         ? (o.revisions() as never)
         : reply(200, {
-            resource_id: 'res_1', current_revision_id: 'rev_bbbbbbbb', file_name: '季度汇报.pptx',
+            resource_id: 'res_1',
+            current_revision_id: 'rev_bbbbbbbb',
+            file_name: '季度汇报.pptx',
             items: [rev('rev_bbbbbbbb', { current: true }), rev('rev_aaaaaaaa', { origin: 'original' })],
-            page: 1, page_size: 50, total: 2,
+            page: 1,
+            page_size: 50,
+            total: 2,
           });
-    if (url.startsWith('/bridge/v1/publications?')) return reply(200, { items: o.pubs?.() ?? [], page: 1, page_size: 50, total: 0 });
+    if (url.startsWith('/bridge/v1/publications?'))
+      return reply(200, { items: o.pubs?.() ?? [], page: 1, page_size: 50, total: 0 });
     if (url.endsWith('/retry')) return reply(200, {});
     if (url === '/bridge/v1/scopes')
-      return reply(200, { sources: [{ source_id: 'src_q', name: '青禾库-很长很长很长很长很长很长很长的名字知识库', provider: 'weknora', counts }], projects: [] });
+      return reply(200, {
+        sources: [
+          { source_id: 'src_q', name: '青禾库-很长很长很长很长很长很长很长的名字知识库', provider: 'weknora', counts },
+        ],
+        projects: [],
+      });
     if (url.endsWith('/metadata')) return o.metadata ? (o.metadata() as never) : reply(200, { secret: false });
     if (url.includes('/changes?'))
       return reply(200, {
-        resource_id: 'res_1', from_revision_id: 'rev_aaaaaaaa', to_revision_id: 'rev_bbbbbbbb', format: 'pptx', compared_root: '/', status: 'complete',
-        coverage: { nodes_from: 1, nodes_to: 1, truncated: false, lists_truncated: false }, changes: [], unknown_parts: [],
+        resource_id: 'res_1',
+        from_revision_id: 'rev_aaaaaaaa',
+        to_revision_id: 'rev_bbbbbbbb',
+        format: 'pptx',
+        compared_root: '/',
+        status: 'complete',
+        coverage: { nodes_from: 1, nodes_to: 1, truncated: false, lists_truncated: false },
+        changes: [],
+        unknown_parts: [],
       });
-    if (url.endsWith('/office/html')) return { ...reply(200, null), text: async () => '<html><head></head><body></body></html>' };
+    if (url.endsWith('/office/html'))
+      return { ...reply(200, null), text: async () => '<html><head></head><body></body></html>' };
     if (url === '/bridge/v1/edit-sessions') return reply(200, { items: [], next_page: null });
     if (url === '/bridge/v1/tags') return reply(200, { tags: [] });
     if (url === '/bridge/v1/saved-views') return reply(200, { views: [] });
@@ -87,8 +120,17 @@ function bridge(o: Opts = {}) {
   });
 }
 const output = (status: string) => ({
-  resource_id: 'res_o', file_name: '产物.pptx', source_id: null, origin: 'outputs', purpose: 'working', state: 'stored',
-  tag_ids: [], secret: false, can_mark_secret: true, updated_at: '2026-10-08T01:00:00.000Z', revision_count: 1,
+  resource_id: 'res_o',
+  file_name: '产物.pptx',
+  source_id: null,
+  origin: 'outputs',
+  purpose: 'working',
+  state: 'stored',
+  tag_ids: [],
+  secret: false,
+  can_mark_secret: true,
+  updated_at: '2026-10-08T01:00:00.000Z',
+  revision_count: 1,
   published_to: [{ publication_id: 'p1', source_id: 'src_q', status, has_published: status === 'published' }],
 });
 const clickPublish = async () => {
@@ -147,7 +189,9 @@ describe('发布设计对齐的审查跟进', () => {
     ];
     for (const [file, sel] of checks) {
       const css = readFileSync(join(dir, file), 'utf8');
-      const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(([, s, body]) => s!.includes(sel) && /(^|\s)(background|color):/.test(body!));
+      const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(
+        ([, s, body]) => s!.includes(sel) && /(^|\s)(background|color):/.test(body!)
+      );
       expect(rules.length, sel).toBeGreaterThan(0);
       for (const [, s] of rules) expect(s, sel).toContain(':not(.arco-btn-disabled)');
     }
@@ -165,7 +209,10 @@ describe('发布设计对齐的审查跟进', () => {
 
   it('每次点发布都重读 Secret 状态；读失败有“重试”，重试读到后放行', async () => {
     let n = 0;
-    bridge({ metadata: () => (n++ < 2 ? reply(404, { error: { code: 'NOT_FOUND', message: 'x' } }) : reply(200, { secret: false })) });
+    bridge({
+      metadata: () =>
+        n++ < 2 ? reply(404, { error: { code: 'NOT_FOUND', message: 'x' } }) : reply(200, { secret: false }),
+    });
     render(<OfficeVersionsSlot />);
     await screen.findByText('v2');
     await waitFor(() => expect(calls('GET', '/metadata')).toHaveLength(1)); // 进页读一次（失败）
@@ -184,8 +231,13 @@ describe('发布设计对齐的审查跟进', () => {
         fail
           ? reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'x' } })
           : reply(200, {
-              resource_id: 'res_1', current_revision_id: 'rev_bbbbbbbb', file_name: '季度汇报.pptx',
-              items: [rev('rev_bbbbbbbb', { current: true }), rev('rev_aaaaaaaa', { origin: 'original' })], page: 1, page_size: 50, total: 2,
+              resource_id: 'res_1',
+              current_revision_id: 'rev_bbbbbbbb',
+              file_name: '季度汇报.pptx',
+              items: [rev('rev_bbbbbbbb', { current: true }), rev('rev_aaaaaaaa', { origin: 'original' })],
+              page: 1,
+              page_size: 50,
+              total: 2,
             }),
     });
     render(<OfficeVersionsSlot />);

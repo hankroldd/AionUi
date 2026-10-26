@@ -157,7 +157,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-
 describe('owner approval in the same dialog', () => {
   it('walks draft → validating → previewable → approved with the right requests, then says it is approved', async () => {
     transitions = ['validating'];

@@ -66,17 +66,28 @@ function bridge(opts: { pubs?: object[]; metadata?: () => unknown } = {}) {
         page_size: 50,
         total: 2,
       });
-    if (url.startsWith('/bridge/v1/publications?')) return reply(200, { items: opts.pubs ?? [], page: 1, page_size: 50, total: 0 });
+    if (url.startsWith('/bridge/v1/publications?'))
+      return reply(200, { items: opts.pubs ?? [], page: 1, page_size: 50, total: 0 });
     if (url === '/bridge/v1/scopes')
-      return reply(200, { sources: [{ source_id: 'src_q', name: '青禾库', provider: 'weknora', counts }], projects: [] });
+      return reply(200, {
+        sources: [{ source_id: 'src_q', name: '青禾库', provider: 'weknora', counts }],
+        projects: [],
+      });
     if (url.endsWith('/metadata')) return opts.metadata ? (opts.metadata() as never) : reply(200, { secret: false });
     if (url.includes('/changes?'))
       return reply(200, {
-        resource_id: 'res_1', from_revision_id: 'rev_aaaaaaaa', to_revision_id: 'rev_bbbbbbbb', format: 'pptx',
-        compared_root: '/', status: 'complete', coverage: { nodes_from: 1, nodes_to: 1, truncated: false, lists_truncated: false },
-        changes: [], unknown_parts: [],
+        resource_id: 'res_1',
+        from_revision_id: 'rev_aaaaaaaa',
+        to_revision_id: 'rev_bbbbbbbb',
+        format: 'pptx',
+        compared_root: '/',
+        status: 'complete',
+        coverage: { nodes_from: 1, nodes_to: 1, truncated: false, lists_truncated: false },
+        changes: [],
+        unknown_parts: [],
       });
-    if (url.endsWith('/office/html')) return { ...reply(200, null), text: async () => '<html><head></head><body></body></html>' };
+    if (url.endsWith('/office/html'))
+      return { ...reply(200, null), text: async () => '<html><head></head><body></body></html>' };
     if (url === '/bridge/v1/edit-sessions') return reply(200, { items: [], next_page: null });
     if (url === '/bridge/v1/tags') return reply(200, { tags: [] });
     if (url === '/bridge/v1/saved-views') return reply(200, { views: [] });
@@ -124,7 +135,11 @@ describe('版本页向空间页设计语言对齐', () => {
       pubs: [
         pub('p1', { status: 'queued' }),
         pub('p2', { status: 'failed', error: 'target_forbidden' }),
-        pub('p3', { status: 'published', published_resource_id: 'res_kb', target: { kind: 'knowledge_base', source_id: 'src_gone' } }),
+        pub('p3', {
+          status: 'published',
+          published_resource_id: 'res_kb',
+          target: { kind: 'knowledge_base', source_id: 'src_gone' },
+        }),
       ],
     });
     render(<OfficeVersionsSlot />);
@@ -133,7 +148,9 @@ describe('版本页向空间页设计语言对齐', () => {
     expect(screen.getByTestId('version-publication-error').textContent).toContain('你已不能再向这个库发布');
     expect(screen.queryByText(/target_forbidden/)).toBeNull();
     expect(screen.getByText('发布到「知识库」 · 已完成')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '查看发布出去的这一份' }).getAttribute('href')).toBe('#/office/resources/res_kb/versions');
+    expect(screen.getByRole('link', { name: '查看发布出去的这一份' }).getAttribute('href')).toBe(
+      '#/office/resources/res_kb/versions'
+    );
   });
 
   it('读不到是否为 Secret：发布入口提示稍后重试，不放行', async () => {

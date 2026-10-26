@@ -749,7 +749,7 @@ describe('static-server', () => {
   });
 
   itRemote('非回环 WebSocket upgrade：敏感路径拒绝、/ws 转发后端并回传 101', async () => {
-    const backend = http.createServer((rq, res) => res.writeHead(rq.url === "/api/auth/user" ? 200 : 404).end());
+    const backend = http.createServer((rq, res) => res.writeHead(rq.url === '/api/auth/user' ? 200 : 404).end());
     let sawWsUpgrade = false;
     backend.on('upgrade', (req, socket) => {
       if (req.url === '/ws') {
@@ -893,7 +893,7 @@ describe('static-server', () => {
     });
 
     it('upgrade：敏感路径 403、/ws 转发后端 101', async () => {
-      const backend = http.createServer((rq, res) => res.writeHead(rq.url === "/api/auth/user" ? 200 : 404).end());
+      const backend = http.createServer((rq, res) => res.writeHead(rq.url === '/api/auth/user' ? 200 : 404).end());
       const upgraded: string[] = [];
       backend.on('upgrade', (req, socket) => {
         upgraded.push(req.url!);
@@ -922,8 +922,13 @@ describe('static-server', () => {
         res.writeHead(200).end('{}');
       });
       expect(
-        (await collect('127.0.0.1', h.port, 'GET /api/auth/status HTTP/1.1\r\nHost: h\r\nCookie: aionui-session=t\r\nConnection: close\r\n\r\n'))
-          .statuses
+        (
+          await collect(
+            '127.0.0.1',
+            h.port,
+            'GET /api/auth/status HTTP/1.1\r\nHost: h\r\nCookie: aionui-session=t\r\nConnection: close\r\n\r\n'
+          )
+        ).statuses
       ).toEqual(['200']);
       expect(
         (await collect('127.0.0.1', h.port, 'GET / HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n')).statuses
@@ -969,7 +974,9 @@ describe('[mycowork] built-in TLS listener (R061)', () => {
 
   const collectTls = (port: number, ...reqs: string[]): Promise<string[]> =>
     new Promise((resolve, reject) => {
-      const sock = tls.connect({ host: '127.0.0.1', port, rejectUnauthorized: false }, () => reqs.forEach((r) => sock.write(r)));
+      const sock = tls.connect({ host: '127.0.0.1', port, rejectUnauthorized: false }, () =>
+        reqs.forEach((r) => sock.write(r))
+      );
       let buf = '';
       sock.on('data', (d) => (buf += d.toString('latin1')));
       sock.on('error', reject);
@@ -982,7 +989,25 @@ describe('[mycowork] built-in TLS listener (R061)', () => {
 
   beforeEach(async () => {
     dir = await mkRendererFixture();
-    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', `${dir}/k.pem`, '-out', `${dir}/c.pem`, '-days', '2', '-subj', '/CN=t'], { stdio: 'ignore' });
+    execFileSync(
+      'openssl',
+      [
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-nodes',
+        '-keyout',
+        `${dir}/k.pem`,
+        '-out',
+        `${dir}/c.pem`,
+        '-days',
+        '2',
+        '-subj',
+        '/CN=t',
+      ],
+      { stdio: 'ignore' }
+    );
     seen.length = 0;
     const backend = await startMockBackend((req, res) => {
       seen.push(req.url!);
@@ -994,7 +1019,12 @@ describe('[mycowork] built-in TLS listener (R061)', () => {
       backendPort: backend.port,
       port: 0,
       allowRemote: true, // must be ignored for the plain listener when tls is set
-      tls: { cert: await fs.readFile(`${dir}/c.pem`), key: await fs.readFile(`${dir}/k.pem`), port: 0, host: '127.0.0.1' },
+      tls: {
+        cert: await fs.readFile(`${dir}/c.pem`),
+        key: await fs.readFile(`${dir}/k.pem`),
+        port: 0,
+        host: '127.0.0.1',
+      },
     });
   });
   afterEach(async () => {
@@ -1009,7 +1039,9 @@ describe('[mycowork] built-in TLS listener (R061)', () => {
     expect(handle!.tlsPort).toBeGreaterThan(0);
     expect(handle!.networkUrl).toBe(`https://127.0.0.1:${handle!.tlsPort}`);
     const addr = await new Promise<string>((resolve) => {
-      const s = net.connect(handle!.port, '127.0.0.1', () => resolve(s.remoteAddress!)).on('error', () => resolve('err'));
+      const s = net
+        .connect(handle!.port, '127.0.0.1', () => resolve(s.remoteAddress!))
+        .on('error', () => resolve('err'));
       s.end();
     });
     expect(addr).toBe('127.0.0.1');
@@ -1036,7 +1068,9 @@ describe('[mycowork] built-in TLS listener (R061)', () => {
 
   it('over TLS every proxied Set-Cookie gets Secure exactly once; plain loopback http is untouched', async () => {
     const raw = await new Promise<string>((resolve, reject) => {
-      const sock = tls.connect({ host: '127.0.0.1', port: handle!.tlsPort!, rejectUnauthorized: false }, () => sock.write(get('/api/auth/status')));
+      const sock = tls.connect({ host: '127.0.0.1', port: handle!.tlsPort!, rejectUnauthorized: false }, () =>
+        sock.write(get('/api/auth/status'))
+      );
       let buf = '';
       sock.on('data', (d) => (buf += d.toString('latin1')));
       sock.on('error', reject);
@@ -1049,7 +1083,11 @@ describe('[mycowork] built-in TLS listener (R061)', () => {
   });
 
   it('secureCookies is idempotent and case-insensitive', () => {
-    expect(secureCookies(['a=b', 'c=d; secure; Path=/', 'e=f; Securex'])).toEqual(['a=b; Secure', 'c=d; secure; Path=/', 'e=f; Securex; Secure']);
+    expect(secureCookies(['a=b', 'c=d; secure; Path=/', 'e=f; Securex'])).toEqual([
+      'a=b; Secure',
+      'c=d; secure; Path=/',
+      'e=f; Securex; Secure',
+    ]);
     expect(secureCookies(undefined)).toBeUndefined();
   });
 
@@ -1118,7 +1156,9 @@ describe('[mycowork] session gate for non-loopback peers (R061)', () => {
       }
       rs.writeHead(200).end('{"success":true,"data":[]}');
     });
-    backend.on('upgrade', (_rq, socket) => socket.end('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n'));
+    backend.on('upgrade', (_rq, socket) =>
+      socket.end('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n')
+    );
     await new Promise<void>((r) => backend!.listen(0, '127.0.0.1', () => r()));
     handle = await startStaticServer({ staticDir: dir, backendPort: (backend.address() as AddressInfo).port, port: 0 });
   });
@@ -1136,7 +1176,14 @@ describe('[mycowork] session gate for non-loopback peers (R061)', () => {
     };
   };
   const status = async (raw: string): Promise<string[]> => (await collect('127.0.0.1', handle!.port, raw)).statuses;
-  const PROTECTED = ['/api/conversations', '/api/system/info', '/api/settings', '/api/assistants', '/api/cron/jobs', '/api/mcp/servers'];
+  const PROTECTED = [
+    '/api/conversations',
+    '/api/system/info',
+    '/api/settings',
+    '/api/assistants',
+    '/api/cron/jobs',
+    '/api/mcp/servers',
+  ];
 
   it('loopback control: no cookie reaches /api and /ws untouched, backend never asked about a session', async () => {
     for (const p of PROTECTED) expect(await status(req(p))).toEqual(['200']);
@@ -1172,7 +1219,13 @@ describe('[mycowork] session gate for non-loopback peers (R061)', () => {
     expect(await status(req('/api/auth/user'))).toEqual(['401']); // from the backend itself, not the gate
     expect(seen).toEqual(['/api/auth/user']);
     expect(await status(req('/api/auth/refresh', undefined, 'POST'))).toEqual(['200']);
-    for (const p of ['/api/auth/user/', '/api/auth/user/../conversations', '/API/auth/user', '/api/auth/status', '/api/auth/users'])
+    for (const p of [
+      '/api/auth/user/',
+      '/api/auth/user/../conversations',
+      '/API/auth/user',
+      '/api/auth/status',
+      '/api/auth/users',
+    ])
       expect(await status(req(p))).toEqual(['401']);
   });
 
@@ -1256,14 +1309,24 @@ describe('[mycowork] session gate for non-loopback peers (R061)', () => {
       ])
         expect((await collect('127.0.0.1', handle!.port, r)).statuses).toEqual(['400']);
       // without `Connection: upgrade` node does not treat it as an upgrade at all: plain request, SPA page, nothing spliced
-      expect((await collect('127.0.0.1', handle!.port, base('Upgrade: websocket\r\nConnection: close\r\nSec-WebSocket-Key: k\r\n'))).statuses).toEqual(['200']);
+      expect(
+        (
+          await collect(
+            '127.0.0.1',
+            handle!.port,
+            base('Upgrade: websocket\r\nConnection: close\r\nSec-WebSocket-Key: k\r\n')
+          )
+        ).statuses
+      ).toEqual(['200']);
       expect(rawSeen).toEqual([]);
     });
 
     it('peer RST while the session gate is pending (and after a 400): process survives, server keeps serving', async () => {
       raw = net.createServer((sock) => {
         sock.on('error', () => {});
-        sock.on('data', () => setTimeout(() => sock.end('HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}'), 300));
+        sock.on('data', () =>
+          setTimeout(() => sock.end('HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}'), 300)
+        );
       });
       await new Promise<void>((r) => raw!.listen(0, '127.0.0.1', () => r()));
       await handle!.stop();

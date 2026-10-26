@@ -56,16 +56,32 @@ export function bridge(opts: Opts = {}) {
     if (u.pathname === '/bridge/v1/scopes') return reply(200, { sources: [], projects: [] });
     if (u.pathname === '/bridge/v1/tags') return reply(200, { tags: [] });
     if (u.pathname === '/bridge/v1/uploads') {
-      const name = decodeURIComponent(String((init?.headers as Record<string, string>)['x-file-name']));
+      const name = decodeURIComponent(String((init!.headers as Record<string, string>)['x-file-name']));
       n += 1;
-      return reply(201, { upload_id: `up_${n}`, file_name: name, size: 5, sha256: 'x', duplicate_of: [], ...opts.upload?.(name, n) });
+      return reply(201, {
+        upload_id: `up_${n}`,
+        file_name: name,
+        size: 5,
+        sha256: 'x',
+        duplicate_of: [],
+        ...opts.upload?.(name, n),
+      });
     }
-    if (u.pathname === '/bridge/v1/import-batches' && init?.method === 'POST') return reply(201, opts.created ?? batch([row({})]));
+    if (u.pathname === '/bridge/v1/import-batches' && init?.method === 'POST')
+      return reply(201, opts.created ?? batch([row({})]));
     if (u.pathname === '/bridge/v1/import-batches/bat_1') return reply(200, opts.created ?? batch([row({})]));
     if (u.pathname === '/bridge/v1/resources')
       return reply(200, opts.resources?.(u.searchParams) ?? { page: 1, page_size: 50, total: 0, items: [] });
     if (u.pathname.endsWith('/revisions'))
-      return reply(200, { resource_id: 'x', current_revision_id: 'r', file_name: null, items: [], page: 1, page_size: 50, total: opts.revisionTotal ?? 2 });
+      return reply(200, {
+        resource_id: 'x',
+        current_revision_id: 'r',
+        file_name: null,
+        items: [],
+        page: 1,
+        page_size: 50,
+        total: opts.revisionTotal ?? 2,
+      });
     throw new Error(`未定义的虚构HTTP请求 ${init?.method ?? 'GET'} ${u.pathname}`);
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -84,4 +100,5 @@ export async function addFiles(container: HTMLElement, ...files: File[]) {
 export const md = (name: string, text = 'hello') => new File([text], name, { type: 'text/markdown' });
 export const zip = (name: string, modified = 1, body = 'PK') =>
   new File([body], name, { type: 'application/zip', lastModified: modified });
-export const confirmButton = (lang = 'zh-CN') => screen.getByRole('button', { name: lang === 'en' ? 'Confirm import' : '确认导入' });
+export const confirmButton = (lang = 'zh-CN') =>
+  screen.getByRole('button', { name: lang === 'en' ? 'Confirm import' : '确认导入' });

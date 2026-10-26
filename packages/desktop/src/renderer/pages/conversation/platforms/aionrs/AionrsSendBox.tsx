@@ -59,7 +59,22 @@ import { useTranslation } from 'react-i18next';
 import { classifyConversationBusyError } from '../conversationBusyError';
 import { useAionrsMessage } from './useAionrsMessage';
 import type { AionrsModelSelection } from './useAionrsModelSelection';
-import { MyCoworkTemplateConfirmationDialog, captureOfficeDraftState, DraftStatus, hydrateOfficeTaskRuntime, isOfficeConversation, officeTaskRuntime, sendOfficeDraft, stopOfficeTurn, useConversationPersistentDraft, officeTaskOwner, watchTurnEnd, watchTurnEnded, acceptOfficeRun, useOfficeTaskRecovery } from '@/renderer/mycowork-slots';
+import {
+  MyCoworkTemplateConfirmationDialog,
+  captureOfficeDraftState,
+  DraftStatus,
+  hydrateOfficeTaskRuntime,
+  isOfficeConversation,
+  officeTaskRuntime,
+  sendOfficeDraft,
+  stopOfficeTurn,
+  useConversationPersistentDraft,
+  officeTaskOwner,
+  watchTurnEnd,
+  watchTurnEnded,
+  acceptOfficeRun,
+  useOfficeTaskRecovery,
+} from '@/renderer/mycowork-slots';
 import type { DraftDocument, DraftState, TaskRun } from '@mycowork/contracts';
 import { withoutYolo } from '@/renderer/mycowork-approval-guard';
 import { useSendFailure } from '@/renderer/mycowork-send-failure';
@@ -172,15 +187,18 @@ const AionrsSendBox: React.FC<{
   const sendFailure = useSendFailure(i18n?.language); // [mycowork] S40：未受理原因常驻
   const [sessionNames, setSessionNames] = useState<Record<string, string>>({});
   const [draftContext, setDraftContext] = useState<Pick<DraftState, 'workspace' | 'scope' | 'choices'>>({});
-  const onRestoreDraft = useCallback((state: DraftState) => {
-    const restored = splitChatFileRefs(state.files);
-    setContent(state.content);
-    setUploadFile(restored.uploadFiles);
-    setAtPath(restored.atPath);
-    setSessionNames(Object.fromEntries(state.sessions.map(({ id, name }) => [id, name])));
-    setSelectedSessions(state.sessions.map(({ id }) => ({ id })));
-    setDraftContext({ workspace: state.workspace, scope: state.scope, choices: state.choices });
-  }, [setAtPath, setContent, setUploadFile]);
+  const onRestoreDraft = useCallback(
+    (state: DraftState) => {
+      const restored = splitChatFileRefs(state.files);
+      setContent(state.content);
+      setUploadFile(restored.uploadFiles);
+      setAtPath(restored.atPath);
+      setSessionNames(Object.fromEntries(state.sessions.map(({ id, name }) => [id, name])));
+      setSelectedSessions(state.sessions.map(({ id }) => ({ id })));
+      setDraftContext({ workspace: state.workspace, scope: state.scope, choices: state.choices });
+    },
+    [setAtPath, setContent, setUploadFile]
+  );
   const handleContentChange = useCallback(
     (val: string) => {
       setContent(val);
@@ -210,20 +228,42 @@ const AionrsSendBox: React.FC<{
   const runtimeThoughtLevel = runtimeConfig.thoughtLevel;
   const draftState = useMemo<DraftState>(() => {
     const input: DraftState = {
-    content, files: collectChatFileRefs(uploadFile, atPath),
-    sessions: selectedSessions.map(({ id }) => ({ id, name: sessionNames[id] ?? '' })), ...draftContext,
+      content,
+      files: collectChatFileRefs(uploadFile, atPath),
+      sessions: selectedSessions.map(({ id }) => ({ id, name: sessionNames[id] ?? '' })),
+      ...draftContext,
     };
     // 旧首条交接受理前保留原版本；自动补配置会使已保存的目标指针失效。
     if (sessionStorage.getItem(`aionrs_initial_message_${conversation_id}`)) return input;
     return captureOfficeDraftState(input, {
-    workspace: conversationContext?.workspace, assistantId: conversationContext?.assistantId,
-    model: current_model, permission: runtimeMode?.currentValue ?? currentMode,
-    thoughtLevel: runtimeThoughtLevel?.currentValue,
+      workspace: conversationContext?.workspace,
+      assistantId: conversationContext?.assistantId,
+      model: current_model,
+      permission: runtimeMode?.currentValue ?? currentMode,
+      thoughtLevel: runtimeThoughtLevel?.currentValue,
     });
-  }, [conversation_id, atPath, content, draftContext, selectedSessions, sessionNames, uploadFile,
-    conversationContext?.workspace, conversationContext?.assistantId, current_model?.id, current_model?.use_model,
-    runtimeMode?.currentValue, currentMode, runtimeThoughtLevel?.currentValue]);
-  const persistentDraft = useConversationPersistentDraft(conversation_id, draftState, onRestoreDraft, !teamRuntime && !teamSendMessage && !teamPermission);
+  }, [
+    conversation_id,
+    atPath,
+    content,
+    draftContext,
+    selectedSessions,
+    sessionNames,
+    uploadFile,
+    conversationContext?.workspace,
+    conversationContext?.assistantId,
+    current_model?.id,
+    current_model?.use_model,
+    runtimeMode?.currentValue,
+    currentMode,
+    runtimeThoughtLevel?.currentValue,
+  ]);
+  const persistentDraft = useConversationPersistentDraft(
+    conversation_id,
+    draftState,
+    onRestoreDraft,
+    !teamRuntime && !teamSendMessage && !teamPermission
+  );
   const { data: officeQueueBlocked, error: queueCheckError } = useSWR(
     persistentDraft.enabled ? ['office-queue-availability', conversation_id, conversationContext?.assistantId] : null,
     () => isOfficeConversation(conversation_id, conversationContext?.assistantId)
@@ -232,9 +272,15 @@ const AionrsSendBox: React.FC<{
   const [officeRun, setOfficeRun] = useState<TaskRun | null>(null);
   const [turnEnded, setTurnEnded] = useState(false);
   const taskRecovery = useOfficeTaskRecovery({
-    conversationId: conversation_id, ownerKey: persistentDraft.ownerKey, isCurrent: persistentDraft.isCurrent,
-    enabled: persistentDraft.enabled && officeQueueBlocked === true, lang: i18n?.language,
-    onRecovered: (run, ended) => { setOfficeRun(run); setTurnEnded(ended); },
+    conversationId: conversation_id,
+    ownerKey: persistentDraft.ownerKey,
+    isCurrent: persistentDraft.isCurrent,
+    enabled: persistentDraft.enabled && officeQueueBlocked === true,
+    lang: i18n?.language,
+    onRecovered: (run, ended) => {
+      setOfficeRun(run);
+      setTurnEnded(ended);
+    },
   });
   const draftStateRef = useLatestRef(draftState);
   const conversationIdRef = useLatestRef(conversation_id);
@@ -304,7 +350,11 @@ const AionrsSendBox: React.FC<{
   });
 
   const executeCommand = useCallback(
-    async ({ input, files, sessions }: Pick<ConversationCommandQueueItem, 'input' | 'files' | 'sessions'>, submitted?: DraftDocument, expectedState?: DraftState) => {
+    async (
+      { input, files, sessions }: Pick<ConversationCommandQueueItem, 'input' | 'files' | 'sessions'>,
+      submitted?: DraftDocument,
+      expectedState?: DraftState
+    ) => {
       if (teamPermission) await teamPermission.warmupSession();
       if (!current_model?.use_model) {
         Message.warning(t('conversation.chat.noModelSelected'));
@@ -326,20 +376,29 @@ const AionrsSendBox: React.FC<{
         }
 
         if (persistentDraft.enabled) {
-          if (!submitted && await isOfficeConversation(conversation_id, conversationContext?.assistantId))
+          if (!submitted && (await isOfficeConversation(conversation_id, conversationContext?.assistantId)))
             throw new Error('办公任务的队列发送尚未接通；已保留队列项，请编辑取回后明确发送。');
           if (submitted) {
             taskRecovery.invalidate();
-            const office = await sendOfficeDraft(persistentDraft, submitted, { expectedState: expectedState!, conversationId: conversation_id, assistantId: conversationContext?.assistantId, lang: i18n?.language, deliveryContent: input });
+            const office = await sendOfficeDraft(persistentDraft, submitted, {
+              expectedState: expectedState!,
+              conversationId: conversation_id,
+              assistantId: conversationContext?.assistantId,
+              lang: i18n?.language,
+              deliveryContent: input,
+            });
             if (office) {
               const runtime = officeTaskRuntime(office);
               if (runtime?.turn_id === office.turn_id) {
-                markSendStarted(); setWaitingResponse(runtime.is_processing); setActiveMsgId(office.msg_id);
+                markSendStarted();
+                setWaitingResponse(runtime.is_processing);
+                setActiveMsgId(office.msg_id);
                 markSendAccepted(office.turn_id, runtime, office.msg_id);
               } else hydrateOfficeTaskRuntime(conversation_id, office);
               emitter.emit('chat.history.refresh');
               if (files.length > 0) emitter.emit('aionrs.workspace.refresh');
-              setOfficeRun(office); setTurnEnded(false);
+              setOfficeRun(office);
+              setTurnEnded(false);
               return office;
             }
           }
@@ -426,13 +485,33 @@ const AionrsSendBox: React.FC<{
 
   // [mycowork] ADR-0025：目标草稿已持久化，受理前保留交接和源草稿；失败不自动重发。
   useEffect(() => {
-    if (!persistentDraft.enabled || !current_model?.use_model || !persistentDraft.ready || isBusy || sendingDraftRef.current ||
-      !sessionStorage.getItem(`aionrs_initial_message_${conversation_id}`) || sessionStorage.getItem(`aionrs_initial_processed_${conversation_id}`)) return;
+    if (
+      !persistentDraft.enabled ||
+      !current_model?.use_model ||
+      !persistentDraft.ready ||
+      isBusy ||
+      sendingDraftRef.current ||
+      !sessionStorage.getItem(`aionrs_initial_message_${conversation_id}`) ||
+      sessionStorage.getItem(`aionrs_initial_processed_${conversation_id}`)
+    )
+      return;
     sendingDraftRef.current = true;
     sendFailure.clear(); // [mycowork] S40：首条重发前清掉上次的未受理原因
-    void persistentDraft.initial((state, saved) => executeCommand({ input: state.content, files: state.files, sessions: state.sessions.map(({ id }) => ({ id })) }, saved, state))
-      .catch((error: unknown) => { sendFailure.fail(error); Message.error(error instanceof Error ? error.message : '首条消息未确认受理，草稿已保留，请检查后重试。'); })
-      .finally(() => { sendingDraftRef.current = false; });
+    void persistentDraft
+      .initial((state, saved) =>
+        executeCommand(
+          { input: state.content, files: state.files, sessions: state.sessions.map(({ id }) => ({ id })) },
+          saved,
+          state
+        )
+      )
+      .catch((error: unknown) => {
+        sendFailure.fail(error);
+        Message.error(error instanceof Error ? error.message : '首条消息未确认受理，草稿已保留，请检查后重试。');
+      })
+      .finally(() => {
+        sendingDraftRef.current = false;
+      });
   }, [conversation_id, current_model?.use_model, executeCommand, isBusy, persistentDraft]);
 
   const { enabled: crossSessionEnabled } = useCrossSessionMessageEnabled();
@@ -487,7 +566,9 @@ const AionrsSendBox: React.FC<{
   }, [conversation_id, messageList, standalone, stoppedTurn, updateMessageList]);
   const lastUserText = useMemo((): string => {
     const last = messageList.findLast((m) => m.type === 'text' && m.position === 'right');
-    return last?.type === 'text' && typeof last.content.content === 'string' ? userMessageText(last.content.content) : '';
+    return last?.type === 'text' && typeof last.content.content === 'string'
+      ? userMessageText(last.content.content)
+      : '';
   }, [messageList]);
   // 输入框有草稿/附件/引用时不发（原样重发不拼接它们），提示先清空
   const resendBlocked = Boolean(content.trim() || uploadFile.length || atPath.length || selectedSessions.length);
@@ -530,7 +611,9 @@ const AionrsSendBox: React.FC<{
     const filesToSend = collectChatFileRefs(uploadFile, atPath);
     const sessions = selectedSessions.length > 0 ? selectedSessions : undefined;
     if (!persistentDraft.enabled) {
-      clearFiles(); setSelectedSessions([]); emitter.emit('aionrs.selected.file.clear');
+      clearFiles();
+      setSelectedSessions([]);
+      emitter.emit('aionrs.selected.file.clear');
       await executeCommand({ input: message, files: filesToSend, sessions });
       return;
     }
@@ -540,10 +623,18 @@ const AionrsSendBox: React.FC<{
       if (!persistentDraft.isCurrent()) return false;
       sendFailure.clear();
       const receipt = await executeCommand({ input: message, files: filesToSend, sessions }, submitted, sent);
-      if (receipt) await persistentDraft.settleTaskSubmission(submitted, receipt.draft_revision, { ...sent, content: '', files: [], sessions: [] });
+      if (receipt)
+        await persistentDraft.settleTaskSubmission(submitted, receipt.draft_revision, {
+          ...sent,
+          content: '',
+          files: [],
+          sessions: [],
+        });
       else await persistentDraft.accept(sent, { ...sent, content: '', files: [], sessions: [] });
       await persistentDraft.finishInitial(sent, Boolean(receipt));
-    } finally { sendingDraftRef.current = false; }
+    } finally {
+      sendingDraftRef.current = false;
+    }
   };
 
   const [interrupting, setInterrupting] = useState(false);
@@ -577,7 +668,10 @@ const AionrsSendBox: React.FC<{
           Message.warning('办公任务的队列发送尚未接通；输入已保留，请在空闲时明确发送。');
           return;
         }
-      } catch { Message.warning('无法确认会话资料范围，输入已保留，请稍后重试。'); return; }
+      } catch {
+        Message.warning('无法确认会话资料范围，输入已保留，请稍后重试。');
+        return;
+      }
     }
     const filesToSend = collectChatFileRefs(uploadFile, atPath);
     // `@@` references must ride along, and must be released from the send box
@@ -589,9 +683,25 @@ const AionrsSendBox: React.FC<{
       sessions: selectedSessions.length > 0 ? selectedSessions : undefined,
     });
     if (draftStateRef.current === captured) {
-      setContent(''); clearFiles(); setSelectedSessions([]); emitter.emit('aionrs.selected.file.clear');
+      setContent('');
+      clearFiles();
+      setSelectedSessions([]);
+      emitter.emit('aionrs.selected.file.clear');
     }
-  }, [atPath, clearFiles, content, enqueue, selectedSessions, setContent, uploadFile, conversation_id, conversationContext?.assistantId, draftState, draftStateRef, persistentDraft.enabled]);
+  }, [
+    atPath,
+    clearFiles,
+    content,
+    enqueue,
+    selectedSessions,
+    setContent,
+    uploadFile,
+    conversation_id,
+    conversationContext?.assistantId,
+    draftState,
+    draftStateRef,
+    persistentDraft.enabled,
+  ]);
 
   const handleEditQueuedCommand = useCallback(
     (item: ConversationCommandQueueItem) => {
@@ -840,7 +950,8 @@ const AionrsSendBox: React.FC<{
   );
 
   // R068：本会话最近一次办公任务；本轮结束由页面看到的turn.completed转给Bridge，确认可选
-  const officeRunActive = officeRun && ['running', 'waiting_input', 'waiting_approval', 'waiting_editor'].includes(officeRun.status);
+  const officeRunActive =
+    officeRun && ['running', 'waiting_input', 'waiting_approval', 'waiting_editor'].includes(officeRun.status);
   useEffect(() => {
     if (!officeRun || !persistentDraft.enabled || !officeRunActive || officeRun.turn_end) return;
     try {
@@ -853,7 +964,16 @@ const AionrsSendBox: React.FC<{
   useEffect(() => {
     if (!officeRun || !persistentDraft.enabled || !officeRunActive) return;
     try {
-      return watchTurnEnded(officeTaskOwner(persistentDraft), officeRun, (latest) => { if (latest) setOfficeRun((prev) => (prev?.run_id !== latest.run_id || !['running', 'waiting_input', 'waiting_approval', 'waiting_editor'].includes(prev.status) ? prev : latest)); setTurnEnded(true); }); // a late re-read never downgrades a terminal run
+      return watchTurnEnded(officeTaskOwner(persistentDraft), officeRun, (latest) => {
+        if (latest)
+          setOfficeRun((prev) =>
+            prev?.run_id !== latest.run_id ||
+            !['running', 'waiting_input', 'waiting_approval', 'waiting_editor'].includes(prev.status)
+              ? prev
+              : latest
+          );
+        setTurnEnded(true);
+      }); // a late re-read never downgrades a terminal run
     } catch {
       return undefined;
     }
@@ -892,19 +1012,36 @@ const AionrsSendBox: React.FC<{
           if (runtime) runtimeView.markStopAcknowledged(turnId, runtime);
           if (stopped.saved_results?.length) {
             const dismiss = Message.info({
-              content: <SavedResults run={stopped} lang={i18n?.language} onOpen={(result) => {
-                dismiss();
-                openPreview(`${result.resource_id}/${result.revision_id}`, 'mycowork-result',
-                  { file_name: result.file_name, editable: false });
-              }} />,
-              duration: 0, closable: true,
+              content: (
+                <SavedResults
+                  run={stopped}
+                  lang={i18n?.language}
+                  onOpen={(result) => {
+                    dismiss();
+                    openPreview(`${result.resource_id}/${result.revision_id}`, 'mycowork-result', {
+                      file_name: result.file_name,
+                      editable: false,
+                    });
+                  }}
+                />
+              ),
+              duration: 0,
+              closable: true,
             }); // A513：已登记的结果（推定），固定版本在右侧预览。
           }
-          if (!stopped.stop_confirmed) { Message.warning('此步骤未确认完成，请检查任务状态；不会停止后来的轮次。'); return; }
+          if (!stopped.stop_confirmed) {
+            Message.warning('此步骤未确认完成，请检查任务状态；不会停止后来的轮次。');
+            return;
+          }
           rememberStoppedTurn();
-          resetState(); resetActiveExecution('stop'); return;
+          resetState();
+          resetActiveExecution('stop');
+          return;
         }
-      } catch { Message.warning('停止请求尚未确认，此步骤未确认完成，请检查任务状态。'); return; }
+      } catch {
+        Message.warning('停止请求尚未确认，此步骤未确认完成，请检查任务状态。');
+        return;
+      }
     }
     try {
       const result = await ipcBridge.conversation.stop.invoke({ conversation_id, turn_id: turnId });
@@ -955,25 +1092,32 @@ const AionrsSendBox: React.FC<{
           onResend={lastUserText ? resendLast : undefined}
           resendBlocked={resendBlocked}
           lang={i18n?.language}
-          onAccept={(runId) => acceptOfficeRun(officeTaskOwner(persistentDraft), runId, () => conversationIdRef.current === conversation_id, setOfficeRun)}
+          onAccept={(runId) =>
+            acceptOfficeRun(
+              officeTaskOwner(persistentDraft),
+              runId,
+              () => conversationIdRef.current === conversation_id,
+              setOfficeRun
+            )
+          }
         />
       )}
       <div inert={persistentDraft.status === 'loading'}>
-      <CommandQueuePanel
-        items={queuedCommands}
-        mode={queueMode}
-        isMobile={isMobile}
-        interactionLocked={isQueueInteractionLocked}
-        onInteractionLock={lockInteraction}
-        onInteractionUnlock={unlockInteraction}
-        onEdit={handleEditQueuedCommand}
-        onSendNow={handleSendNowQueued}
-        onToggleMode={toggleMode}
-        onReorder={reorder}
-        onRemove={remove}
-        onClear={clear}
-      />
-      <ThoughtDisplay
+        <CommandQueuePanel
+          items={queuedCommands}
+          mode={queueMode}
+          isMobile={isMobile}
+          interactionLocked={isQueueInteractionLocked}
+          onInteractionLock={lockInteraction}
+          onInteractionUnlock={unlockInteraction}
+          onEdit={handleEditQueuedCommand}
+          onSendNow={handleSendNowQueued}
+          onToggleMode={toggleMode}
+          onReorder={reorder}
+          onRemove={remove}
+          onClear={clear}
+        />
+        <ThoughtDisplay
           thought={waitingForConfirmation ? undefined : thought}
           running={waitingForConfirmation ? false : (teamRuntime?.loading ?? running)}
           statusText={
@@ -981,132 +1125,134 @@ const AionrsSendBox: React.FC<{
               ? `${t('messages.toolActivity.waitingForConfirmation')} · ${t('messages.toolActivity.confirmationHint')}`
               : teamRuntime?.statusText
           }
-        externalElapsedSource={Boolean(teamRuntime) || turnStartedAtMs != null}
-        startedAtMs={teamRuntime ? (teamRuntime.startedAtMs ?? null) : turnStartedAtMs}
-        onStop={effectiveHandleStop}
-        onRetryStart={teamRuntime?.onRetryStart ? () => void teamRuntime.onRetryStart?.() : undefined}
-      />
-      <CrossSessionDisabledBanner />
-      <SendBox
-        data-testid='aionrs-sendbox'
-        submitRef={templateSubmitRef}
-        onMobilePlusClick={isMobile ? () => setIsMobileSheetOpen(true) : undefined}
-        preserveInputOnSend={persistentDraft.enabled}
-        value={content}
-        onChange={handleContentChange}
-        selectedWorkspaceItems={atPath}
-        onSelectedWorkspaceItemsChange={(items) => {
-          emitter.emit('aionrs.selected.file', items, conversation_id);
-          setAtPath(items);
-        }}
-        selectedSessions={selectedSessions}
-        sessionNames={persistentDraft.enabled ? sessionNames : undefined}
-        onSessionNamesChange={persistentDraft.enabled ? setSessionNames : undefined}
-        onSelectedSessionsChange={setSelectedSessions}
-        crossSessionEnabled={crossSessionEnabled}
-        isTeamConversation={Boolean(teamRuntime)}
-        loading={teamRuntime?.loading ?? isBusy}
-        active={teamRuntime?.isActive}
-        onFocused={teamRuntime?.onFocus}
-        disabled={!current_model?.use_model}
-        sendDisabled={isBusy || !persistentDraft.ready}
-        sendDisabledTooltip={
-          isBusy
-            ? t('conversation.commandQueue.midturnBlockedSendHint', {
-                defaultValue:
-                  'The current agent is still working and cannot receive another message yet. Add it to Draft box instead.',
-              })
-            : undefined
-        }
-        placeholder={
-          current_model?.use_model
-            ? t('acp.sendbox.placeholder', {
-                backend: agent_name || 'AionCLI',
-                defaultValue: `Send message to {{backend}}...`,
-              })
-            : t('conversation.chat.noModelSelected')
-        }
-        onStop={effectiveHandleStop}
-        className='z-10'
-        onFilesAdded={handleFilesAdded}
-        hasPendingAttachments={uploadFile.length > 0 || atPath.length > 0}
-        supportedExts={allSupportedExts}
-        defaultMultiLine={!isMobile}
-        lockMultiLine={!isMobile}
-        tools={
-          <FileAttachButton
-            openFileSelector={openFileSelector}
-            onLocalFilesAdded={handleFilesAdded}
-            loadedMcpStatuses={loadedMcpStatuses}
-          />
-        }
-        rightTools={
-          <div className='flex items-center gap-8px min-w-0'>
-            <AgentModeSelector
-              backend='aionrs'
-              conversation_id={conversation_id}
-              compact
-              initialMode={session_mode}
-              dynamicModes={dynamicModes}
-              compactLeadingIcon={<Shield theme='outline' size='14' fill={iconColors.secondary} />}
-              modeLabelFormatter={(mode) => t(`agentMode.${mode.value}`, { defaultValue: mode.label })}
-              compactLabelPrefix={t('agentMode.permission')}
-              hideCompactLabelPrefixOnMobile
-              onModeChanged={propagateMode}
-              beforeRuntimeSync={prepareRuntimeConfig}
-              beforeRuntimeSet={teamPermission?.warmupSession}
-              configOptionsPort={teamPermission?.configOptionsPort}
+          externalElapsedSource={Boolean(teamRuntime) || turnStartedAtMs != null}
+          startedAtMs={teamRuntime ? (teamRuntime.startedAtMs ?? null) : turnStartedAtMs}
+          onStop={effectiveHandleStop}
+          onRetryStart={teamRuntime?.onRetryStart ? () => void teamRuntime.onRetryStart?.() : undefined}
+        />
+        <CrossSessionDisabledBanner />
+        <SendBox
+          data-testid='aionrs-sendbox'
+          submitRef={templateSubmitRef}
+          onMobilePlusClick={isMobile ? () => setIsMobileSheetOpen(true) : undefined}
+          preserveInputOnSend={persistentDraft.enabled}
+          value={content}
+          onChange={handleContentChange}
+          selectedWorkspaceItems={atPath}
+          onSelectedWorkspaceItemsChange={(items) => {
+            emitter.emit('aionrs.selected.file', items, conversation_id);
+            setAtPath(items);
+          }}
+          selectedSessions={selectedSessions}
+          sessionNames={persistentDraft.enabled ? sessionNames : undefined}
+          onSessionNamesChange={persistentDraft.enabled ? setSessionNames : undefined}
+          onSelectedSessionsChange={setSelectedSessions}
+          crossSessionEnabled={crossSessionEnabled}
+          isTeamConversation={Boolean(teamRuntime)}
+          loading={teamRuntime?.loading ?? isBusy}
+          active={teamRuntime?.isActive}
+          onFocused={teamRuntime?.onFocus}
+          disabled={!current_model?.use_model}
+          sendDisabled={isBusy || !persistentDraft.ready}
+          sendDisabledTooltip={
+            isBusy
+              ? t('conversation.commandQueue.midturnBlockedSendHint', {
+                  defaultValue:
+                    'The current agent is still working and cannot receive another message yet. Add it to Draft box instead.',
+                })
+              : undefined
+          }
+          placeholder={
+            current_model?.use_model
+              ? t('acp.sendbox.placeholder', {
+                  backend: agent_name || 'AionCLI',
+                  defaultValue: `Send message to {{backend}}...`,
+                })
+              : t('conversation.chat.noModelSelected')
+          }
+          onStop={effectiveHandleStop}
+          className='z-10'
+          onFilesAdded={handleFilesAdded}
+          hasPendingAttachments={uploadFile.length > 0 || atPath.length > 0}
+          supportedExts={allSupportedExts}
+          defaultMultiLine={!isMobile}
+          lockMultiLine={!isMobile}
+          tools={
+            <FileAttachButton
+              openFileSelector={openFileSelector}
+              onLocalFilesAdded={handleFilesAdded}
+              loadedMcpStatuses={loadedMcpStatuses}
             />
-          </div>
-        }
-        prefix={
-          <>
-            {uploadFile.length > 0 && (
-              <HorizontalFileList>
-                {uploadFile.map((path) => (
-                  <FilePreview
-                    key={path}
-                    data-testid={`aionrs-file-tag-${uploadFile.indexOf(path)}`}
-                    path={path}
-                    onRemove={() => setUploadFile(uploadFile.filter((v) => v !== path))}
-                  />
-                ))}
-              </HorizontalFileList>
-            )}
-            {atPath.some((item) => (typeof item === 'string' ? false : !item.isFile)) && (
-              <div className='flex flex-wrap items-center gap-8px mb-8px'>
-                {atPath.map((item) => {
-                  if (typeof item === 'string') return null;
-                  if (!item.isFile) {
-                    const folderIndex = atPath.filter((v) => typeof v !== 'string' && !v.isFile).indexOf(item);
-                    return (
-                      <Tag
-                        key={item.path}
-                        data-testid={`aionrs-folder-tag-${folderIndex}`}
-                        color='blue'
-                        closable
-                        onClose={() => {
-                          const newAtPath = atPath.filter((v) => (typeof v === 'string' ? true : v.path !== item.path));
-                          emitter.emit('aionrs.selected.file', newAtPath, conversation_id);
-                          setAtPath(newAtPath);
-                        }}
-                      >
-                        {item.name}
-                      </Tag>
-                    );
-                  }
-                  return null;
-                })}
-              </div>
-            )}
-          </>
-        }
-        onSend={onSendHandler}
-        slash_commands={slash_commands}
-        onSlashBuiltinCommand={onSlashBuiltinCommand}
-        // 办公任务不支持队列发送时不显示常驻灰色按钮（A532）
-        onAddToDraft={officeQueueBlocked === true ? undefined : handleAddToQueue}
-        addToDraftDisabled={queueUnavailable || !canQueueCurrentDraft || !persistentDraft.ready}
+          }
+          rightTools={
+            <div className='flex items-center gap-8px min-w-0'>
+              <AgentModeSelector
+                backend='aionrs'
+                conversation_id={conversation_id}
+                compact
+                initialMode={session_mode}
+                dynamicModes={dynamicModes}
+                compactLeadingIcon={<Shield theme='outline' size='14' fill={iconColors.secondary} />}
+                modeLabelFormatter={(mode) => t(`agentMode.${mode.value}`, { defaultValue: mode.label })}
+                compactLabelPrefix={t('agentMode.permission')}
+                hideCompactLabelPrefixOnMobile
+                onModeChanged={propagateMode}
+                beforeRuntimeSync={prepareRuntimeConfig}
+                beforeRuntimeSet={teamPermission?.warmupSession}
+                configOptionsPort={teamPermission?.configOptionsPort}
+              />
+            </div>
+          }
+          prefix={
+            <>
+              {uploadFile.length > 0 && (
+                <HorizontalFileList>
+                  {uploadFile.map((path) => (
+                    <FilePreview
+                      key={path}
+                      data-testid={`aionrs-file-tag-${uploadFile.indexOf(path)}`}
+                      path={path}
+                      onRemove={() => setUploadFile(uploadFile.filter((v) => v !== path))}
+                    />
+                  ))}
+                </HorizontalFileList>
+              )}
+              {atPath.some((item) => (typeof item === 'string' ? false : !item.isFile)) && (
+                <div className='flex flex-wrap items-center gap-8px mb-8px'>
+                  {atPath.map((item) => {
+                    if (typeof item === 'string') return null;
+                    if (!item.isFile) {
+                      const folderIndex = atPath.filter((v) => typeof v !== 'string' && !v.isFile).indexOf(item);
+                      return (
+                        <Tag
+                          key={item.path}
+                          data-testid={`aionrs-folder-tag-${folderIndex}`}
+                          color='blue'
+                          closable
+                          onClose={() => {
+                            const newAtPath = atPath.filter((v) =>
+                              typeof v === 'string' ? true : v.path !== item.path
+                            );
+                            emitter.emit('aionrs.selected.file', newAtPath, conversation_id);
+                            setAtPath(newAtPath);
+                          }}
+                        >
+                          {item.name}
+                        </Tag>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              )}
+            </>
+          }
+          onSend={onSendHandler}
+          slash_commands={slash_commands}
+          onSlashBuiltinCommand={onSlashBuiltinCommand}
+          // 办公任务不支持队列发送时不显示常驻灰色按钮（A532）
+          onAddToDraft={officeQueueBlocked === true ? undefined : handleAddToQueue}
+          addToDraftDisabled={queueUnavailable || !canQueueCurrentDraft || !persistentDraft.ready}
           addToDraftTooltip={
             queueUnavailable
               ? officeQueueBlocked
@@ -1121,20 +1267,20 @@ const AionrsSendBox: React.FC<{
                 : t('conversation.commandQueue.addToQueue', { defaultValue: 'Save to Draft box' })
           }
           allowSendWhileLoading
-        sendButtonPrefix={
-          teamRuntime?.onInterruptSend && content.trim() ? (
-            <Button
-              size='mini'
-              type='secondary'
-              icon={<Lightning />}
-              loading={interrupting}
-              onClick={() => void handleInterruptSend()}
-            >
-              {t('team.interruptAndSend')}
-            </Button>
-          ) : undefined
-        }
-      />
+          sendButtonPrefix={
+            teamRuntime?.onInterruptSend && content.trim() ? (
+              <Button
+                size='mini'
+                type='secondary'
+                icon={<Lightning />}
+                loading={interrupting}
+                onClick={() => void handleInterruptSend()}
+              >
+                {t('team.interruptAndSend')}
+              </Button>
+            ) : undefined
+          }
+        />
       </div>
       {isMobile && (
         <>

@@ -47,9 +47,12 @@ const calls = (part: string) =>
 const SAVED = { revision_id: 'rev_b', created: true, base_revision_id: 'rev_b', workspace_writeback: null };
 const writeText = vi.fn(async () => {});
 
-
 /** 第一次开会话是 txe_1（基线 rev_a）；之后再开 = 本人没有活动会话时新建的 txe_2（基线 latest.base，内容 latest.content）。 */
-function bridge(saves: Array<'lost' | 'conflict' | 'ok'>, latest: { base: string; content: string }, hold?: Promise<void>) {
+function bridge(
+  saves: Array<'lost' | 'conflict' | 'ok'>,
+  latest: { base: string; content: string },
+  hold?: Promise<void>
+) {
   let n = 0;
   let opens = 0;
   fetchMock.mockImplementation(async (url: string) => {
@@ -61,7 +64,9 @@ function bridge(saves: Array<'lost' | 'conflict' | 'ok'>, latest: { base: string
       await hold;
       const how = saves[n++] ?? 'ok';
       if (how === 'lost') throw new TypeError('Failed to fetch');
-      return how === 'conflict' ? reply(409, { error: { code: 'REVISION_CONFLICT', message: 'x' } }) : reply(200, SAVED);
+      return how === 'conflict'
+        ? reply(409, { error: { code: 'REVISION_CONFLICT', message: 'x' } })
+        : reply(200, SAVED);
     }
     return reply(204, null);
   });

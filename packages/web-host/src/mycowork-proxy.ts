@@ -26,7 +26,11 @@ export function isBlockedWatchRequest(method: string, url: string): boolean {
 export const BRIDGE_UNAVAILABLE = { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'bridge unavailable' } };
 
 export function bridgeHeaders(req: IncomingMessage): http.IncomingHttpHeaders {
-  const { cookie, ...rest } = peerHeaders(req.headers, req.socket.remoteAddress, isLoopbackAddr(req.socket.remoteAddress));
+  const { cookie, ...rest } = peerHeaders(
+    req.headers,
+    req.socket.remoteAddress,
+    isLoopbackAddr(req.socket.remoteAddress)
+  );
   const session = sessionCookieOf(cookie);
   return session ? { ...rest, cookie: session } : rest;
 }

@@ -68,7 +68,8 @@ function bridge(opts: { upload?: object; uploadStatus?: number; afterCreate: obj
     if (url.endsWith('/retry')) return reply(200, batch(opts.later ?? opts.afterCreate, 2));
     if (url === '/bridge/v1/import-batches/bat_1')
       return reply(200, batch(polls++ > 0 && opts.later ? opts.later : opts.afterCreate));
-    if (url.startsWith('/bridge/v1/import-batches?')) return reply(200, { items: [], page: 1, page_size: 20, total: 0 });
+    if (url.startsWith('/bridge/v1/import-batches?'))
+      return reply(200, { items: [], page: 1, page_size: 20, total: 0 });
     return reply(404, {});
   });
 }
@@ -179,16 +180,17 @@ describe('OfficeImportsSlot', () => {
     await drop();
     await screen.findByText('与你已导入的 1 个资源内容相同');
     await chooseTarget(); // 先选了库，再勾 Secret：库选择不生效
-    fireEvent.click(
-      screen.getByRole('checkbox', { name: '设为 Secret：只存本机，不进知识库和存档库，AI 读不到' })
-    );
+    fireEvent.click(screen.getByRole('checkbox', { name: '设为 Secret：只存本机，不进知识库和存档库，AI 读不到' }));
     expect(screen.queryByText('另登记为独立来源')).toBeNull();
     expect(document.querySelector('.arco-select-disabled')).not.toBeNull(); // 知识库选择被禁用
     expect(screen.getAllByText('不进知识库和存档库').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
     await waitFor(() => expect(calls('POST', '/import-batches')).toHaveLength(1));
     const body = JSON.parse(String(calls('POST', '/import-batches')[0]?.[1]?.body));
-    expect(body).toMatchObject({ secret: true, items: [{ purpose: 'working', duplicate_action: 'register_separately' }] });
+    expect(body).toMatchObject({
+      secret: true,
+      items: [{ purpose: 'working', duplicate_action: 'register_separately' }],
+    });
     expect(body.source_id).toBeUndefined();
     expect(await screen.findByText('Secret（只存本机）')).toBeInTheDocument();
   });
@@ -278,7 +280,7 @@ describe('OfficeImportsSlot', () => {
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
       url === '/bridge/v1/uploads'
         ? reply(201, { upload_id: `up_${++n}`, file_name: `f${n}.md`, size: 5, sha256: 'x', duplicate_of: [] })
-        : base(url, init),
+        : base(url, init)
     );
     render(<OfficeImportsSlot />);
     await screen.findByText(/^这次导入的资料会归到当前项目/);

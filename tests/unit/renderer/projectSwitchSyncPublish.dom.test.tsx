@@ -83,7 +83,11 @@ describe('conversation route — synchronous project publish from list snapshot 
     const { rerender } = renderIndex();
     expect(previewScopeChanged).toHaveBeenLastCalledWith('conversation:c1');
     currentId = 'c2';
-    rerender(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><ChatConversationIndex /></SWRConfig>);
+    rerender(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <ChatConversationIndex />
+      </SWRConfig>
+    );
     expect(previewScopeChanged).toHaveBeenLastCalledWith('conversation:c2');
   });
 

@@ -60,7 +60,13 @@ function bridge(knowledgeBases: unknown[]) {
         projects: [],
       });
     if (url.endsWith('/metadata'))
-      return reply(200, { resource_id: 'res_1', metadata_revision: 1, current_revision_id: 'rev_5', tag_ids: [], secret: false });
+      return reply(200, {
+        resource_id: 'res_1',
+        metadata_revision: 1,
+        current_revision_id: 'rev_5',
+        tag_ids: [],
+        secret: false,
+      });
     if (url.endsWith('/office/html')) return { ...reply(200, null), text: async () => '<html><body></body></html>' };
     if (url === '/bridge/v1/edit-sessions') return reply(200, { items: [], next_page: null });
     return reply(404, {});
@@ -80,7 +86,9 @@ describe('版本页：知识库里是哪一版', () => {
   it('落后：顶部写“里是 v3，不是当前版本 v5”，点“重新发布”弹出发布框并预选库乙', async () => {
     bridge([{ source_id: 'src_b', via: 'publication', revision_id: 'rev_3', revision_no: 3, is_current: false }]);
     render(<OfficeVersionsSlot />);
-    expect(await screen.findByTestId('mycowork-versions-kb')).toHaveTextContent('知识库「库乙」里是 v3，不是当前版本 v5');
+    expect(await screen.findByTestId('mycowork-versions-kb')).toHaveTextContent(
+      '知识库「库乙」里是 v3，不是当前版本 v5'
+    );
     fireEvent.click(screen.getByRole('button', { name: '重新发布' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('库乙')).toBeInTheDocument();

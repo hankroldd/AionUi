@@ -25,7 +25,11 @@ export async function startTlsListener(httpServer: HttpServer, opts: TlsListener
 }
 
 /** https on the TLS port when there is one, else http on the plain port; undefined without a LAN IP. */
-export function networkUrlFor(lanIP: string | undefined, plainPort: number, tlsPort: number | undefined): string | undefined {
+export function networkUrlFor(
+  lanIP: string | undefined,
+  plainPort: number,
+  tlsPort: number | undefined
+): string | undefined {
   if (!lanIP) return undefined;
   return tlsPort ? `https://${lanIP}:${tlsPort}` : `http://${lanIP}:${plainPort}`;
 }

@@ -30,7 +30,9 @@ let gates: Map<string, () => void>;
 let inFlight = 0;
 let maxInFlight = 0;
 const purges = (id?: string) =>
-  fetchMock.mock.calls.filter(([u, i]) => String(u).endsWith('/purge') && i?.method === 'POST' && (!id || String(u).includes(id + '/')));
+  fetchMock.mock.calls.filter(
+    ([u, i]) => String(u).endsWith('/purge') && i?.method === 'POST' && (!id || String(u).includes(id + '/'))
+  );
 const listReads = () => fetchMock.mock.calls.filter(([u]) => String(u).startsWith('/bridge/v1/trash?')).length;
 
 beforeEach(() => {
@@ -43,7 +45,12 @@ beforeEach(() => {
   fetchMock.mockReset().mockImplementation(async (url: string, init?: RequestInit) => {
     if (url.startsWith('/bridge/v1/trash?')) {
       const page = Number(new URL(url, 'http://fixture.test').searchParams.get('page'));
-      return reply(200, { items: structuredClone(rows.slice((page - 1) * 50, page * 50)), page, page_size: 50, total: rows.length });
+      return reply(200, {
+        items: structuredClone(rows.slice((page - 1) * 50, page * 50)),
+        page,
+        page_size: 50,
+        total: rows.length,
+      });
     }
     if (init?.method !== 'POST') return reply(404, { error: { code: 'NOT_FOUND' } });
     const id = url.split('/').at(-2) ?? '';
@@ -51,7 +58,8 @@ beforeEach(() => {
     maxInFlight = Math.max(maxInFlight, inFlight);
     try {
       if (gates.has(id)) await new Promise<void>((r) => gates.set(id, r));
-      if (reject[id]) return reply(reject[id], { error: { code: reject[id] === 409 ? 'REVISION_CONFLICT' : 'NOT_FOUND' } });
+      if (reject[id])
+        return reply(reject[id], { error: { code: reject[id] === 409 ? 'REVISION_CONFLICT' : 'NOT_FOUND' } });
       if (lostNoop.has(id) && !url.endsWith('/untrash')) throw new TypeError('Failed to fetch');
       const row = rows.find((r) => r.resource_id === id);
       if (!row) return reply(404, { error: { code: 'NOT_FOUND' } });
@@ -66,7 +74,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
 });
 afterEach(async () => {
-  for (const id of [...gates.keys()]) gates.get(id)?.();
+  for (const id of gates.keys()) gates.get(id)?.();
   gates.clear();
   await waitFor(() => expect(screen.queryByText(/已永久删除 \d+ \/ \d+/) === null || inFlight === 0).toBe(true));
   dismissPurge();
@@ -183,7 +191,9 @@ it('离开页面后批次继续做完', async () => {
 it('恢复成功给“已恢复”轻提示', async () => {
   mount();
   await screen.findByText('虚构资料1.md');
-  fireEvent.click(within(screen.getByTestId('mycowork-trash-row-res_1')).getByRole('button', { name: '恢复 虚构资料1.md' }));
+  fireEvent.click(
+    within(screen.getByTestId('mycowork-trash-row-res_1')).getByRole('button', { name: '恢复 虚构资料1.md' })
+  );
   expect(await screen.findByText(/已恢复「虚构资料1\.md」/)).toBeInTheDocument();
 });
 
@@ -192,7 +202,9 @@ it('进度条被关掉后批次结束时有失败：重新显示', async () => {
   reject.res_2 = 409;
   mount();
   await confirmAll();
-  fireEvent.click(await within(await screen.findByTestId('mycowork-purge-progress')).findByRole('button', { name: '关闭' }));
+  fireEvent.click(
+    await within(await screen.findByTestId('mycowork-purge-progress')).findByRole('button', { name: '关闭' })
+  );
   expect(screen.queryByTestId('mycowork-purge-progress')).toBeNull();
   gates.get('res_1')?.();
   expect(await screen.findByTestId('mycowork-purge-progress')).toHaveTextContent('虚构资料2.md');
@@ -203,7 +215,9 @@ it('结果未知的项被用户恢复：不再算“已永久删除”，确认�
   mount();
   await confirmAll();
   await screen.findByRole('button', { name: '确认结果' });
-  fireEvent.click(within(screen.getByTestId('mycowork-trash-row-res_1')).getByRole('button', { name: '恢复 虚构资料1.md' }));
+  fireEvent.click(
+    within(screen.getByTestId('mycowork-trash-row-res_1')).getByRole('button', { name: '恢复 虚构资料1.md' })
+  );
   await screen.findByText(/已恢复「虚构资料1\.md」/);
   await waitFor(() => expect(screen.queryByRole('button', { name: '确认结果' })).toBeNull());
   expect(panel()).toHaveTextContent('已永久删除 2 / 3');

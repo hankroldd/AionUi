@@ -41,12 +41,10 @@ const posts = (part: string) =>
   fetchMock.mock.calls.filter(([url, init]) => init?.method === 'POST' && String(url).includes(part));
 const submissionIds = () => posts('/discard').map(([, init]) => JSON.parse(String(init?.body)).submission_id as string);
 /** 会话由 cur() 决定；head = 资源当前版本；discard 的应答可由 onDiscard 覆盖。 */
-function api(
-  cur: () => object,
-  opt: { head?: () => string; onDiscard?: () => ReturnType<typeof reply> } = {}
-) {
+function api(cur: () => object, opt: { head?: () => string; onDiscard?: () => ReturnType<typeof reply> } = {}) {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-    if (/\/resources\/[^/]+\/revisions/.test(url)) return reply(200, { items: [], current_revision_id: opt.head?.() ?? 'rev_a' });
+    if (/\/resources\/[^/]+\/revisions/.test(url))
+      return reply(200, { items: [], current_revision_id: opt.head?.() ?? 'rev_a' });
     if (/\/edit-sessions\/[^/]+$/.test(url) && !init?.method) return reply(200, cur());
     if (url.endsWith('/discard')) return opt.onDiscard?.() ?? reply(200, {});
     if (url === '/bridge/v1/edit-sessions' && init?.method === 'POST') return reply(200, session('editing'));
@@ -195,7 +193,9 @@ describe('放弃', () => {
 
   it('409 之后换新键', async () => {
     let reply409 = true;
-    api(() => session('recovery_required'), { onDiscard: () => (reply409 ? err(409, 'EDIT_STATE_CONFLICT') : reply(200, {})) });
+    api(() => session('recovery_required'), {
+      onDiscard: () => (reply409 ? err(409, 'EDIT_STATE_CONFLICT') : reply(200, {})),
+    });
     const n = await recoveryNote();
     const click = async () => {
       fireEvent.click(n.getByRole('button', { name: '放弃这次修改' }));

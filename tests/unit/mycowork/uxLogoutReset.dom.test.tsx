@@ -36,7 +36,9 @@ beforeEach(() => {
   vi.stubGlobal('electronAPI', undefined);
   state.logout.mockResolvedValue(undefined);
   vi.stubGlobal('fetch', async (url: string) =>
-    String(url).endsWith('/metadata') ? reply(200, { metadata_revision: 1 }) : reply(409, { error: { code: 'EDIT_LEASE_HELD' } }),
+    String(url).endsWith('/metadata')
+      ? reply(200, { metadata_revision: 1 })
+      : reply(409, { error: { code: 'EDIT_LEASE_HELD' } })
   );
 });
 afterEach(() => {
@@ -49,7 +51,7 @@ afterEach(() => {
 it('退出登录后：失败提示与写回冲突通知消失、三类批次状态为空', async () => {
   runTrashBatch(
     [{ resource_id: 'res_x', file_name: '上一个账号的文件.md', origin: 'imports', source_id: null } as never],
-    'zh-CN',
+    'zh-CN'
   );
   startPurge([{ resource_id: 'res_y', file_name: '另一个文件.md', metadata_revision: 1 } as never], false);
   publishNotice('publish:res_z').info('上一个账号的发布提示');
@@ -61,7 +63,12 @@ it('退出登录后：失败提示与写回冲突通知消失、三类批次状�
     saved_revision_id: 'rev_b',
     state: 'closed',
     workspace_writeback_status: 'conflict',
-    workspace_writeback: { relative_path: '上一个账号的写回.md', outcome: 'conflict', saved_as: '上一个账号的写回.人工编辑.md', reason: null },
+    workspace_writeback: {
+      relative_path: '上一个账号的写回.md',
+      outcome: 'conflict',
+      saved_as: '上一个账号的写回.人工编辑.md',
+      reason: null,
+    },
   } as never);
   await screen.findByText(/上一个账号的写回\.人工编辑\.md/);
   await screen.findByText(/上一个账号的文件\.md/);
@@ -69,7 +76,7 @@ it('退出登录后：失败提示与写回冲突通知消失、三类批次状�
   render(
     <MemoryRouter initialEntries={['/guid']}>
       <MyCoworkRail mobile={false} />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
   fireEvent.click(screen.getByRole('button', { name: '账户菜单' }));
   fireEvent.click(await screen.findByRole('menuitem', { name: '退出登录' }));

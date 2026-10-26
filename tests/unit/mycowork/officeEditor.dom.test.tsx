@@ -98,7 +98,9 @@ describe('OfficeEditSlot', () => {
     });
     render(<OfficeEditSlot />);
     fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
-    expect(await screen.findByText('这份文件已经有更新的版本，不能再接着这次编辑；请到版本页查看。')).toBeInTheDocument();
+    expect(
+      await screen.findByText('这份文件已经有更新的版本，不能再接着这次编辑；请到版本页查看。')
+    ).toBeInTheDocument();
     expect(calls('POST', '/bridge/v1/edit-sessions')).toHaveLength(0);
     expect(DocEditor).not.toHaveBeenCalled();
   });

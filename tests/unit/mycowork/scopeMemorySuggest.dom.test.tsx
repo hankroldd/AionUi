@@ -73,7 +73,9 @@ it('hides the badge when the conversation has no candidates', async () => {
   pending = [];
   render(<ScopeStrip {...props} />);
   await screen.findByText(/虚构库/);
-  await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => String(u).startsWith('/bridge/v1/memory-items'))).toBe(true));
+  await waitFor(() =>
+    expect(fetchMock.mock.calls.some(([u]) => String(u).startsWith('/bridge/v1/memory-items'))).toBe(true)
+  );
   expect(screen.queryByTestId('memory-suggest-badge')).toBeNull();
 });
 

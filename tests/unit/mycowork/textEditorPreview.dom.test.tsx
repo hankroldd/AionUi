@@ -138,7 +138,7 @@ describe('OfficeTextEditSlot preview privacy', () => {
     ['mermaid', 'graph TD\nA@{ img: "https://a63.invalid/diagram.png", label: "fixture" }'],
     ['wavedrom', '{ "signal": [{ "name": "fixture", "wave": "01" }] }'],
     ['html', '<img src="https://a63.invalid/code.png">'],
-    ['javascript', 'const fixture = "<iframe src=\"https://a63.invalid/\">";'],
+    ['javascript', 'const fixture = "<iframe src="https://a63.invalid/">";'],
     ['latex', '\\frac{1}{2}'],
   ])('%s fence remains literal code without activating its renderer', async (language, source) => {
     const preview = await mount(`\`\`\`${language}\n${source}\n\`\`\``);

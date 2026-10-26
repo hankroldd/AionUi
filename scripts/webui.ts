@@ -208,7 +208,12 @@ function resolveTls(): { cert: Buffer; key: Buffer; port: number; host?: string 
   if (!cert || !key || !port || !/^\d+$/.test(port)) {
     throw new Error('AIONUI_TLS_CERT, AIONUI_TLS_KEY and a numeric AIONUI_TLS_PORT must be set together');
   }
-  return { cert: fs.readFileSync(cert), key: fs.readFileSync(key), port: Number(port), host: host?.trim() || undefined };
+  return {
+    cert: fs.readFileSync(cert),
+    key: fs.readFileSync(key),
+    port: Number(port),
+    host: host?.trim() || undefined,
+  };
 }
 
 async function main(): Promise<void> {

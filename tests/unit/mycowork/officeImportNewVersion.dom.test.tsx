@@ -8,7 +8,21 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
-import { addFiles, batch, bodyOf, bridge, confirmButton, fetchMock, md, posts, renderImports, reply, row, zip, type Opts } from './importFlowFixture';
+import {
+  addFiles,
+  batch,
+  bodyOf,
+  bridge,
+  confirmButton,
+  fetchMock,
+  md,
+  posts,
+  renderImports,
+  reply,
+  row,
+  zip,
+  type Opts,
+} from './importFlowFixture';
 
 const inFlow = () => screen.getByTestId('mycowork-upload-flow');
 const res = (id: string, name: string, over: object = {}) => ({
@@ -19,9 +33,13 @@ const res = (id: string, name: string, over: object = {}) => ({
   updated_at: '2026-10-01T02:00:00Z',
   ...over,
 });
-const found = (...items: object[]): Opts['resources'] => () => ({ page: 1, page_size: 50, total: items.length, items });
+const found =
+  (...items: object[]): Opts['resources'] =>
+  () => ({ page: 1, page_size: 50, total: items.length, items });
 const lookups = () =>
-  fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/bridge/v1/resources?')).map(([url]) => new URLSearchParams(String(url).split('?')[1]));
+  fetchMock.mock.calls
+    .filter(([url]) => String(url).startsWith('/bridge/v1/resources?'))
+    .map(([url]) => new URLSearchParams(String(url).split('?')[1]));
 async function add(file: File = md('周报.md')) {
   renderImports('zh-CN');
   await addFiles(inFlow(), file);
@@ -41,15 +59,19 @@ describe('作为新版本导入', () => {
     await add();
     expect(screen.getByText(/你已有同名资料“周报.md”，内容不同/)).toBeInTheDocument();
     const group = within(inFlow()).getByRole('radiogroup');
-    expect(within(group).getAllByRole('radio').map((r) => r.parentElement?.textContent)).toEqual([
-      '作为“周报.md”的新版本',
-      '另存为独立资料',
-      '取消这一项',
-    ]);
+    expect(
+      within(group)
+        .getAllByRole('radio')
+        .map((r) => r.parentElement?.textContent)
+    ).toEqual(['作为“周报.md”的新版本', '另存为独立资料', '取消这一项']);
     expect(within(group).getByRole('radio', { name: '另存为独立资料' })).toBeChecked();
     fireEvent.click(confirmButton());
     await waitFor(() => expect(posts('/import-batches')).toHaveLength(1));
-    expect(bodyOf().items[0]).toEqual({ upload_id: 'up_1', purpose: 'working', duplicate_action: 'register_separately' });
+    expect(bodyOf().items[0]).toEqual({
+      upload_id: 'up_1',
+      purpose: 'working',
+      duplicate_action: 'register_separately',
+    });
   });
 
   it('查询用现有列表接口：origin=imports、q=文件名、按最近变化排序', async () => {
@@ -75,7 +97,10 @@ describe('作为新版本导入', () => {
     expect(await screen.findByText('已成为“周报.md”的第 3 版')).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([url]) => String(url) === '/bridge/v1/resources/res_old/revisions')).toBe(true);
     // 成为新版本的项：除了“在空间中查看”，还给“查看版本与变化”（跳该资源的版本页）
-    expect(screen.getByRole('link', { name: '查看版本与变化' })).toHaveAttribute('href', '#/office/resources/res_old/versions');
+    expect(screen.getByRole('link', { name: '查看版本与变化' })).toHaveAttribute(
+      'href',
+      '#/office/resources/res_old/versions'
+    );
     expect(screen.getByRole('button', { name: '在空间中查看' })).toBeInTheDocument();
   });
 
@@ -101,7 +126,7 @@ describe('作为新版本导入', () => {
     bridge({ resources: found(res('res_old', '周报.md')), created: batch([row({ resource_id: 'res_old' })]) });
     const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<unknown>;
     fetchMock.mockImplementation(async (u: string, i?: RequestInit) =>
-      u.endsWith('/revisions') ? reply(503, {}) : base(u, i),
+      u.endsWith('/revisions') ? reply(503, {}) : base(u, i)
     );
     await add();
     fireEvent.click(choice(/新版本/));
@@ -139,7 +164,11 @@ describe('作为新版本导入', () => {
     expect(within(inFlow()).queryByRole('radiogroup')).toBeNull();
     fireEvent.click(confirmButton());
     await waitFor(() => expect(posts('/import-batches')).toHaveLength(1));
-    expect(bodyOf().items[0]).toEqual({ upload_id: 'up_1', purpose: 'working', duplicate_action: 'register_separately' });
+    expect(bodyOf().items[0]).toEqual({
+      upload_id: 'up_1',
+      purpose: 'working',
+      duplicate_action: 'register_separately',
+    });
     expect(bodyOf().secret).toBe(true);
   });
 
@@ -148,7 +177,7 @@ describe('作为新版本导入', () => {
     const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<unknown>;
     let down = true;
     fetchMock.mockImplementation(async (u: string, i?: RequestInit) =>
-      u.startsWith('/bridge/v1/resources?') && down ? reply(503, {}) : base(u, i),
+      u.startsWith('/bridge/v1/resources?') && down ? reply(503, {}) : base(u, i)
     );
     await add();
     expect(within(inFlow()).queryByRole('radiogroup')).toBeNull();
@@ -164,7 +193,7 @@ describe('作为新版本导入', () => {
     bridge({
       resources: found(
         res('res_new', '周报.md', { updated_at: '2026-10-03T02:00:00Z' }),
-        res('res_older', '周报.md', { updated_at: '2026-10-01T02:00:00Z' }),
+        res('res_older', '周报.md', { updated_at: '2026-10-01T02:00:00Z' })
       ),
     });
     await add();
@@ -184,7 +213,11 @@ describe('作为新版本导入', () => {
     await add();
     fireEvent.click(confirmButton());
     await waitFor(() => expect(posts('/import-batches')).toHaveLength(1));
-    expect(bodyOf().items[0]).toEqual({ upload_id: 'up_1', purpose: 'working', duplicate_action: 'register_separately' });
+    expect(bodyOf().items[0]).toEqual({
+      upload_id: 'up_1',
+      purpose: 'working',
+      duplicate_action: 'register_separately',
+    });
   });
 
   it('不是本人的资料（can_mark_secret 为 false）不作为新版本的候选', async () => {
@@ -199,14 +232,23 @@ describe('作为新版本导入', () => {
     bridge({
       resources: (q) =>
         q.get('page') === '2'
-          ? ((page2Down ? undefined : { page: 2, page_size: 50, total: 51, items: [res('res_p2', '周报.md', { updated_at: '2026-09-01T00:00:00Z' })] }) as object)
+          ? ((page2Down
+              ? undefined
+              : {
+                  page: 2,
+                  page_size: 50,
+                  total: 51,
+                  items: [res('res_p2', '周报.md', { updated_at: '2026-09-01T00:00:00Z' })],
+                }) as object)
           : { page: 1, page_size: 50, total: 51, items: [...filler, res('res_p1', '周报.md')] },
     });
     const base = fetchMock.getMockImplementation() as (u: string, i?: RequestInit) => Promise<unknown>;
     fetchMock.mockImplementation(async (u: string, i?: RequestInit) =>
-      page2Down && String(u).startsWith('/bridge/v1/resources?') && new URLSearchParams(String(u).split('?')[1]).get('page') === '2'
+      page2Down &&
+      String(u).startsWith('/bridge/v1/resources?') &&
+      new URLSearchParams(String(u).split('?')[1]).get('page') === '2'
         ? reply(503, {})
-        : base(u, i),
+        : base(u, i)
     );
     await add();
     expect(await screen.findByTestId('import-lookup-partial')).toHaveTextContent('可能没列全');
@@ -218,7 +260,11 @@ describe('作为新版本导入', () => {
   });
 
   it('英文界面', async () => {
-    bridge({ resources: found(res('res_old', 'r.md')), created: batch([row({ resource_id: 'res_old' })]), revisionTotal: 2 });
+    bridge({
+      resources: found(res('res_old', 'r.md')),
+      created: batch([row({ resource_id: 'res_old' })]),
+      revisionTotal: 2,
+    });
     renderImports('en');
     await addFiles(inFlow(), md('r.md'));
     await screen.findByText('Uploaded, awaiting confirmation');
@@ -248,7 +294,11 @@ describe('作为新版本导入', () => {
     fireEvent.click(confirmButton());
     expect(await screen.findByTestId('import-item')).toBeInTheDocument();
     expect(screen.queryByTestId('import-version')).toBeNull();
-    expect(bodyOf(1).items[0]).toEqual({ upload_id: 'up_1', purpose: 'working', duplicate_action: 'register_separately' });
+    expect(bodyOf(1).items[0]).toEqual({
+      upload_id: 'up_1',
+      purpose: 'working',
+      duplicate_action: 'register_separately',
+    });
   });
 
   it('新版本项原件没保存成功，或后端落到的不是目标资源：不写“已成为”', async () => {

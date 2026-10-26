@@ -99,7 +99,9 @@ describe('row ··· menu', () => {
   it('knowledge-base rows can be asked about and downloaded but have no 移入回收站', async () => {
     mount();
     await openMenu('C.md');
-    expect(await screen.findByRole('menuitem', { name: '用这份资料提问' })).not.toHaveClass('arco-dropdown-menu-disabled');
+    expect(await screen.findByRole('menuitem', { name: '用这份资料提问' })).not.toHaveClass(
+      'arco-dropdown-menu-disabled'
+    );
     expect(screen.getByRole('link', { name: '下载' })).toHaveAttribute('href', '/bridge/v1/resources/res_c/preview');
     expect(screen.getByRole('link', { name: '下载' })).toHaveAttribute('download', 'C.md');
     expect(screen.queryByRole('menuitem', { name: '移入回收站' })).toBeNull();
@@ -170,7 +172,7 @@ describe('row ··· menu', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: '移入回收站' }));
     fireEvent.click(within(await confirmDialog()).getByRole('button', { name: '移入回收站' }));
     await waitFor(() => expect(calls('POST', '/resources/res_a/trash')).toHaveLength(1));
-    expect(JSON.parse(String((calls('POST', '/resources/res_a/trash')[0]?.[1] as RequestInit).body))).toEqual({
+    expect(JSON.parse(String((calls('POST', '/resources/res_a/trash')[0]![1] as RequestInit).body))).toEqual({
       expected_metadata_revision: 7,
     });
   });

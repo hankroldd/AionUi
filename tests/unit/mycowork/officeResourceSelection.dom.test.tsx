@@ -213,7 +213,9 @@ describe('space selection and batch tags', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: '选择本页' }));
     expect(screen.getByText('已选 2 项')).toBeInTheDocument();
     // 工具栏的整库提问让位于浮动条里的“所选资料提问”：只剩一个入口
-    expect(within(screen.getByRole('region', { name: '所选资料的操作' })).getByText('用这些资料提问')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: '所选资料的操作' })).getByText('用这些资料提问')
+    ).toBeInTheDocument();
     expect(screen.getAllByText('用这些资料提问')).toHaveLength(1);
     fireEvent.click(screen.getByLabelText('网格'));
     expect(screen.getByRole('checkbox', { name: '选择 A.md' })).toBeChecked();

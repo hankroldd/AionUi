@@ -12,7 +12,11 @@ import { getClientBusinessSetting } from '@/renderer/services/clientBusinessSett
 import { hasAvailableModels } from '@/renderer/pages/guid/utils/modelUtils';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { MYCOWORK_MEMORY_SIDER_ID, MYCOWORK_SPACE_SIDER_ID } from '@/renderer/mycowork-sider-ids';
-import { useOwnerKey, useResourceQuestionNavigation, useResourceScopeSwitch } from '@/renderer/mycowork-resource-navigation';
+import {
+  useOwnerKey,
+  useResourceQuestionNavigation,
+  useResourceScopeSwitch,
+} from '@/renderer/mycowork-resource-navigation';
 import MarkdownView from '@/renderer/components/Markdown';
 import {
   ImportsPage,

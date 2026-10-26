@@ -27,12 +27,20 @@ vi.mock('@/common', async (original) => {
   const real = await original<typeof import('@/common')>();
   return {
     ...real,
-    ipcBridge: { ...real.ipcBridge, conversation: { ...real.ipcBridge.conversation, responseStream: { on: () => () => {} } } },
+    ipcBridge: {
+      ...real.ipcBridge,
+      conversation: { ...real.ipcBridge.conversation, responseStream: { on: () => () => {} } },
+    },
   };
 });
 readRetry.delays = [0, 0];
 
-const intent = { ownerKey: 'owner-a', capabilityId: 'knowledge.retrieval', origin: 'conversation', conversationId: 'conv-1' };
+const intent = {
+  ownerKey: 'owner-a',
+  capabilityId: 'knowledge.retrieval',
+  origin: 'conversation',
+  conversationId: 'conv-1',
+};
 const counts = { total: 1, ready: 1, indexing: 0, failed: 0, unavailable: 0 };
 const CONTEXT = {
   plan_id: 'plan_1',
@@ -91,8 +99,12 @@ beforeEach(() => {
         if (method === 'PUT') {
           const value = JSON.parse(String(init?.body));
           const old = docs.get(location) as { revision: number } | undefined;
-          if (value.expected_revision !== (old?.revision ?? 0)) return reply(409, { error: { code: 'REVISION_CONFLICT' } });
-          docs.set(location, { ...doc(location, value.state, (old?.revision ?? 0) + 1), submission_id: value.submission_id });
+          if (value.expected_revision !== (old?.revision ?? 0))
+            return reply(409, { error: { code: 'REVISION_CONFLICT' } });
+          docs.set(location, {
+            ...doc(location, value.state, (old?.revision ?? 0) + 1),
+            submission_id: value.submission_id,
+          });
           return reply(200, docs.get(location));
         }
         return docs.has(location) ? reply(200, docs.get(location)) : reply(404, {});
@@ -107,7 +119,9 @@ beforeEach(() => {
       if (url === '/bridge/v1/tags') return reply(200, { tags: [] });
       if (url === '/bridge/v1/saved-views') return reply(200, { views: [] });
       if (url === '/bridge/v1/context-plans' && method === 'POST')
-        return reply(planStatus, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'knowledge provider unavailable' } });
+        return reply(planStatus, {
+          error: { code: 'UPSTREAM_UNAVAILABLE', message: 'knowledge provider unavailable' },
+        });
       if (url === '/bridge/v1/capabilities')
         return reply(200, {
           capabilities: [
@@ -143,7 +157,11 @@ function ConversationPage() {
   useConversationPersistentDraft(id, state, restore, true);
   return (
     <>
-      <textarea aria-label='对话输入' value={state.content} onChange={(e) => setState({ ...state, content: e.target.value })} />
+      <textarea
+        aria-label='对话输入'
+        value={state.content}
+        onChange={(e) => setState({ ...state, content: e.target.value })}
+      />
       <ConversationScopeSlot conversation_id={id} />
     </>
   );
@@ -157,7 +175,8 @@ const renderApp = (entry: string | { pathname: string; state: unknown }) =>
       </Routes>
     </MemoryRouter>
   );
-const contextReads = () => calls.filter((c) => c.method === 'GET' && c.url.endsWith('/conversations/conv-1/context')).length;
+const contextReads = () =>
+  calls.filter((c) => c.method === 'GET' && c.url.endsWith('/conversations/conv-1/context')).length;
 const planPosts = () => calls.filter((c) => c.method === 'POST' && c.url === '/bridge/v1/context-plans').length;
 const changeScope = async () => {
   fireEvent.click(await screen.findByRole('button', { name: '更改范围' }));
@@ -173,10 +192,21 @@ describe('意图解析：对话来源', () => {
       path: '/conversation/conv-1',
       state: { mycoworkCapabilityReturned: { ownerKey: 'owner-a' } },
     });
-    for (const conversationId of [undefined, '', '../guid', 'a/b', 'https://example.invalid/x', 'x'.repeat(129), 7, ['conv-1']])
+    for (const conversationId of [
+      undefined,
+      '',
+      '../guid',
+      'a/b',
+      'https://example.invalid/x',
+      'x'.repeat(129),
+      7,
+      ['conv-1'],
+    ])
       expect(parseCapabilityReturn({ mycoworkCapabilityReturn: { ...intent, conversationId } }, 'owner-a')).toBeNull();
     expect(parseCapabilityReturn({ mycoworkCapabilityReturn: intent }, 'owner-b')).toBeNull();
-    expect(parseCapabilityReturn({ mycoworkCapabilityReturn: { ...intent, origin: 'conversations' } }, 'owner-a')).toBeNull();
+    expect(
+      parseCapabilityReturn({ mycoworkCapabilityReturn: { ...intent, origin: 'conversations' } }, 'owner-a')
+    ).toBeNull();
   });
 });
 
@@ -193,7 +223,9 @@ describe('对话页 → 去配置 → 回到同一对话', () => {
     const tip = await screen.findByTestId('mycowork-capability-return'); // 读上下文核对归属后才出现
     const readsBeforeReturn = contextReads();
     fireEvent.click(await screen.findByRole('button', { name: '回到原任务' }));
-    await waitFor(() => expect(screen.getByRole('textbox', { name: '对话输入' })).toHaveValue('虚构：提纲再加一节风险'));
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: '对话输入' })).toHaveValue('虚构：提纲再加一节风险')
+    );
     await waitFor(() => expect(contextReads()).toBe(readsBeforeReturn + 1)); // 范围条重挂载即重读
     expect(tip).not.toBeInTheDocument();
     expect(planPosts()).toBe(1);
@@ -228,7 +260,9 @@ describe('能力中心：对话来源的归属核对', () => {
       });
       await screen.findByTestId('capability-knowledge.retrieval');
       if (owner === 'owner-a')
-        await waitFor(() => expect(calls.some((c) => c.url.includes(`/conversations/${conversationId}/context`))).toBe(true));
+        await waitFor(() =>
+          expect(calls.some((c) => c.url.includes(`/conversations/${conversationId}/context`))).toBe(true)
+        );
       await new Promise((r) => setTimeout(r, 0));
       expect(screen.queryByTestId('mycowork-capability-return')).toBeNull();
       unmount();

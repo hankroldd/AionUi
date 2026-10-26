@@ -128,7 +128,11 @@ it('partial failure retry contains only the original failed ids and is confirmed
   acknowledge();
   fireEvent.click(dialog().getByRole('button', { name: '确认永久删除' }));
   await waitFor(() => expect(calls('/purge')).toHaveLength(4));
-  expect(calls('/purge').map(([url]) => String(url).split('/').at(-2)).sort()).toEqual(['res_1', 'res_2', 'res_2', 'res_3']);
+  expect(
+    calls('/purge')
+      .map(([url]) => String(url).split('/').at(-2))
+      .sort()
+  ).toEqual(['res_1', 'res_2', 'res_2', 'res_3']);
   expect(rows.map((r) => r.resource_id)).toEqual(['res_4']);
 });
 it('double-clicking the final button sends each confirmed id once', async () => {
@@ -294,32 +298,35 @@ it('a failed post-enumeration read invalidates the pending confirmation', async 
   expect(calls('/purge')).toHaveLength(0);
 });
 
-it.each(['500', 'disconnect'])('purge response %s after commit stays unconfirmed; no blind retry; confirming = read only', async (mode) => {
-  const original = fetchMock.getMockImplementation();
-  let first = true;
-  fetchMock.mockImplementation(async (url) => {
-    const response = await original?.(url);
-    if (String(url).endsWith('/purge') && first) {
-      first = false;
-      if (mode === 'disconnect') throw new Error('synthetic connection lost after commit');
-      return reply(500, { error: { code: 'INTERNAL_ERROR' } });
-    }
-    return response;
-  });
-  mount();
-  await screen.findByText('虚构资料1.md');
-  fireEvent.click(row(1).getByRole('button', { name: '永久删除 虚构资料1.md' }));
-  acknowledge();
-  fireEvent.click(dialog().getByRole('button', { name: '确认永久删除' }));
-  const check = await screen.findByRole('button', { name: '确认结果' });
-  expect(screen.queryByRole('button', { name: '重试失败项' })).toBeNull();
-  expect(rows.map((r) => r.resource_id)).toEqual(['res_2', 'res_3']);
-  fireEvent.click(check);
-  // the first request did delete it: reading the list shows it gone, which counts as done (no retry offered)
-  await screen.findByText('已永久删除 1 / 1');
-  expect(screen.queryByRole('button', { name: '确认结果' })).toBeNull();
-  expect(calls('/purge')).toHaveLength(1);
-});
+it.each(['500', 'disconnect'])(
+  'purge response %s after commit stays unconfirmed; no blind retry; confirming = read only',
+  async (mode) => {
+    const original = fetchMock.getMockImplementation();
+    let first = true;
+    fetchMock.mockImplementation(async (url) => {
+      const response = await original?.(url);
+      if (String(url).endsWith('/purge') && first) {
+        first = false;
+        if (mode === 'disconnect') throw new Error('synthetic connection lost after commit');
+        return reply(500, { error: { code: 'INTERNAL_ERROR' } });
+      }
+      return response;
+    });
+    mount();
+    await screen.findByText('虚构资料1.md');
+    fireEvent.click(row(1).getByRole('button', { name: '永久删除 虚构资料1.md' }));
+    acknowledge();
+    fireEvent.click(dialog().getByRole('button', { name: '确认永久删除' }));
+    const check = await screen.findByRole('button', { name: '确认结果' });
+    expect(screen.queryByRole('button', { name: '重试失败项' })).toBeNull();
+    expect(rows.map((r) => r.resource_id)).toEqual(['res_2', 'res_3']);
+    fireEvent.click(check);
+    // the first request did delete it: reading the list shows it gone, which counts as done (no retry offered)
+    await screen.findByText('已永久删除 1 / 1');
+    expect(screen.queryByRole('button', { name: '确认结果' })).toBeNull();
+    expect(calls('/purge')).toHaveLength(1);
+  }
+);
 
 it('clear enumeration network failure never implies a write was submitted', async () => {
   const original = fetchMock.getMockImplementation();

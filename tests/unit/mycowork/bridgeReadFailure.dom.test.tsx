@@ -44,7 +44,8 @@ describe('详情输入与现场', () => {
   });
 
   it.each(['/private/fixture.key', 'Bearer fixture-secret', '<script>fixture</script>', 'INTERNAL\n', 'A'.repeat(65)])(
-    '非法诊断不回显：%s', (value) => {
+    '非法诊断不回显：%s',
+    (value) => {
       render(<BridgeReadFailure lang='en' error={new BridgeError('failed', value)} onRetry={vi.fn()} />);
       expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
       expect(document.body.textContent).not.toContain(value);
@@ -54,13 +55,28 @@ describe('详情输入与现场', () => {
   it('任意Error/对象的消息不作为诊断，不调用未知toString', () => {
     const view = render(<BridgeReadFailure lang='en' error={new Error('fixture_secret')} onRetry={vi.fn()} />);
     expect(document.body.textContent).not.toContain('fixture_secret');
-    view.rerender(<BridgeReadFailure lang='en' error={{ toString: () => { throw new Error('must not stringify'); } }} onRetry={vi.fn()} />);
+    view.rerender(
+      <BridgeReadFailure
+        lang='en'
+        error={{
+          toString: () => {
+            throw new Error('must not stringify');
+          },
+        }}
+        onRetry={vi.fn()}
+      />
+    );
     expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
   });
 
-  it.each([new BridgeError('unauthenticated'), new BridgeError('failed', 'FORBIDDEN'),
-    new BridgeError('failed', 'NOT_FOUND'), new BridgeError('failed', 'HTTP 403'),
-    new BridgeError('failed', 'HTTP 404'), new BridgeError('scope_changed')])('不可直接重试的错误：%s', (error) => {
+  it.each([
+    new BridgeError('unauthenticated'),
+    new BridgeError('failed', 'FORBIDDEN'),
+    new BridgeError('failed', 'NOT_FOUND'),
+    new BridgeError('failed', 'HTTP 403'),
+    new BridgeError('failed', 'HTTP 404'),
+    new BridgeError('scope_changed'),
+  ])('不可直接重试的错误：%s', (error) => {
     render(<BridgeReadFailure lang='en' error={error} onRetry={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain('contact your administrator (details:');
@@ -83,7 +99,9 @@ describe('详情输入与现场', () => {
     expect(retry).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     expect(retry).toHaveBeenCalledTimes(1);
-    expect(bridgeFailureText('en', first)).toBe('The action did not finish; retry, or contact your administrator (details: INTERNAL).');
+    expect(bridgeFailureText('en', first)).toBe(
+      'The action did not finish; retry, or contact your administrator (details: INTERNAL).'
+    );
   });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -92,13 +110,24 @@ describe.each(['imports', 'memory', 'browser'] as const)('真实入口 %s', (pag
   it('先显示人话；详情显式展开；原重试成功后清掉错误，篮子不丢', async () => {
     if (page === 'imports') render(<ImportsPage lang='en' />);
     else if (page === 'memory') render(<MemoryPage lang='en' />);
-    else render(
-      <ResourceBrowser
-        source={{ source_id: 'src_fixture', name: '虚构库', provider: 'weknora', counts: { total: 1, ready: 1, indexing: 0, failed: 0, unavailable: 0 } }}
-        tagIds={[]} initialIds={['res_keep']} lang='en'
-        onClose={vi.fn()} onConfirm={vi.fn()} onPreview={vi.fn()} afterClose={vi.fn()}
-      />
-    );
+    else
+      render(
+        <ResourceBrowser
+          source={{
+            source_id: 'src_fixture',
+            name: '虚构库',
+            provider: 'weknora',
+            counts: { total: 1, ready: 1, indexing: 0, failed: 0, unavailable: 0 },
+          }}
+          tagIds={[]}
+          initialIds={['res_keep']}
+          lang='en'
+          onClose={vi.fn()}
+          onConfirm={vi.fn()}
+          onPreview={vi.fn()}
+          afterClose={vi.fn()}
+        />
+      );
     const details = await screen.findByRole('button', { name: 'Details' });
     expect(details).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText('INTERNAL', { exact: true })).not.toBeInTheDocument();
@@ -112,7 +141,10 @@ describe.each(['imports', 'memory', 'browser'] as const)('真实入口 %s', (pag
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));
     if (page === 'imports') await screen.findByText('No imports yet');
-    else await waitFor(() => expect(document.querySelector(page === 'memory' ? '.mcw-mem-count' : '.arco-pagination')).toBeVisible());
+    else
+      await waitFor(() =>
+        expect(document.querySelector(page === 'memory' ? '.mcw-mem-count' : '.arco-pagination')).toBeVisible()
+      );
     await waitFor(() => expect(screen.queryByTestId('bridge-read-failure')).not.toBeInTheDocument());
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
     if (page === 'browser') expect(screen.getByText('1 selected', { exact: true })).toBeVisible();

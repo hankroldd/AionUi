@@ -157,7 +157,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-
 describe('menu item', () => {
   it('shows for an imported pptx only: not for docx, outputs, Secret or knowledge-base originals', async () => {
     items = [

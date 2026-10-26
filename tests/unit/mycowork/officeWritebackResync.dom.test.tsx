@@ -76,8 +76,10 @@ function serve(view: object, answers: (() => ReturnType<typeof reply> | Promise<
   });
   return calls;
 }
-const written = () => reply(200, { revision_id: 'rev_b', workspace_writeback_status: 'written', workspace_writeback: wb('written') });
-const stillFailed = () => reply(200, { revision_id: 'rev_b', workspace_writeback_status: 'failed', workspace_writeback: wb('failed') });
+const written = () =>
+  reply(200, { revision_id: 'rev_b', workspace_writeback_status: 'written', workspace_writeback: wb('written') });
+const stillFailed = () =>
+  reply(200, { revision_id: 'rev_b', workspace_writeback_status: 'failed', workspace_writeback: wb('failed') });
 const conflicted = () =>
   reply(200, {
     revision_id: 'rev_b',
@@ -224,7 +226,11 @@ describe('文本编辑页', () => {
           workspace_writeback: writeback,
         });
       if (url === '/bridge/v1/resources/res_1/workspace-writeback' && init?.method === 'POST')
-        return reply(200, { revision_id: 'rev_b', workspace_writeback_status: 'written', workspace_writeback: wb('written', { relative_path: 'notes.md' }) });
+        return reply(200, {
+          revision_id: 'rev_b',
+          workspace_writeback_status: 'written',
+          workspace_writeback: wb('written', { relative_path: 'notes.md' }),
+        });
       return reply(204, null);
     });
     render(<OfficeTextEditSlot />);
@@ -251,7 +257,18 @@ describe('版本页顶部提示条（刷新后也有）', () => {
   const mount = () => render(<VersionsPage resourceId={RES} lang='zh-CN' renderMarkdown={(s) => <p>{s}</p>} />);
   it('时间线 workspace_writeback_failed=true 才出现；点后 POST，重读时间线后提示条消失并提示结果', async () => {
     let failed = true;
-    const b = installBridge({ total: 3, writebackFailed: () => failed, resync: () => ((failed = false), json({ revision_id: 'rev-3', workspace_writeback_status: 'written', workspace_writeback: wb('written', { relative_path: 'a.docx' }) })) });
+    const b = installBridge({
+      total: 3,
+      writebackFailed: () => failed,
+      resync: () => (
+        (failed = false),
+        json({
+          revision_id: 'rev-3',
+          workspace_writeback_status: 'written',
+          workspace_writeback: wb('written', { relative_path: 'a.docx' }),
+        })
+      ),
+    });
     mount();
     const banner = await screen.findByTestId('writeback-resync-banner');
     expect(within(banner).getByText(text.resyncBanner)).toBeInTheDocument();
@@ -265,11 +282,16 @@ describe('版本页顶部提示条（刷新后也有）', () => {
     installBridge({
       total: 3,
       writebackFailed: () => failed,
-      resync: () => ((failed = false), json({ revision_id: 'rev-3', workspace_writeback_status: 'written', workspace_writeback: wb('written') })),
+      resync: () => (
+        (failed = false),
+        json({ revision_id: 'rev-3', workspace_writeback_status: 'written', workspace_writeback: wb('written') })
+      ),
     });
     const inner = fetch;
     vi.stubGlobal('fetch', async (url: string, init?: RequestInit) =>
-      url === '/bridge/v1/edit-sessions/eds_1' ? new Response(JSON.stringify({ ...failedView, resource_id: RES })) : inner(url, init)
+      url === '/bridge/v1/edit-sessions/eds_1'
+        ? new Response(JSON.stringify({ ...failedView, resource_id: RES }))
+        : inner(url, init)
     );
     trackSave(text, 'eds_1');
     await waitFor(() => expect(body()).toHaveTextContent(text.writeFailed('方案.docx')));
@@ -285,12 +307,19 @@ describe('版本页顶部提示条（刷新后也有）', () => {
     expect(screen.queryByTestId('writeback-resync-banner')).toBeNull();
   });
   it('仍失败：提示条保留，可再试', async () => {
-    installBridge({ total: 3, writebackFailed: () => true, resync: () => json({ revision_id: 'rev-3', workspace_writeback_status: 'failed', workspace_writeback: wb('failed') }) });
+    installBridge({
+      total: 3,
+      writebackFailed: () => true,
+      resync: () =>
+        json({ revision_id: 'rev-3', workspace_writeback_status: 'failed', workspace_writeback: wb('failed') }),
+    });
     mount();
     const banner = await screen.findByTestId('writeback-resync-banner');
     fireEvent.click(within(banner).getByRole('button', { name: text.resync }));
     await waitFor(() => expect(body()).toHaveTextContent(text.resyncFailed));
     expect(screen.getByTestId('writeback-resync-banner')).toBeInTheDocument();
-    expect(within(screen.getByTestId('writeback-resync-banner')).getByRole('button', { name: text.resync })).toBeEnabled();
+    expect(
+      within(screen.getByTestId('writeback-resync-banner')).getByRole('button', { name: text.resync })
+    ).toBeEnabled();
   });
 });

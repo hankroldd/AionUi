@@ -907,7 +907,13 @@ const PreviewPanel: React.FC<{ hideMaximizeToggle?: boolean }> = ({ hideMaximize
   // 渲染预览内容 / Render preview content
   const renderContent = () => {
     if (content_type === 'mycowork-result')
-      return <SavedResultPreview identity={content} fileName={metadata?.file_name ?? activeTab!.title} lang={i18n.language} />;
+      return (
+        <SavedResultPreview
+          identity={content}
+          fileName={metadata?.file_name ?? activeTab!.title}
+          lang={i18n.language}
+        />
+      );
     if (metadata?.missingFile) return renderMissingFile();
     if (metadata?.oversized) return renderOversized();
     if (content_type === 'unsupported') return renderUnsupported();
@@ -1231,48 +1237,51 @@ const PreviewPanel: React.FC<{ hideMaximizeToggle?: boolean }> = ({ hideMaximize
 
         {/* 工具栏（URL / 浏览器 类型不显示工具栏，因为不需要下载/编辑等功能）
             Toolbar (hidden for URL and browser types — no download/edit needed) */}
-        {content_type !== 'url' && content_type !== 'browser' && content_type !== 'mycowork-result' && !metadata?.missingFile && (
-          <PreviewToolbar
-            content_type={content_type}
-            isMarkdown={isMarkdown}
-            isHTML={isHTML}
-            viewMode={viewMode}
-            isSplitScreenEnabled={isSplitScreenEnabled}
-            file_name={metadata?.file_name || activeTab.title}
-            showOpenInSystemButton={showOpenInSystemButton}
-            hasFilePath={Boolean(metadata?.file_path)}
-            refreshState={refreshStateToken(refreshState)}
-            refreshActionable={isRefreshActionable(refreshState)}
-            onRefresh={handleRefreshClick}
-            showSave={
-              isEditable &&
-              (EDITABLE_CONTENT_TYPES as readonly string[]).includes(content_type) &&
-              !(Boolean(metadata?.oversized) || content_type === 'unsupported')
-            }
-            saveActionable={Boolean(activeTab?.isDirty)}
-            onSave={() => void handleSaveActiveTab()}
-            hasNoRenderableContent={Boolean(metadata?.oversized) || content_type === 'unsupported'}
-            onViewModeChange={(mode) => {
-              setViewMode(mode);
-              setIsSplitScreenEnabled(false); // 切换视图模式时关闭分屏 / Disable split when switching view mode
-            }}
-            onSplitScreenToggle={() => setIsSplitScreenEnabled(!isSplitScreenEnabled)}
-            onOpenInSystem={handleOpenInSystem}
-            onDownload={handleDownload}
-            onClose={handleClosePanel}
-            inspectMode={inspectMode}
-            onInspectModeToggle={() => setInspectMode(!inspectMode)}
-            leftExtra={toolbarExtras?.left}
-            // [mycowork] D125: "Edit" opens this workspace file in a separate editor; the preview stays read-only.
-            // Explorer tabs carry only {pe_id, relative_path} (no absolute path), so pass the workspace-relative path.
-            rightExtra={
-              <>
-                {toolbarExtras?.right}
-                {activeTab && <PreviewEditSlot relativePath={previewTabPaths(activeTab).relative} />}
-              </>
-            }
-          />
-        )}
+        {content_type !== 'url' &&
+          content_type !== 'browser' &&
+          content_type !== 'mycowork-result' &&
+          !metadata?.missingFile && (
+            <PreviewToolbar
+              content_type={content_type}
+              isMarkdown={isMarkdown}
+              isHTML={isHTML}
+              viewMode={viewMode}
+              isSplitScreenEnabled={isSplitScreenEnabled}
+              file_name={metadata?.file_name || activeTab.title}
+              showOpenInSystemButton={showOpenInSystemButton}
+              hasFilePath={Boolean(metadata?.file_path)}
+              refreshState={refreshStateToken(refreshState)}
+              refreshActionable={isRefreshActionable(refreshState)}
+              onRefresh={handleRefreshClick}
+              showSave={
+                isEditable &&
+                (EDITABLE_CONTENT_TYPES as readonly string[]).includes(content_type) &&
+                !(Boolean(metadata?.oversized) || content_type === 'unsupported')
+              }
+              saveActionable={Boolean(activeTab?.isDirty)}
+              onSave={() => void handleSaveActiveTab()}
+              hasNoRenderableContent={Boolean(metadata?.oversized) || content_type === 'unsupported'}
+              onViewModeChange={(mode) => {
+                setViewMode(mode);
+                setIsSplitScreenEnabled(false); // 切换视图模式时关闭分屏 / Disable split when switching view mode
+              }}
+              onSplitScreenToggle={() => setIsSplitScreenEnabled(!isSplitScreenEnabled)}
+              onOpenInSystem={handleOpenInSystem}
+              onDownload={handleDownload}
+              onClose={handleClosePanel}
+              inspectMode={inspectMode}
+              onInspectModeToggle={() => setInspectMode(!inspectMode)}
+              leftExtra={toolbarExtras?.left}
+              // [mycowork] D125: "Edit" opens this workspace file in a separate editor; the preview stays read-only.
+              // Explorer tabs carry only {pe_id, relative_path} (no absolute path), so pass the workspace-relative path.
+              rightExtra={
+                <>
+                  {toolbarExtras?.right}
+                  {activeTab && <PreviewEditSlot relativePath={previewTabPaths(activeTab).relative} />}
+                </>
+              }
+            />
+          )}
 
         {/* 预览内容 / Preview content */}
         {renderContent()}

@@ -16,16 +16,33 @@ const sources = [
 const accepted = (r: PublicationRequest) =>
   new Response(
     JSON.stringify({
-      publication_id: 'pub-1', resource_id: r.resource_id, revision_id: r.revision_id, target: r.target,
-      status: 'queued', error: null, accepted_at: 't', published_at: null, created_at: 't',
+      publication_id: 'pub-1',
+      resource_id: r.resource_id,
+      revision_id: r.revision_id,
+      target: r.target,
+      status: 'queued',
+      error: null,
+      accepted_at: 't',
+      published_at: null,
+      created_at: 't',
     }),
-    { status: 201, headers: { 'content-type': 'application/json' } },
+    { status: 201, headers: { 'content-type': 'application/json' } }
   );
 const serve = (reply: (r: PublicationRequest) => Promise<Response> | Response) =>
   vi.stubGlobal('fetch', async (_url: string, init?: RequestInit) => reply(JSON.parse(String(init?.body))));
 const dialog = () => (
-  <PublicationDialog resourceId='resource-1' revisionId='rev-1' headRevisionId='rev-1' versionLabel='v34'
-    initialFileName='虚构成果.txt' sources={sources} secret={false} lang='zh-CN' onAccepted={() => {}} onCancel={() => {}} />
+  <PublicationDialog
+    resourceId='resource-1'
+    revisionId='rev-1'
+    headRevisionId='rev-1'
+    versionLabel='v34'
+    initialFileName='虚构成果.txt'
+    sources={sources}
+    secret={false}
+    lang='zh-CN'
+    onAccepted={() => {}}
+    onCancel={() => {}}
+  />
 );
 async function publish() {
   fireEvent.click(screen.getByLabelText('选择知识库'));
@@ -56,8 +73,12 @@ describe('发布结果提示一定看得见', () => {
     serve(accepted);
     render(dialog());
     await publish();
-    expect(await screen.findByText(/已提交发布 v34 到「虚构知识库」，入库在后台进行/, {}, { timeout: 8000 })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '查看版本与变化' }).getAttribute('href')).toBe('#/office/resources/resource-1/versions');
+    expect(
+      await screen.findByText(/已提交发布 v34 到「虚构知识库」，入库在后台进行/, {}, { timeout: 8000 })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '查看版本与变化' }).getAttribute('href')).toBe(
+      '#/office/resources/resource-1/versions'
+    );
     await act(() => vi.advanceTimersByTimeAsync(700)); // 越过“正在发布”的延迟：它不能冒出来盖住结果
     expect(screen.queryByText('正在发布到「虚构知识库」…')).toBeNull();
     // 分小步推进：弹窗到期后的移除是“计时器 → 渲染 → 再计时”的链，一次推大步会把后半段留在没跑的队列里，缩短停留也测不出来
@@ -73,7 +94,15 @@ describe('发布结果提示一定看得见', () => {
     await waitFor(() => expect(document.querySelector('.arco-modal')).toBeNull());
     expect(screen.queryByText('正在发布到「虚构知识库」…')).toBeNull();
     expect(await screen.findByText('正在发布到「虚构知识库」…', {}, { timeout: 1500 })).toBeInTheDocument();
-    await act(async () => release(accepted({ resource_id: 'resource-1', revision_id: 'rev-1', target: { kind: 'knowledge_base', source_id: 'kb-1', file_name: 'a' } } as PublicationRequest)));
+    await act(async () =>
+      release(
+        accepted({
+          resource_id: 'resource-1',
+          revision_id: 'rev-1',
+          target: { kind: 'knowledge_base', source_id: 'kb-1', file_name: 'a' },
+        } as PublicationRequest)
+      )
+    );
     expect(await screen.findByText(/已提交发布 v34/)).toBeInTheDocument();
     expect(screen.queryByText('正在发布到「虚构知识库」…')).toBeNull();
   });

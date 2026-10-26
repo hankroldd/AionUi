@@ -58,7 +58,9 @@ function bridge(saves: Array<'lost' | 'conflict' | 'ok'>, latest?: { base: strin
     if (url.endsWith('/save')) {
       const how = saves[n++] ?? 'ok';
       if (how === 'lost') throw new TypeError('Failed to fetch');
-      return how === 'conflict' ? reply(409, { error: { code: 'REVISION_CONFLICT', message: 'x' } }) : reply(200, SAVED);
+      return how === 'conflict'
+        ? reply(409, { error: { code: 'REVISION_CONFLICT', message: 'x' } })
+        : reply(200, SAVED);
     }
     return reply(204, null);
   });

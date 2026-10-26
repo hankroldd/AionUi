@@ -93,7 +93,9 @@ vi.mock('@/renderer/pages/conversation/Preview/components/editors', () => ({
 vi.mock('@/renderer/components/Markdown', () => ({ default: () => null }));
 vi.mock('@/renderer/pages/conversation/Preview/components/viewers', () => ({ MarkdownViewer: () => null }));
 vi.mock('swr', () => ({
-  default: (key: unknown) => ({ data: typeof key === 'string' && key.startsWith('guid.assistant.detail.') ? boundary.detail : null }),
+  default: (key: unknown) => ({
+    data: typeof key === 'string' && key.startsWith('guid.assistant.detail.') ? boundary.detail : null,
+  }),
   mutate: vi.fn(),
 }));
 vi.mock('@/renderer/pages/guid/components/GuidActionRow', () => ({
@@ -185,32 +187,42 @@ it('StrictMode consumes the question once and keeps the required file selection'
   expect(boundary.create).not.toHaveBeenCalled();
 });
 
-it('another account\'s intent installs an empty required set (send refused), never the file', async () => {
+it("another account's intent installs an empty required set (send refused), never the file", async () => {
   render(tree(owned('另一个账号的问题', 'other-owner')));
   await waitFor(() => expect(getScope()).toMatchObject({ items: [], views: [], requiredResourceIds: [] }));
   expect(boundary.create).not.toHaveBeenCalled();
 });
 
-
 it.each([
   { local: [], english: [], base: ['根据资料制作虚构汇报 PPT'], expected: '根据资料制作虚构汇报 PPT' },
   { local: ['自定义中文示例'], english: ['English custom prompt'], base: ['默认示例'], expected: '自定义中文示例' },
   { local: [], english: ['English custom prompt'], base: ['默认示例'], expected: 'English custom prompt' },
-])('renders the first non-empty assistant prompt array, preserving locale priority: $expected', async ({ local, english, base, expected }) => {
-  boundary.detail = {
-    id: 'fixture-assistant', source: 'user', agent_status: 'online', team_selectable: true, deletable: true,
-    profile: { name: '虚构材料助手', name_i18n: {}, description_i18n: {} },
-    state: { enabled: true, sort_order: 0 }, engine: { agent_id: 'aionrs' },
-    rules: { content: '', storage_mode: 'inline' },
-    prompts: { recommended: base, recommended_i18n: { 'zh-CN': local, 'en-US': english } },
-    defaults: {
-      model: { mode: 'inherit' }, permission: { mode: 'inherit' }, thought_level: { mode: 'inherit' },
-      skills: { mode: 'fixed', value: [] }, mcps: { mode: 'fixed', value: [] },
-    },
-    capabilities: { default_skill_ids: [], custom_skill_names: [], default_disabled_builtin_skill_ids: [] },
-    preferences: { last_skill_ids: [], last_disabled_builtin_skill_ids: [], last_mcp_ids: [] },
-  };
-  render(tree());
-  expect(await screen.findByRole('button', { name: expected })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'guid.defaultPrompts.understand' })).toBeNull();
-});
+])(
+  'renders the first non-empty assistant prompt array, preserving locale priority: $expected',
+  async ({ local, english, base, expected }) => {
+    boundary.detail = {
+      id: 'fixture-assistant',
+      source: 'user',
+      agent_status: 'online',
+      team_selectable: true,
+      deletable: true,
+      profile: { name: '虚构材料助手', name_i18n: {}, description_i18n: {} },
+      state: { enabled: true, sort_order: 0 },
+      engine: { agent_id: 'aionrs' },
+      rules: { content: '', storage_mode: 'inline' },
+      prompts: { recommended: base, recommended_i18n: { 'zh-CN': local, 'en-US': english } },
+      defaults: {
+        model: { mode: 'inherit' },
+        permission: { mode: 'inherit' },
+        thought_level: { mode: 'inherit' },
+        skills: { mode: 'fixed', value: [] },
+        mcps: { mode: 'fixed', value: [] },
+      },
+      capabilities: { default_skill_ids: [], custom_skill_names: [], default_disabled_builtin_skill_ids: [] },
+      preferences: { last_skill_ids: [], last_disabled_builtin_skill_ids: [], last_mcp_ids: [] },
+    };
+    render(tree());
+    expect(await screen.findByRole('button', { name: expected })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'guid.defaultPrompts.understand' })).toBeNull();
+  }
+);

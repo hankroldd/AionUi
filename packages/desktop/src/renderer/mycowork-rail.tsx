@@ -338,7 +338,9 @@ export default function MyCoworkRail({ mobile = false }: { mobile?: boolean }): 
     /^\/office\/trash\/?$/.test(pathname);
   const scheduled = pathname.startsWith('/scheduled');
   const memory = pathname.startsWith('/office/memory');
-  const more = pathname.startsWith('/office/knowledge') || pathname.startsWith('/office/imports') ||
+  const more =
+    pathname.startsWith('/office/knowledge') ||
+    pathname.startsWith('/office/imports') ||
     pathname.startsWith('/office/capabilities') ||
     pathname.startsWith('/office/setup') ||
     pathname.startsWith('/office/schedules') ||

@@ -39,11 +39,23 @@ function Space() {
 }
 function Conversation() {
   const { proposed, handled } = useScopeChangeProposal('fixture-owner', 'convA');
-  return <ScopeStrip lang='zh-CN' conversationId='convA' onStrictShrink={() => {}} proposed={proposed} onProposedHandled={handled} />;
+  return (
+    <ScopeStrip
+      lang='zh-CN'
+      conversationId='convA'
+      onStrictShrink={() => {}}
+      proposed={proposed}
+      onProposedHandled={handled}
+    />
+  );
 }
 function Probe() {
   const l = useLocation();
-  return <output data-testid='route' data-state={JSON.stringify(l.state)}>{l.pathname}</output>;
+  return (
+    <output data-testid='route' data-state={JSON.stringify(l.state)}>
+      {l.pathname}
+    </output>
+  );
 }
 const methods = () => boundary.fetch.mock.calls.map((c) => (c[1] as RequestInit | undefined)?.method ?? 'GET');
 const mount = (entry: unknown) =>
@@ -62,7 +74,10 @@ beforeEach(() => {
   boundary.fetch.mockReset().mockImplementation(async (url: string) => ({
     status: 200,
     ok: true,
-    json: async () => (String(url).includes('/context') ? planA : { sources: [{ source_id: 'src_B', name: 'B 库' }], tags: [], views: [] }),
+    json: async () =>
+      String(url).includes('/context')
+        ? planA
+        : { sources: [{ source_id: 'src_B', name: 'B 库' }], tags: [], views: [] },
   }));
   vi.stubGlobal('fetch', boundary.fetch);
 });
@@ -92,7 +107,10 @@ it.each([
   ['别的账号', { ownerKey: 'other', conversationId: 'convA', selection: draftB }],
   ['别的对话 id', { ownerKey: 'fixture-owner', conversationId: 'convX', selection: draftB }],
   ['非白名单 id', { ownerKey: 'fixture-owner', conversationId: '../x', selection: draftB }],
-  ['条目结构被篡改', { ownerKey: 'fixture-owner', conversationId: 'convA', selection: { items: [{ source_id: 1 }], views: [] } }],
+  [
+    '条目结构被篡改',
+    { ownerKey: 'fixture-owner', conversationId: 'convA', selection: { items: [{ source_id: 1 }], views: [] } },
+  ],
 ])('被篡改的意图被忽略（%s）：不弹确认框', async (_n, intent) => {
   mount({ pathname: '/conversation/convA', state: { mycoworkScopeChange: intent } } as never);
   await waitFor(() => expect(screen.getByTestId('mycowork-scope-strip').textContent).toContain('更改范围'));

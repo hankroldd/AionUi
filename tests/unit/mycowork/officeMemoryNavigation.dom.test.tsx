@@ -75,7 +75,11 @@ it('a temporary failed list can retry; an expired login hides rows and has no Re
   );
   render(<MemoryPage lang='zh-CN' />);
   await screen.findByText('没有读到记忆');
-  expect(screen.getAllByText('资料服务暂不可用，请稍后重试；已保存的内容不受影响，手头的文件仍可打开和编辑，只是暂时不能语义检索。')).toHaveLength(1);
+  expect(
+    screen.getAllByText(
+      '资料服务暂不可用，请稍后重试；已保存的内容不受影响，手头的文件仍可打开和编辑，只是暂时不能语义检索。'
+    )
+  ).toHaveLength(1);
   code = 200;
   fireEvent.click(screen.getByRole('button', { name: '重试' }));
   await screen.findByText('这一栏还没有条目');

@@ -49,8 +49,15 @@ function bridge(opts: { duplicate?: string[]; created?: object[]; retried?: obje
   const base = fetchMock.getMockImplementation() as (url: string, init?: RequestInit) => Promise<unknown>;
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     if (url === '/bridge/v1/uploads')
-      return reply(201, { upload_id: 'up_1', file_name: '周报.md', size: 5, sha256: 'x', duplicate_of: opts.duplicate ?? [] });
-    if (url === '/bridge/v1/import-batches' && init?.method === 'POST') return reply(201, batch(opts.created ?? [row({})]));
+      return reply(201, {
+        upload_id: 'up_1',
+        file_name: '周报.md',
+        size: 5,
+        sha256: 'x',
+        duplicate_of: opts.duplicate ?? [],
+      });
+    if (url === '/bridge/v1/import-batches' && init?.method === 'POST')
+      return reply(201, batch(opts.created ?? [row({})]));
     if (url.endsWith('/retry')) return reply(200, batch(opts.retried ?? [row({})], 2));
     if (url === '/bridge/v1/import-batches/bat_1') return reply(200, batch(opts.created ?? [row({})]));
     return base(url, init);
@@ -59,7 +66,11 @@ function bridge(opts: { duplicate?: string[]; created?: object[]; retried?: obje
 async function openDialog(lang = 'zh-CN') {
   render(<ResourcesPage lang={lang} />);
   await screen.findByRole('button', { name: '第一页-1.md', exact: true });
-  fireEvent.click(within(document.querySelector('header') as HTMLElement).getByRole('button', { name: lang === 'en' ? 'Create' : '新建' }));
+  fireEvent.click(
+    within(document.querySelector('header') as HTMLElement).getByRole('button', {
+      name: lang === 'en' ? 'Create' : '新建',
+    })
+  );
   fireEvent.click(await screen.findByRole('menuitem', { name: lang === 'en' ? 'Import files' : '导入资料' }));
   return screen.findByRole('dialog');
 }
@@ -116,7 +127,9 @@ describe('上传弹窗', () => {
     expect(within(dialog).getByText('导入资料')).toBeInTheDocument();
     expect(selectedKb(dialog)).toBe('不选知识库（仅存档）');
     expect(within(dialog).getByLabelText('标签（可选）')).toBeInTheDocument();
-    expect(within(dialog).getByRole('checkbox', { name: /设为 Secret：只存本机，不进知识库和存档库，AI 读不到/ })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('checkbox', { name: /设为 Secret：只存本机，不进知识库和存档库，AI 读不到/ })
+    ).toBeInTheDocument();
     for (const purpose of ['参考材料', '可编辑工作文件', '模板或优秀样例', '图示素材', '临时分析'])
       expect(within(dialog).queryByText(purpose)).toBeNull();
   });
@@ -173,7 +186,10 @@ describe('上传弹窗', () => {
     expect(within(dialog).queryByText('另登记为独立来源')).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: '确认导入' }));
     await waitFor(() => expect(calls('POST', '/import-batches')).toHaveLength(1));
-    expect(bodyOf()).toMatchObject({ secret: true, items: [{ purpose: 'working', duplicate_action: 'register_separately' }] });
+    expect(bodyOf()).toMatchObject({
+      secret: true,
+      items: [{ purpose: 'working', duplicate_action: 'register_separately' }],
+    });
     expect(bodyOf().source_id).toBeUndefined();
     expect(await within(dialog).findByText('Secret（只存本机）')).toBeInTheDocument();
   });
@@ -190,14 +206,21 @@ describe('上传弹窗', () => {
   });
 
   it('四步进度、失败原因按 D145 文案，只重试失败项带 expected_revision', async () => {
-    const failed = row({ purpose: 'reference', source_id: 'src_a', status: 'failed', steps: steps('failed', 'pending'), error: 'upstream_failed' });
+    const failed = row({
+      purpose: 'reference',
+      source_id: 'src_a',
+      status: 'failed',
+      steps: steps('failed', 'pending'),
+      error: 'upstream_failed',
+    });
     bridge({ created: [failed], retried: [row({ purpose: 'reference', source_id: 'src_a', steps: steps('done') })] });
     const dialog = await openDialog();
     await addFile(dialog);
     fireEvent.click(kb());
     fireEvent.click(await screen.findByText('虚构甲库', { selector: '.arco-select-popup *' }));
     fireEvent.click(within(dialog).getByRole('button', { name: '确认导入' }));
-    for (const step of ['已接收', '已保存原件', '解析', '索引']) expect(await within(dialog).findByText(step)).toBeInTheDocument();
+    for (const step of ['已接收', '已保存原件', '解析', '索引'])
+      expect(await within(dialog).findByText(step)).toBeInTheDocument();
     expect(within(dialog).getByText('知识库暂不可用')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: '只重试失败项' }));
     await waitFor(() => expect(calls('POST', '/retry')).toHaveLength(1));
@@ -217,7 +240,9 @@ describe('上传弹窗', () => {
   });
 
   it('上一批读取失败过：再导入一批后，新批次的首次轮询回到 2 秒而不是沿用退避', async () => {
-    const dialog = await pendingBatch((n) => (n === 1 ? failRead() : batch([row({ status: 'stored', steps: steps('pending') })])));
+    const dialog = await pendingBatch((n) =>
+      n === 1 ? failRead() : batch([row({ status: 'stored', steps: steps('pending') })])
+    );
     await flush(2000);
     expect(batchReads()).toHaveLength(1);
     fireEvent.click(within(dialog).getByRole('button', { name: '再导入一批' }));
@@ -265,8 +290,12 @@ describe('上传弹窗', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: '取消' }));
     await waitFor(() => expect(screen.queryByText('导入资料', { selector: '.arco-modal-title' })).toBeNull());
     expect(calls('POST', '/import-batches')).toHaveLength(0);
-    expect(fetchMock.mock.calls.filter(([, init]) => init?.method && init.method !== 'GET' && init.method !== undefined)
-      .map(([url]) => String(url)).filter((u) => u !== '/bridge/v1/uploads')).toEqual([]);
+    expect(
+      fetchMock.mock.calls
+        .filter(([, init]) => init?.method && init.method !== 'GET' && init.method !== undefined)
+        .map(([url]) => String(url))
+        .filter((u) => u !== '/bridge/v1/uploads')
+    ).toEqual([]);
   });
 
   it('英文界面：弹窗文案与知识库选项', async () => {
@@ -274,7 +303,9 @@ describe('上传弹窗', () => {
     const dialog = await openDialog('en');
     expect(within(dialog).getByText('Import files')).toBeInTheDocument();
     expect(dialog.querySelector('.arco-select-view-value')?.textContent).toBe('No knowledge base (archive only)');
-    expect(within(dialog).getByRole('checkbox', { name: /Mark as Secret: kept on this machine only/ })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('checkbox', { name: /Mark as Secret: kept on this machine only/ })
+    ).toBeInTheDocument();
   });
 
   it('空间为空时的“导入资料”也打开弹窗', async () => {

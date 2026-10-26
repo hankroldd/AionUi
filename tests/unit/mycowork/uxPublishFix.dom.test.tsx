@@ -26,8 +26,22 @@ const rev = (id: string, current: boolean) => ({
 let head: 'rev-2' | 'rev-3';
 const timeline = () =>
   head === 'rev-2'
-    ? { current_revision_id: 'rev-2', total: 2, page: 1, page_size: 50, file_name: '虚构成果.txt', items: [rev('rev-2', true), rev('rev-1', false)] }
-    : { current_revision_id: 'rev-3', total: 3, page: 1, page_size: 50, file_name: '虚构成果.txt', items: [rev('rev-3', true), rev('rev-2', false), rev('rev-1', false)] };
+    ? {
+        current_revision_id: 'rev-2',
+        total: 2,
+        page: 1,
+        page_size: 50,
+        file_name: '虚构成果.txt',
+        items: [rev('rev-2', true), rev('rev-1', false)],
+      }
+    : {
+        current_revision_id: 'rev-3',
+        total: 3,
+        page: 1,
+        page_size: 50,
+        file_name: '虚构成果.txt',
+        items: [rev('rev-3', true), rev('rev-2', false), rev('rev-1', false)],
+      };
 const pub = (r: PublicationRequest): Publication => ({
   publication_id: 'pub-1',
   resource_id: r.resource_id,
@@ -87,7 +101,7 @@ it('弹窗已卸载后收到“需要确认”：进度提示换成不自动消�
       lang='zh-CN'
       onAccepted={() => {}}
       onCancel={() => {}}
-    />,
+    />
   );
   await choosePublish();
   await screen.findByText('正在发布到「虚构知识库」…');

@@ -52,7 +52,11 @@ function SpaceHarness() {
 }
 function Probe() {
   const l = useLocation();
-  return <output data-testid='route' data-state={JSON.stringify(l.state)}>{l.pathname}</output>;
+  return (
+    <output data-testid='route' data-state={JSON.stringify(l.state)}>
+      {l.pathname}
+    </output>
+  );
 }
 const methods = () => boundary.fetch.mock.calls.map((c) => (c[1] as RequestInit | undefined)?.method ?? 'GET');
 

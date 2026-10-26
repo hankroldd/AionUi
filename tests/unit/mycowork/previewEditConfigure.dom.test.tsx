@@ -114,28 +114,32 @@ afterEach(() => {
 });
 
 describe('preview Edit: online editing not configured (R036)', () => {
-  it.each(['online editor not configured', 'document server unavailable'])('503 "%s" -> 去配置 goes to P15 office, returning to this conversation', async (message) => {
-    await openEdit(() => reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message } }));
-    fireEvent.click(await screen.findByRole('button', { name: '去配置' }));
-    const at = screen.getByTestId('at').textContent ?? '';
-    expect(at.startsWith('/office/connections|')).toBe(true);
-    expect(JSON.parse(at.split('|')[1]!)).toEqual({
-      mycoworkConnectionsReturn: {
-        ownerKey: 'owner-a',
-        section: 'office',
-        to: 'task',
-        task: {
+  it.each(['online editor not configured', 'document server unavailable'])(
+    '503 "%s" -> 去配置 goes to P15 office, returning to this conversation',
+    async (message) => {
+      await openEdit(() => reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message } }));
+      fireEvent.click(await screen.findByRole('button', { name: '去配置' }));
+      const at = screen.getByTestId('at').textContent ?? '';
+      expect(at.startsWith('/office/connections|')).toBe(true);
+      expect(JSON.parse(at.split('|')[1]!)).toEqual({
+        mycoworkConnectionsReturn: {
           ownerKey: 'owner-a',
-          capabilityId: 'office.online-edit',
-          origin: 'conversation',
-          conversationId: 'conv_1',
+          section: 'office',
+          to: 'task',
+          task: {
+            ownerKey: 'owner-a',
+            capabilityId: 'office.online-edit',
+            origin: 'conversation',
+            conversationId: 'conv_1',
+          },
         },
-      },
-    });
-  }, 30000);
+      });
+    },
+    30000
+  );
 
   it.each(['identity provider unavailable', 'knowledge provider unavailable', 'office tool failed'])(
-    'other 503 \"%s\" shows no 去配置',
+    'other 503 "%s" shows no 去配置',
     async (message) => {
       await openEdit(() => reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message } }));
       await waitFor(() => expect(screen.getByRole('button', { name: '编辑' })).not.toBeDisabled());

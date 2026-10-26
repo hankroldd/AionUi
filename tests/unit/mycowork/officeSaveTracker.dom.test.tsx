@@ -112,7 +112,7 @@ describe('保存并返回', () => {
     await waitFor(() => expect(body()).toHaveTextContent('正在保存…'));
     await waitFor(() => expect(body()).toHaveTextContent('已保存为新版本。'), { timeout: 4000 });
     expect(changed).toHaveBeenCalledTimes(1);
-    expect((changed.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({ resourceId: 'res_1' });
+    expect((changed.mock.calls[0]![0] as CustomEvent).detail).toEqual({ resourceId: 'res_1' });
     const before = calls('GET', '/edit-sessions/eds_1').length;
     await new Promise((r) => setTimeout(r, 1800));
     expect(calls('GET', '/edit-sessions/eds_1').length).toBe(before); // 终态后不再轮询

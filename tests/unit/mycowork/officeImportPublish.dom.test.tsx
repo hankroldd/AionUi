@@ -16,7 +16,15 @@ const timeline = {
   page: 1,
   page_size: 50,
   file_name: IMPORT.file_name,
-  items: [{ revision_id: 'rev-1', origin: 'original', current: true, created_at: '2026-10-03T07:00:00Z', restored_from: null }],
+  items: [
+    {
+      revision_id: 'rev-1',
+      origin: 'original',
+      current: true,
+      created_at: '2026-10-03T07:00:00Z',
+      restored_from: null,
+    },
+  ],
 };
 const counts = { total: 6, ready: 6, indexing: 0, failed: 0, unavailable: 0 };
 
@@ -35,7 +43,7 @@ function serve(sourceIds: string[]) {
   });
 }
 async function openPublish() {
-  render(<ResourcesPage lang="zh-CN" />);
+  render(<ResourcesPage lang='zh-CN' />);
   await screen.findByRole('button', { name: IMPORT.file_name, exact: true });
   fireEvent.click(screen.getByRole('button', { name: `更多操作 ${IMPORT.file_name}` }));
   fireEvent.click(await screen.findByRole('menuitem', { name: '发布到知识库' }));
@@ -58,7 +66,9 @@ describe('导入的文件：发布到知识库', () => {
   it('只有一个可选知识库时预选它', async () => {
     serve(['src_a']);
     const dialog = await openPublish();
-    await waitFor(() => expect(within(dialog).getByText('虚构库-src_a', { selector: '.arco-select-view-value' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(dialog).getByText('虚构库-src_a', { selector: '.arco-select-view-value' })).toBeInTheDocument()
+    );
   });
 
   it('两个可选知识库：不预选', async () => {

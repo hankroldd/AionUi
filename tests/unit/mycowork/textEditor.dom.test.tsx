@@ -94,7 +94,7 @@ describe('OfficeTextEditSlot', () => {
 
   it('the page header has exactly one primary pill button (save) and a secondary close', async () => {
     fetchMock.mockImplementation(async (url: string) =>
-      url === '/bridge/v1/text-edit-sessions' ? reply(201, session()) : reply(204, null),
+      url === '/bridge/v1/text-edit-sessions' ? reply(201, session()) : reply(204, null)
     );
     const { container } = render(<OfficeTextEditSlot />);
     await screen.findByTestId('md-editor');
@@ -187,7 +187,8 @@ describe('OfficeTextEditSlot', () => {
 
   it('a resource without editable content shows its own message and no retry (A355)', async () => {
     fetchMock.mockImplementation(async (url: string) => {
-      if (url === '/bridge/v1/text-edit-sessions') return reply(422, { error: { code: 'UNSUPPORTED_FORMAT', message: 'x' } });
+      if (url === '/bridge/v1/text-edit-sessions')
+        return reply(422, { error: { code: 'UNSUPPORTED_FORMAT', message: 'x' } });
       return reply(204, null);
     });
     render(<OfficeTextEditSlot />);
@@ -202,7 +203,9 @@ describe('OfficeTextEditSlot', () => {
     let opens = 0;
     fetchMock.mockImplementation(async (url: string) => {
       if (url === '/bridge/v1/text-edit-sessions')
-        return ++opens === 1 ? reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'x' } }) : reply(201, session());
+        return ++opens === 1
+          ? reply(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'x' } })
+          : reply(201, session());
       return reply(204, null);
     });
     render(<OfficeTextEditSlot />);
@@ -218,7 +221,7 @@ describe('OfficeTextEditSlot', () => {
     [404, 'NOT_FOUND', '只有文件所有者能在线编辑'],
   ])('open failure %i %s: no retry button, reason shown after the open-failed prefix', async (status, code, reason) => {
     fetchMock.mockImplementation(async (url: string) =>
-      url === '/bridge/v1/text-edit-sessions' ? reply(status, { error: { code, message: 'x' } }) : reply(204, null),
+      url === '/bridge/v1/text-edit-sessions' ? reply(status, { error: { code, message: 'x' } }) : reply(204, null)
     );
     render(<OfficeTextEditSlot />);
     expect(await screen.findByText(new RegExp(`无法打开编辑：${reason}`))).toBeInTheDocument();

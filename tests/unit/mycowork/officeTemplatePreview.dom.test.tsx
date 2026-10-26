@@ -155,7 +155,7 @@ describe('P09 candidate preview', () => {
 
   it('fetches a given asset version once while the page re-renders its cards (cards remount after choosing), not across page mounts', async () => {
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (init?.method === 'POST') return reply(201, { ...decision(['a5', 'a6'], 2), version: 2 }) // 页号变了 → 卡片整体重挂，只有缓存能避免再取;
+      if (init?.method === 'POST') return reply(201, { ...decision(['a5', 'a6'], 2), version: 2 }); // 页号变了 → 卡片整体重挂，只有缓存能避免再取;
       const m = /\/assets\/([^/]+)\/preview\?version=1$/.exec(url);
       return m ? reply(200, `<html>${m[1]}</html>`) : reply(200, decision(['a5', 'a6']));
     });

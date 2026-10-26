@@ -38,7 +38,9 @@ let inFlight = 0;
 let maxInFlight = 0;
 let listReads = 0;
 const trashCalls = (id?: string) =>
-  fetchMock.mock.calls.filter(([u, i]) => /\/trash$/.test(String(u)) && (i as RequestInit)?.method === 'POST' && (!id || String(u).includes(id)));
+  fetchMock.mock.calls.filter(
+    ([u, i]) => String(u).endsWith('/trash') && (i as RequestInit)?.method === 'POST' && (!id || String(u).includes(id))
+  );
 
 function serve() {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -52,7 +54,7 @@ function serve() {
       listReads++;
       return reply(200, { items, page: 1, page_size: 50, total: items.length, failed_source_ids: [] });
     }
-    if (/\/metadata$/.test(u.pathname)) return reply(200, { metadata_revision: 7, tag_ids: [], secret: false });
+    if (u.pathname.endsWith('/metadata')) return reply(200, { metadata_revision: 7, tag_ids: [], secret: false });
     const m = /^\/bridge\/v1\/resources\/([^/]+)\/trash$/.exec(u.pathname);
     if (m && method === 'POST') {
       const id = m[1] ?? '';
@@ -65,7 +67,12 @@ function serve() {
         if (fail) {
           failOnce.delete(id);
           if (fail === 'network') throw new TypeError('Failed to fetch');
-          const code = { lease: 'EDIT_LEASE_HELD', state: 'TRASH_STATE_CONFLICT', rev: 'REVISION_CONFLICT', network: '' }[fail];
+          const code = {
+            lease: 'EDIT_LEASE_HELD',
+            state: 'TRASH_STATE_CONFLICT',
+            rev: 'REVISION_CONFLICT',
+            network: '',
+          }[fail];
           return reply(409, { error: { code, message: 'x' } });
         }
         return reply(200, { resource_id: id, file_name: 'x', trashed_at: '2026-10-09T00:00:00Z' });
@@ -101,7 +108,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
 });
 afterEach(async () => {
-  for (const id of [...gates.keys()]) release(id);
+  for (const id of gates.keys()) release(id);
   gates.clear();
   await settle();
   cleanup();

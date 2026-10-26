@@ -240,7 +240,10 @@ it('ordinary Guid navigation retains its existing temporary hand-selected scope'
 });
 
 it('Guid rail captures the installed project as the Space origin', async () => {
-  mount({ mycoworkScopeDraft: { ownerKey: 'fixture-owner', selection: { ...selected, projectId: 'confirmed-project' } } }, '/guid');
+  mount(
+    { mycoworkScopeDraft: { ownerKey: 'fixture-owner', selection: { ...selected, projectId: 'confirmed-project' } } },
+    '/guid'
+  );
   await waitFor(() => expect(getScope().projectId).toBe('confirmed-project'));
   fireEvent.click(screen.getByRole('button', { name: '空间' }));
   expect(JSON.parse(screen.getByTestId('route').textContent!).state).toEqual({
@@ -249,7 +252,9 @@ it('Guid rail captures the installed project as the Space origin', async () => {
 });
 
 it('an account change on the Guid page replaces the previous actor’s intent with an empty required set and no project', async () => {
-  const state = { mycoworkScopeDraft: { ownerKey: 'fixture-owner', selection: { ...selected, projectId: 'old-project' } } };
+  const state = {
+    mycoworkScopeDraft: { ownerKey: 'fixture-owner', selection: { ...selected, projectId: 'old-project' } },
+  };
   const view = mount(state, '/guid');
   await waitFor(() => expect(getScope().projectId).toBe('old-project'));
   boundary.owner = 'changed-owner';

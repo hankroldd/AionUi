@@ -32,10 +32,14 @@ describe('回收站影响说明', () => {
     const t = trashText('zh-CN');
     expect(t.impact(zero)).toBe('');
     expect(t.impact({ ...zero, publications: 2 })).toBe('发布过 2 次');
-    expect(t.impact({ publications: 1, memory_items: 3, collections: 0, plans: 0 })).toBe('发布过 1 次 · 3 条记忆来自它');
-    expect(t.impact({ publications: 1, memory_items: 3, collections: 2, plans: 4 })).toBe(
-      '发布过 1 次 · 3 条记忆来自它 · 在 2 个集合里（含收藏） · 在 4 次对话的资料范围里用过',
+    expect(t.impact({ publications: 1, memory_items: 3, collections: 0, plans: 0 })).toBe(
+      '发布过 1 次 · 3 条记忆来自它'
     );
-    expect(t.impact({ publications: 1, memory_items: 3, collections: 1, plans: 1 })).not.toMatch(/发布记录|记忆来源|集合关系|历史引用|页面计划|分组/);
+    expect(t.impact({ publications: 1, memory_items: 3, collections: 2, plans: 4 })).toBe(
+      '发布过 1 次 · 3 条记忆来自它 · 在 2 个集合里（含收藏） · 在 4 次对话的资料范围里用过'
+    );
+    expect(t.impact({ publications: 1, memory_items: 3, collections: 1, plans: 1 })).not.toMatch(
+      /发布记录|记忆来源|集合关系|历史引用|页面计划|分组/
+    );
   });
 });

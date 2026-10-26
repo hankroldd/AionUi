@@ -247,10 +247,16 @@ const GuidPage: React.FC = () => {
   );
 
   const persistentDraft = useGuidPersistentDraft({
-    input: guidInput, agent: agentSelection, model: modelSelection, skills: allSkills, servers: availableMcpServers,
+    input: guidInput,
+    agent: agentSelection,
+    model: modelSelection,
+    skills: allSkills,
+    servers: availableMcpServers,
     choices: {
-      assistant_id: selectedAssistantId, backend: agentSelection.selectedAssistantBackend,
-      model_provider_id: modelSelection.current_model?.id ?? null, model_id: modelSelection.current_model?.use_model ?? null,
+      assistant_id: selectedAssistantId,
+      backend: agentSelection.selectedAssistantBackend,
+      model_provider_id: modelSelection.current_model?.id ?? null,
+      model_id: modelSelection.current_model?.use_model ?? null,
       acp_model: agentSelection.selectedAcpModel,
       ...(agentSelection.selectedMode ? { permission: agentSelection.selectedMode } : {}),
       ...(agentSelection.selectedThoughtLevelValue ? { thought_level: agentSelection.selectedThoughtLevelValue } : {}),
@@ -258,7 +264,9 @@ const GuidPage: React.FC = () => {
       ...(guidDisabledBuiltinSkills !== undefined ? { disabled_builtin_skill_ids: guidDisabledBuiltinSkills } : {}),
       ...(guidSelectedMcpServerIds !== undefined ? { mcp_ids: guidSelectedMcpServerIds } : {}),
     },
-    setSkills: setGuidEnabledSkills, setDisabledSkills: setGuidDisabledBuiltinSkills, setMcp: setGuidSelectedMcpServerIds,
+    setSkills: setGuidEnabledSkills,
+    setDisabledSkills: setGuidDisabledBuiltinSkills,
+    setMcp: setGuidSelectedMcpServerIds,
     navigation: navState,
   });
 
@@ -348,14 +356,15 @@ const GuidPage: React.FC = () => {
   }, [agentSelection.assistants, selectedAssistantId, agentSelection.selectedAssistantId]);
   const selectedAssistantPrompts = useMemo(() => {
     if (!selectedAssistantId) return [];
-    const resolvedPrompts = [
-      selectedAssistantDetail?.prompts.recommended_i18n?.[localeKey],
-      selectedAssistantDetail?.prompts.recommended_i18n?.['en-US'],
-      selectedAssistantDetail?.prompts.recommended,
-      selectedAssistantRecord?.prompts_i18n?.[localeKey],
-      selectedAssistantRecord?.prompts_i18n?.['en-US'],
-      selectedAssistantRecord?.prompts,
-    ].find((prompts) => prompts && prompts.length > 0) ?? [];
+    const resolvedPrompts =
+      [
+        selectedAssistantDetail?.prompts.recommended_i18n?.[localeKey],
+        selectedAssistantDetail?.prompts.recommended_i18n?.['en-US'],
+        selectedAssistantDetail?.prompts.recommended,
+        selectedAssistantRecord?.prompts_i18n?.[localeKey],
+        selectedAssistantRecord?.prompts_i18n?.['en-US'],
+        selectedAssistantRecord?.prompts,
+      ].find((prompts) => prompts && prompts.length > 0) ?? [];
 
     if (resolvedPrompts.length > 0) {
       return resolvedPrompts;
@@ -482,7 +491,8 @@ const GuidPage: React.FC = () => {
       console.error('[GuidPage] Failed to apply assistant defaults:', error);
     });
   }, [
-    persistentDraft.ready, persistentDraft.hasRestoredChoices,
+    persistentDraft.ready,
+    persistentDraft.hasRestoredChoices,
     agentSelection.currentAcpCachedModelInfo?.available_models,
     agentSelection.currentAgentModeOptions,
     agentSelection.currentThoughtLevelOption,
@@ -570,10 +580,19 @@ const GuidPage: React.FC = () => {
       guidInput.setInput('');
       guidInput.setFiles([]);
     }
-    if (!preserveCurrentDraft && !prefillState?.workspace && (!persistentDraft.hasAuthProvider || prefillPrompt)) guidInput.setDir('');
+    if (!preserveCurrentDraft && !prefillState?.workspace && (!persistentDraft.hasAuthProvider || prefillPrompt))
+      guidInput.setDir('');
     // [mycowork] ADR-0025：普通Back/刷新保留草稿；明确路由提问仍按上面的意图覆盖。
     guidInput.setLoading(false);
-  }, [guidInput.setDir, guidInput.setFiles, guidInput.setInput, guidInput.setLoading, location.key, location.state, persistentDraft.hasAuthProvider]);
+  }, [
+    guidInput.setDir,
+    guidInput.setFiles,
+    guidInput.setInput,
+    guidInput.setLoading,
+    location.key,
+    location.state,
+    persistentDraft.hasAuthProvider,
+  ]);
 
   // A draft-preserving prefill is an action, not durable navigation state.
   // Strip it after consumption so browser history or a remount cannot replay it.
@@ -659,10 +678,16 @@ const GuidPage: React.FC = () => {
       allSkills={allSkills}
       disabledBuiltinSkills={guidDisabledBuiltinSkills ?? []}
       enabledSkills={guidEnabledSkills ?? []}
-      onToggleSkill={(name, isAuto) => { persistentDraft.releaseChoices([isAuto ? 'disabled_builtin_skill_ids' : 'skill_ids']); handleToggleSkill(name, isAuto); }}
+      onToggleSkill={(name, isAuto) => {
+        persistentDraft.releaseChoices([isAuto ? 'disabled_builtin_skill_ids' : 'skill_ids']);
+        handleToggleSkill(name, isAuto);
+      }}
       mcpServers={availableMcpServers}
       selectedMcpServerIds={guidSelectedMcpServerIds ?? []}
-      onToggleMcpServer={(id) => { persistentDraft.releaseChoices(['mcp_ids']); handleToggleMcpServer(id); }}
+      onToggleMcpServer={(id) => {
+        persistentDraft.releaseChoices(['mcp_ids']);
+        handleToggleMcpServer(id);
+      }}
       speechInputNode={
         <SpeechInputButton onLiveTranscript={handleLiveTranscript} onTranscript={handleSpeechTranscript} />
       }

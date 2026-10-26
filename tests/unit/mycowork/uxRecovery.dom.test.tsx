@@ -77,7 +77,11 @@ describe('页面计划', () => {
   it('读失败：显示错误页和“重试”，点后重新读取并显示页面计划', async () => {
     let ok = false;
     fetchMock.mockImplementation(async (url: string) =>
-      url.includes('/preview') ? reply(200, '<html></html>') : ok ? reply(200, decision(1)) : reply(500, { error: { code: 'X' } })
+      url.includes('/preview')
+        ? reply(200, '<html></html>')
+        : ok
+          ? reply(200, decision(1))
+          : reply(500, { error: { code: 'X' } })
     );
     render(<OfficeCompositionSlot />);
     const retry = await screen.findByRole('button', { name: '重试' });
@@ -166,7 +170,7 @@ describe('空间预览：在线编辑读不到当前版本', () => {
         return { status: 200, ok: true, text: async () => '<html><body>x</body></html>', json: async () => null };
       return reply(204, null);
     });
-    render(<ResourcesPage lang="zh-CN" ownerKey="fixture_a" />);
+    render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
     fireEvent.click(await screen.findByRole('button', { name: '周报.md' }));
     const dialog = await screen.findByRole('dialog', { name: '当前内容预览' });
     const edit = await within(dialog).findByRole('button', { name: '在线编辑（读取失败，点击重试）' });

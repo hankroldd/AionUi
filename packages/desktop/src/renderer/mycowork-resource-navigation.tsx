@@ -51,7 +51,7 @@ export function useGuidResourceSelection(ownerKey: string | undefined) {
         : intent.ownerKey === ownerKey && ownerKey
           ? intent.selection
           : { items: [], views: [], requiredResourceIds: [] },
-    [intent, ownerKey],
+    [intent, ownerKey]
   );
   return { initialScope, scopeKey: intent ? JSON.stringify(intent) : '' };
 }
@@ -82,7 +82,7 @@ export function useResourceQuestionNavigation(ownerKey: string | undefined) {
     () => () => {
       current.current = undefined;
     },
-    [],
+    []
   );
   return useCallback(
     async (draft: ScopeDraft, signal: AbortSignal, question?: string): Promise<void> => {
@@ -100,7 +100,7 @@ export function useResourceQuestionNavigation(ownerKey: string | undefined) {
         },
       });
     },
-    [location.key, location.state, navigate, ownerKey],
+    [location.key, location.state, navigate, ownerKey]
   );
 }
 
@@ -116,11 +116,12 @@ export function useResourceScopeSwitch(ownerKey: string | undefined) {
     () => () => {
       current.current = undefined;
     },
-    [],
+    []
   );
   const run = useCallback(
     async (draft: ScopeDraft, signal: AbortSignal): Promise<void> => {
-      if (!ownerKey || !id || origin?.ownerKey !== ownerKey || !CONVERSATION_ID.test(id)) throw new BridgeError('failed');
+      if (!ownerKey || !id || origin?.ownerKey !== ownerKey || !CONVERSATION_ID.test(id))
+        throw new BridgeError('failed');
       await verifiedProjectId(origin); // 只为核对会话归属；失败即不导航
       if (signal.aborted || current.current?.ownerKey !== ownerKey || current.current?.key !== location.key) return;
       const items = draft.items.map(({ source_id, name, resource_ids }) => ({
@@ -132,7 +133,7 @@ export function useResourceScopeSwitch(ownerKey: string | undefined) {
         state: { mycoworkScopeChange: { ownerKey, conversationId: id, selection: { items, views: [] } } },
       });
     },
-    [id, location.key, navigate, origin, ownerKey],
+    [id, location.key, navigate, origin, ownerKey]
   );
   return id && origin?.ownerKey === ownerKey ? run : undefined;
 }
@@ -140,7 +141,7 @@ export function useResourceScopeSwitch(ownerKey: string | undefined) {
 function parseScopeChange(
   state: unknown,
   ownerKey: string | undefined,
-  conversationId: string,
+  conversationId: string
 ): ScopeDraft | undefined {
   const v = (state as ResourceNavigationState | null)?.mycoworkScopeChange;
   if (!ownerKey || !v || v.ownerKey !== ownerKey || v.conversationId !== conversationId) return undefined;
@@ -148,7 +149,10 @@ function parseScopeChange(
   const items: { source_id: string; name: string; resource_ids?: string[] }[] = [];
   for (const i of v.selection.items.slice(0, 50)) {
     if (typeof i?.source_id !== 'string' || typeof i.name !== 'string') return undefined;
-    const ids = Array.isArray(i.resource_ids) && i.resource_ids.every((r: unknown) => typeof r === 'string') ? i.resource_ids : undefined;
+    const ids =
+      Array.isArray(i.resource_ids) && i.resource_ids.every((r: unknown) => typeof r === 'string')
+        ? i.resource_ids
+        : undefined;
     items.push({ source_id: i.source_id, name: i.name, ...(ids ? { resource_ids: ids } : {}) });
   }
   return items.length ? { items, views: [] } : undefined;
@@ -160,7 +164,7 @@ export function useScopeChangeProposal(ownerKey: string | undefined, conversatio
   const navigate = useNavigate();
   const proposed = useMemo(
     () => parseScopeChange(location.state, ownerKey, conversationId),
-    [location.state, ownerKey, conversationId],
+    [location.state, ownerKey, conversationId]
   );
   const handled = useCallback((): void => {
     void navigate(location.pathname, { replace: true, state: null });

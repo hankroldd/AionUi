@@ -10,7 +10,12 @@ import '@arco-design/web-react/lib/_util/react-19-adapter';
 import { ResourcesPage } from '@mycowork/ui';
 import { AssetPreview } from '@mycowork/ui/template-picker/AssetPreview.tsx';
 import { pickerText } from '@mycowork/ui/template-picker/messages.ts';
-import { goEditReturn, peekEditReturn, requestEditReturn, clearEditReturn } from '@mycowork/ui/pages/office-editor/edit-return.ts';
+import {
+  goEditReturn,
+  peekEditReturn,
+  requestEditReturn,
+  clearEditReturn,
+} from '@mycowork/ui/pages/office-editor/edit-return.ts';
 import { TrashPage } from '@mycowork/ui/pages/trash/index.ts';
 import { OfficeCompositionSlot } from '@/renderer/mycowork-slots';
 

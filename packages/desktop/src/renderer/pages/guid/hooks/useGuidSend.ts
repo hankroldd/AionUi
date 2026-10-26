@@ -16,7 +16,14 @@ import { type TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
-import { bindGuidScope, withGuidScope, handoffGuidDraft, notifyCapabilityBlocked, sendOfficeDraft, type PersistentDraft } from '@/renderer/mycowork-slots';
+import {
+  bindGuidScope,
+  withGuidScope,
+  handoffGuidDraft,
+  notifyCapabilityBlocked,
+  sendOfficeDraft,
+  type PersistentDraft,
+} from '@/renderer/mycowork-slots';
 
 export type GuidSendDeps = {
   persistentDraft?: PersistentDraft & { ownerKey?: string; isCurrent: () => boolean };
@@ -103,7 +110,11 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
 
   const handleSend = useCallback(async () => {
     const persistent = deps.persistentDraft;
-    if (selectedAssistantBackend === 'aionrs' && persistent && (!persistent.ready || ['error', 'conflict', 'loading'].includes(persistent.status))) {
+    if (
+      selectedAssistantBackend === 'aionrs' &&
+      persistent &&
+      (!persistent.ready || ['error', 'conflict', 'loading'].includes(persistent.status))
+    ) {
       Message.warning('草稿尚未保存或恢复失败，请先处理草稿状态。');
       return;
     }
@@ -186,33 +197,50 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         const expectedState = persistent?.ownerKey ? persistent.captureSnapshot() : undefined;
         const savedDraft = persistent ? await persistent.flush() : undefined;
         if (persistent && !persistent.isCurrent()) throw new Error('登录状态已变化，请回到草稿重试。');
-        const office = savedDraft && persistent?.ownerKey && input.trim()
-          ? await sendOfficeDraft(persistent, savedDraft, { expectedState: expectedState!, assistantId: assistantConversationId, lang: localeKey }) : null;
+        const office =
+          savedDraft && persistent?.ownerKey && input.trim()
+            ? await sendOfficeDraft(persistent, savedDraft, {
+                expectedState: expectedState!,
+                assistantId: assistantConversationId,
+                lang: localeKey,
+              })
+            : null;
         if (office && persistent && savedDraft) {
           try {
-            await persistent.settleTaskSubmission(savedDraft, office.draft_revision, { ...savedDraft.state, content: '', files: [], sessions: [], workspace: '', scope: { items: [], views: [], origin: 'turn' } });
-          } catch { Message.warning('任务已受理，草稿清理尚未保存；不会重复发送。'); }
+            await persistent.settleTaskSubmission(savedDraft, office.draft_revision, {
+              ...savedDraft.state,
+              content: '',
+              files: [],
+              sessions: [],
+              workspace: '',
+              scope: { items: [], views: [], origin: 'turn' },
+            });
+          } catch {
+            Message.warning('任务已受理，草稿清理尚未保存；不会重复发送。');
+          }
         }
-        const conversation = office ? { id: office.conversation_id } : await ipcBridge.conversation.create.invoke({
-          name: input,
-          model: current_model,
-          assistant: {
-            id: assistantConversationId,
-            locale: localeKey,
-            conversation_overrides: assistantOverrides,
-          },
-          extra: await withGuidScope(
-            {
-              default_files: files.map(chatFileRefPath),
-              workspace: finalWorkspace,
-              custom_workspace: isCustomWorkspace,
-              selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
-              selected_session_mcp_servers: selectedSessionMcpServersToSend,
-            },
-            assistantOverrides, // [mycowork] D115：带范围时不以 YOLO 创建
-            assistantConversationId // [mycowork] A197：场景助手无范围也带空范围计划
-          ),
-        });
+        const conversation = office
+          ? { id: office.conversation_id }
+          : await ipcBridge.conversation.create.invoke({
+              name: input,
+              model: current_model,
+              assistant: {
+                id: assistantConversationId,
+                locale: localeKey,
+                conversation_overrides: assistantOverrides,
+              },
+              extra: await withGuidScope(
+                {
+                  default_files: files.map(chatFileRefPath),
+                  workspace: finalWorkspace,
+                  custom_workspace: isCustomWorkspace,
+                  selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
+                  selected_session_mcp_servers: selectedSessionMcpServersToSend,
+                },
+                assistantOverrides, // [mycowork] D115：带范围时不以 YOLO 创建
+                assistantConversationId // [mycowork] A197：场景助手无范围也带空范围计划
+              ),
+            });
 
         if (!conversation || !conversation.id) {
           Message.error(t('conversation.createFailed'));
@@ -239,7 +267,11 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
         // auto-sending a blank first turn.
         if (input.trim() && !office) {
           if (savedDraft && persistent) await handoffGuidDraft(conversation.id, savedDraft, persistent);
-          else sessionStorage.setItem(`aionrs_initial_message_${conversation.id}`, JSON.stringify({ input, files: files.length ? files : undefined }));
+          else
+            sessionStorage.setItem(
+              `aionrs_initial_message_${conversation.id}`,
+              JSON.stringify({ input, files: files.length ? files : undefined })
+            );
         }
 
         await navigate(`/conversation/${conversation.id}`);
@@ -258,14 +290,18 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           locale: localeKey,
           conversation_overrides: assistantOverrides,
         },
-        extra: await withGuidScope({
-          workspace: finalWorkspace,
-          custom_workspace: isCustomWorkspace,
-          default_files: files.map(chatFileRefPath),
-          selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
-          selected_session_mcp_servers:
-            selectedMcpServerIds !== undefined ? selectedSessionMcpServers : selectedSessionMcpServersToSend,
-        }, undefined, assistantConversationId), // [mycowork] A197
+        extra: await withGuidScope(
+          {
+            workspace: finalWorkspace,
+            custom_workspace: isCustomWorkspace,
+            default_files: files.map(chatFileRefPath),
+            selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
+            selected_session_mcp_servers:
+              selectedMcpServerIds !== undefined ? selectedSessionMcpServers : selectedSessionMcpServersToSend,
+          },
+          undefined,
+          assistantConversationId
+        ), // [mycowork] A197
       });
       if (!conversation || !conversation.id) {
         console.error('Failed to create ACP conversation - conversation object is null or missing id');
@@ -344,7 +380,15 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       .catch((error) => {
         console.error('Failed to send message:', error);
         // [mycowork] R036：资料服务不可用时提示带“去配置”，输入与范围已在持久草稿里
-        if (notifyCapabilityBlocked(error, deps.persistentDraft?.ownerKey, localeKey, (path, state) => void navigate(path, { state }))) return;
+        if (
+          notifyCapabilityBlocked(
+            error,
+            deps.persistentDraft?.ownerKey,
+            localeKey,
+            (path, state) => void navigate(path, { state })
+          )
+        )
+          return;
         Message.error(getConversationCreateErrorMessage(error, t));
       })
       .finally(() => {
@@ -373,7 +417,10 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
   // Calculate button disabled state. Empty input is allowed once an assistant is
   // picked — that path creates an empty conversation ("start chat") rather than
   // sending a message, so the gate only blocks while loading or with no assistant.
-  const isButtonDisabled = loading || !selectedAssistantId || (selectedAssistantBackend === 'aionrs' && Boolean(deps.persistentDraft) && !deps.persistentDraft?.ready);
+  const isButtonDisabled =
+    loading ||
+    !selectedAssistantId ||
+    (selectedAssistantBackend === 'aionrs' && Boolean(deps.persistentDraft) && !deps.persistentDraft?.ready);
 
   return {
     handleSend,

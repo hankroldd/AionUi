@@ -47,7 +47,9 @@ describe('space locate-output intent', () => {
   });
 
   it('opens Outputs searched by file name, marks and scrolls to the resource, and consumes the intent once (a remount does not re-apply it)', async () => {
-    fixture((q) => (q.get('origin') === 'outputs' && q.get('q') === '季度报告.docx' ? list([OTHER, OUT], 2) : list([], 0)));
+    fixture((q) =>
+      q.get('origin') === 'outputs' && q.get('q') === '季度报告.docx' ? list([OTHER, OUT], 2) : list([], 0)
+    );
     locate('res_out', '季度报告.docx');
     render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
     await waitFor(() => expect(document.querySelectorAll('[data-resource-id]').length).toBe(2));
@@ -90,7 +92,9 @@ describe('space locate-output edge cases', () => {
     fixture((q) => (q.get('origin') === 'outputs' ? list([spaced], 1) : list([], 0)));
     locate('res_sp', ' 带空格 .docx');
     render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
-    await waitFor(() => expect(document.querySelector('[data-resource-id="res_sp"]')!.className).toContain('is-located'));
+    await waitFor(() =>
+      expect(document.querySelector('[data-resource-id="res_sp"]')!.className).toContain('is-located')
+    );
     expect(screen.queryByText(/没找到/)).toBeNull();
   });
 
@@ -106,7 +110,9 @@ describe('space locate-output edge cases', () => {
     fixture(() => list([], 0));
     locate('res_long', '长'.repeat(260));
     render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
-    await waitFor(() => expect(queries().some((q) => q.get('origin') === 'outputs' && q.get('q') === '长'.repeat(200))).toBe(true));
+    await waitFor(() =>
+      expect(queries().some((q) => q.get('origin') === 'outputs' && q.get('q') === '长'.repeat(200))).toBe(true)
+    );
     expect(queries().every((q) => (q.get('q') ?? '').length <= 200)).toBe(true);
   });
 
@@ -132,7 +138,9 @@ describe('space locate-output edge cases', () => {
     fixture((q) => (q.get('origin') === 'outputs' ? list([OUT], 1) : list([], 0)));
     locate('res_out', '季度报告.docx');
     render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
-    await waitFor(() => expect(document.querySelector('.mcw-rc-card[data-resource-id="res_out"]')!.className).toContain('is-located'));
+    await waitFor(() =>
+      expect(document.querySelector('.mcw-rc-card[data-resource-id="res_out"]')!.className).toContain('is-located')
+    );
   });
 });
 
@@ -143,7 +151,9 @@ describe('space locate intent with place=imports (导入记录里的“在空间
     requestLocate('res_imp', '导入的.md', 'imports');
     window.location.hash = '#/office/space';
     render(<ResourcesPage lang='zh-CN' ownerKey='fixture_a' />);
-    await waitFor(() => expect(document.querySelector('[data-resource-id="res_imp"]')!.className).toContain('is-located'));
+    await waitFor(() =>
+      expect(document.querySelector('[data-resource-id="res_imp"]')!.className).toContain('is-located')
+    );
     expect(lastQuery().get('origin')).toBe('imports');
     expect(queries().some((q) => q.get('origin') === 'outputs')).toBe(false);
   });

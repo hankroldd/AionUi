@@ -9,7 +9,20 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@arco-design/web-react/lib/_util/react-19-adapter';
-import { addFiles, batch, bodyOf, bridge, confirmButton, fetchMock, md, posts, renderImports, row, steps, zip } from './importFlowFixture';
+import {
+  addFiles,
+  batch,
+  bodyOf,
+  bridge,
+  confirmButton,
+  fetchMock,
+  md,
+  posts,
+  renderImports,
+  row,
+  steps,
+  zip,
+} from './importFlowFixture';
 
 const inFlow = () => screen.getByTestId('mycowork-upload-flow');
 const archiveItem = (path: string, over: object = {}) =>
@@ -69,9 +82,12 @@ describe('ZIP 导入入口', () => {
         [
           archiveItem('docs/a.md'),
           archiveItem('docs/b.md', { seq: 1 }),
-          archiveItem('SKILL.md', { seq: 2, archive: { upload_id: 'up_1', path: 'SKILL.md', notice: 'inert_instruction_file' } }),
+          archiveItem('SKILL.md', {
+            seq: 2,
+            archive: { upload_id: 'up_1', path: 'SKILL.md', notice: 'inert_instruction_file' },
+          }),
         ],
-        [expanded],
+        [expanded]
       ),
     });
     renderImports('zh-CN');
@@ -97,21 +113,32 @@ describe('ZIP 导入入口', () => {
     await screen.findByText('已上传，待确认');
     fireEvent.click(confirmButton());
     const report = await screen.findByTestId('import-archive');
-    expect(within(report).getByRole('alert')).toHaveTextContent('包里有不安全的路径或文件名（指向包外、绝对路径，或含控制 / 欺骗显示的字符），已整包拒绝');
+    expect(within(report).getByRole('alert')).toHaveTextContent(
+      '包里有不安全的路径或文件名（指向包外、绝对路径，或含控制 / 欺骗显示的字符），已整包拒绝'
+    );
     expect(within(report).getByText('整包拒绝，没有展开任何文件')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '只重试失败项' })).toBeNull();
     expect(screen.getByRole('button', { name: '再导入一批' })).toBeInTheDocument();
   });
 
   it('同批里另有可重试的失败项时，仍提供“只重试失败项”', async () => {
-    const other = row({ seq: 1, upload_id: 'up_2', file_name: '乙.md', status: 'failed', error: 'upstream_failed', steps: steps('failed', 'pending') });
+    const other = row({
+      seq: 1,
+      upload_id: 'up_2',
+      file_name: '乙.md',
+      status: 'failed',
+      error: 'upstream_failed',
+      steps: steps('failed', 'pending'),
+    });
     bridge({ created: batch([rejectedItem, other], [rejected('encrypted')]) });
     renderImports('zh-CN');
     await addFiles(inFlow(), zip('坏包.zip'), md('乙.md'));
     await waitFor(() => expect(screen.getAllByText('已上传，待确认')).toHaveLength(2));
     fireEvent.click(confirmButton());
     expect(await screen.findByRole('button', { name: '只重试失败项' })).toBeInTheDocument();
-    expect(within(await screen.findByTestId('import-archive')).getByRole('alert')).toHaveTextContent('先解密后重新上传');
+    expect(within(await screen.findByTestId('import-archive')).getByRole('alert')).toHaveTextContent(
+      '先解密后重新上传'
+    );
   });
 
   it('同一个 ZIP 重复选入：队列里只有一份并提示；改名或不同大小 / 时间的不算重复', async () => {
@@ -144,19 +171,27 @@ describe('ZIP 导入入口', () => {
     await addFiles(inFlow(), zip('坏包.zip'));
     await screen.findByText('Uploaded, awaiting confirmation');
     fireEvent.click(confirmButton('en'));
-    expect(within(await screen.findByTestId('import-archive')).getByRole('alert')).toHaveTextContent('abnormal compression ratio');
+    expect(within(await screen.findByTestId('import-archive')).getByRole('alert')).toHaveTextContent(
+      'abnormal compression ratio'
+    );
     expect(screen.getByText('Rejected as a whole; nothing was extracted')).toBeInTheDocument();
   });
 
   it('未知原因码不显示空白：整包拒绝与跳过各有带原因码的兜底说明；archives 条目缺 skipped 不抛异常', async () => {
-    const odd = { upload_id: 'up_1', file_name: '怪包.zip', outcome: 'rejected', reject_reason: 'future_reason', extracted: 0 };
+    const odd = {
+      upload_id: 'up_1',
+      file_name: '怪包.zip',
+      outcome: 'rejected',
+      reject_reason: 'future_reason',
+      extracted: 0,
+    };
     bridge({ created: batch([rejectedItem], [odd as object]) });
     renderImports('zh-CN');
     await addFiles(inFlow(), zip('怪包.zip'));
     await screen.findByText('已上传，待确认');
     fireEvent.click(confirmButton());
     expect(within(await screen.findByTestId('import-archive')).getByRole('alert')).toHaveTextContent(
-      '这个压缩包未通过安全检查，已整包拒绝（详情：future_reason）',
+      '这个压缩包未通过安全检查，已整包拒绝（详情：future_reason）'
     );
   });
 
@@ -176,9 +211,14 @@ describe('ZIP 导入入口', () => {
       created: batch(
         [
           archiveItem('a/甲.md'),
-          row({ seq: 1, upload_id: 'up_y', file_name: '乙.md', archive: { upload_id: 'up_2', path: 'b/乙.md', notice: null } }),
+          row({
+            seq: 1,
+            upload_id: 'up_y',
+            file_name: '乙.md',
+            archive: { upload_id: 'up_2', path: 'b/乙.md', notice: null },
+          }),
         ],
-        [expanded, second],
+        [expanded, second]
       ),
     });
     renderImports('zh-CN');
@@ -206,7 +246,10 @@ describe('ZIP 导入入口', () => {
 
   it('入库状态按去向分：进知识库的写“AI 可引用”，仅存档的写“已完成”（去向说明另写“仅存档”，同一行不重复同一个词）', async () => {
     bridge({
-      created: batch([row({ seq: 0, source_id: 'src_a', upload_id: 'up_1' }), row({ seq: 1, source_id: null, upload_id: 'up_2', file_name: '乙.md' })]),
+      created: batch([
+        row({ seq: 0, source_id: 'src_a', upload_id: 'up_1' }),
+        row({ seq: 1, source_id: null, upload_id: 'up_2', file_name: '乙.md' }),
+      ]),
     });
     renderImports('zh-CN');
     await addFiles(inFlow(), md('甲.md'), md('乙.md'));

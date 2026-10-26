@@ -96,7 +96,7 @@ describe('发布弹窗不锁人', () => {
 
   it('范围门禁与隐藏内容确认仍然出现：弹窗重新打开询问，确认后再关，请求身份不变', async () => {
     serve((r, i) =>
-      i === 0 ? error('DIFF_OUT_OF_SCOPE') : i === 1 ? error('HIDDEN_CONTENT_PRESENT') : json(publication(r), 201),
+      i === 0 ? error('DIFF_OUT_OF_SCOPE') : i === 1 ? error('HIDDEN_CONTENT_PRESENT') : json(publication(r), 201)
     );
     render(<Harness />);
     await publish();

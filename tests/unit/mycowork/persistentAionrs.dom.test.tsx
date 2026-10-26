@@ -301,8 +301,12 @@ it.each([
   { label: 'local→upload默认目录', indices: [2, 0], workspace: '/fixture/generated' },
 ])('$label首页交接恢复仅自动发送一次，原版本条件清源', async ({ indices, workspace }) => {
   contextState.workspace = workspace;
-  const state = { ...original, files: (indices as number[]).map((i) => original.files[i]), sessions: [],
-    ...(workspace ? { workspace: '' } : {}) };
+  const state = {
+    ...original,
+    files: (indices as number[]).map((i) => original.files[i]),
+    sessions: [],
+    ...(workspace ? { workspace: '' } : {}),
+  };
   const docs = new Map<string, typeof saved>();
   const source = { ...saved, input_location: 'guid', state, revision: 7 };
   docs.set('guid', source);

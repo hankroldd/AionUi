@@ -39,7 +39,8 @@ const batch = (items: object[]) => ({
 });
 const calls = (method: string, suffix: string) =>
   fetchMock.mock.calls.filter(([url, init]) => (init?.method ?? 'GET') === method && String(url).endsWith(suffix));
-const nameOf = (init?: RequestInit) => decodeURIComponent(String((init?.headers as Record<string, string>)['x-file-name']));
+const nameOf = (init?: RequestInit) =>
+  decodeURIComponent(String((init!.headers as Record<string, string>)['x-file-name']));
 
 /** failFirst：这些文件名的第一次上传失败（Bridge 给人话），之后成功；hang：这些文件名的上传永不返回。 */
 function bridge(opts: { failFirst?: string[]; hang?: string[]; hangBatch?: boolean } = {}) {
@@ -51,20 +52,24 @@ function bridge(opts: { failFirst?: string[]; hang?: string[]; hangBatch?: boole
       const n = (seen.get(name) ?? 0) + 1;
       seen.set(name, n);
       if (opts.hang?.includes(name)) return new Promise(() => undefined);
-      if (opts.failFirst?.includes(name) && n === 1) return reply(413, { error: { code: 'X', message: '单个文件不超过 50MB' } });
+      if (opts.failFirst?.includes(name) && n === 1)
+        return reply(413, { error: { code: 'X', message: '单个文件不超过 50MB' } });
       return reply(201, { upload_id: `up_${name}`, file_name: name, size: 5, sha256: name, duplicate_of: [] });
     }
     if (url === '/bridge/v1/import-batches' && init?.method === 'POST') {
       if (opts.hangBatch) return new Promise(() => undefined);
       const sent = JSON.parse(String(init.body)).items as { upload_id: string }[];
-      return reply(201, batch(sent.map((s, i) => row({ seq: i, upload_id: s.upload_id, file_name: s.upload_id.slice(3) }))));
+      return reply(
+        201,
+        batch(sent.map((s, i) => row({ seq: i, upload_id: s.upload_id, file_name: s.upload_id.slice(3) })))
+      );
     }
     if (url === '/bridge/v1/import-batches/bat_1') return reply(200, batch([row({})]));
     return base(url, init);
   });
 }
 async function openDialog() {
-  render(<ResourcesPage lang="zh-CN" />);
+  render(<ResourcesPage lang='zh-CN' />);
   await screen.findByRole('button', { name: '第一页-1.md', exact: true });
   fireEvent.click(within(document.querySelector('header') as HTMLElement).getByRole('button', { name: '新建' }));
   fireEvent.click(await screen.findByRole('menuitem', { name: '导入资料' }));
@@ -72,7 +77,8 @@ async function openDialog() {
 }
 async function addFiles(dialog: HTMLElement, ...names: string[]) {
   const input = dialog.querySelector('input[type=file]') as HTMLInputElement;
-  for (const name of names) await act(async () => fireEvent.change(input, { target: { files: [new File(['hello'], name)] } }));
+  for (const name of names)
+    await act(async () => fireEvent.change(input, { target: { files: [new File(['hello'], name)] } }));
   for (const name of names) await screen.findByText(name);
 }
 
@@ -101,11 +107,15 @@ describe('上传弹窗：失败有出路', () => {
     const dialog = await openDialog();
     await addFiles(dialog, '好的.md', '坏的.md');
     await within(dialog).findByText(/上传失败/);
-    expect(within(dialog).getByText('有 1 个文件没传上去，可重试或移除；现在确认只导入已上传的文件')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('有 1 个文件没传上去，可重试或移除；现在确认只导入已上传的文件')
+    ).toBeInTheDocument();
     const confirm = within(dialog).getByRole('button', { name: '确认导入' });
     await waitFor(() => expect(confirm).toBeEnabled());
     fireEvent.click(confirm);
-    await within(dialog).findByText('原件已保存，AI 尚未读完').catch(() => undefined);
+    await within(dialog)
+      .findByText('原件已保存，AI 尚未读完')
+      .catch(() => undefined);
     await waitFor(() => expect(calls('POST', '/import-batches')).toHaveLength(1));
     const sent = JSON.parse(String(calls('POST', '/import-batches')[0]?.[1]?.body)).items as { upload_id: string }[];
     expect(sent.map((s) => s.upload_id)).toEqual(['up_好的.md']);

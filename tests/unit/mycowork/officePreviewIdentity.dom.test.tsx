@@ -52,7 +52,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('A107/A321 — the preview title carries a version number only while it matches the list', () => {
-  it('shows later current GET bytes while the parent timeline still says v2; the title carries the list\'s current version, the body is not claimed to be it', async () => {
+  it("shows later current GET bytes while the parent timeline still says v2; the title carries the list's current version, the body is not claimed to be it", async () => {
     let finish!: (value: ReturnType<typeof page>) => void;
     const pending = new Promise<ReturnType<typeof page>>((resolve) => {
       finish = resolve;

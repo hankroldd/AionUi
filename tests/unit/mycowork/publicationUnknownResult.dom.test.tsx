@@ -60,14 +60,14 @@ function Harness() {
     <>
       <button onClick={() => setClicks((n) => n + 1)}>再点发布入口</button>
       <PublicationDialog
-      {...initial}
-      reopen={clicks}
-      onAccepted={(p) => {
-        accepted(p);
-        setOpen(false);
-      }}
-      onCancel={() => setOpen(false)}
-    />
+        {...initial}
+        reopen={clicks}
+        onAccepted={(p) => {
+          accepted(p);
+          setOpen(false);
+        }}
+        onCancel={() => setOpen(false)}
+      />
     </>
   ) : (
     <button onClick={() => setOpen(true)}>开始新的发布操作</button>

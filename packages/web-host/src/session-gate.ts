@@ -67,7 +67,11 @@ export function createSessionGate(backendPort: number, now: () => number = Date.
 }
 
 /** Headers for proxying a non-loopback request: client-supplied X-Forwarded-For / X-Real-IP never reach the backend. */
-export function peerHeaders<T extends Record<string, unknown>>(headers: T, remoteAddress: string | undefined, loopback: boolean): T {
+export function peerHeaders<T extends Record<string, unknown>>(
+  headers: T,
+  remoteAddress: string | undefined,
+  loopback: boolean
+): T {
   if (loopback) return headers;
   const { 'x-real-ip': _drop, ...rest } = headers;
   return { ...rest, 'x-forwarded-for': remoteAddress ?? '' } as unknown as T;

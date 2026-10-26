@@ -25,6 +25,7 @@ export const FILE_EXTENSION_MAP: Record<PreviewContentType, readonly string[]> =
   csv: ['csv'],
   image: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico', 'tif', 'tiff', 'avif'],
   code: [], // code 作为默认类型，不需要显式映射 / code is the default type, no explicit mapping needed
+  'mycowork-result': [], // 已登记的固定版本由 Bridge 读取，不按文件扩展名识别。
   diff: ['diff', 'patch'],
   /**
    * Identifiable but genuinely unrenderable here — say so, and offer the escape

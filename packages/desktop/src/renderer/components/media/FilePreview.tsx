@@ -12,6 +12,8 @@ import { getFileExtension } from '@/renderer/services/FileService';
 import { ipcBridge } from '@/common';
 import { Image, Tooltip } from '@arco-design/web-react';
 import fileIcon from '@/renderer/assets/icons/file-icon.svg';
+import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { useLocalFilePreview } from '@/renderer/pages/conversation/Preview/hooks/useLocalFilePreview';
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']);
 
@@ -46,7 +48,9 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
   // Extract filename directly from path without cleaning timestamp suffix
   const file_name = path.split(/[\\/]/).pop() || '';
   const fileExt = getFileExtension(path).toUpperCase().replace('.', '');
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
+  const conversation = useConversationContextSafe();
+  const previewFile = useLocalFilePreview(conversation?.workspace);
   const [imageUrl, setImageUrl] = useState<string>('');
   const [fileSize, setFileSize] = useState<string>('');
 
@@ -110,20 +114,35 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
   const withHint = (chip: React.ReactElement) => (hint ? <Tooltip content={hint}>{chip}</Tooltip> : chip);
 
   if (isImage) {
+    const thumbnail = (
+      <>
+        <Image
+          src={imageUrl}
+          alt={file_name}
+          width={60}
+          height={60}
+          className='object-cover cursor-pointer'
+          style={{ display: imageUrl ? 'block' : 'none' }}
+          preview={!conversation && Boolean(imageUrl)}
+        />
+        {!imageUrl && <div className='w-60px h-60px bg-bg-3'></div>}
+      </>
+    );
     return withHint(
       <div className='relative inline-block'>
-        <div className='rd-8px overflow-hidden border-1 border-solid b-color-border-2'>
-          <Image
-            src={imageUrl}
-            alt={file_name}
-            width={60}
-            height={60}
-            className='object-cover cursor-pointer'
-            style={{ display: imageUrl ? 'block' : 'none' }}
-            preview={Boolean(imageUrl)}
-          />
-          {!imageUrl && <div className='w-60px h-60px bg-bg-3'></div>}
-        </div>
+        {conversation ? (
+          <button
+            type='button'
+            className='p-0 rd-8px overflow-hidden border-1 border-solid b-color-border-2 bg-transparent cursor-pointer'
+            aria-label={`${t('common.preview', { defaultValue: 'Preview' })}: ${file_name}`}
+            disabled={!imageUrl}
+            onClick={() => void previewFile(path)}
+          >
+            {thumbnail}
+          </button>
+        ) : (
+          <div className='rd-8px overflow-hidden border-1 border-solid b-color-border-2'>{thumbnail}</div>
+        )}
         {!readonly && (
           <div
             className='absolute -top-4px -end-4px w-16px h-16px rd-50% bg-white dark:bg-gray-700 cursor-pointer flex items-center justify-center shadow-md hover:shadow-lg transition-all z-10 border-1 border-solid border-gray-200 dark:border-gray-600'

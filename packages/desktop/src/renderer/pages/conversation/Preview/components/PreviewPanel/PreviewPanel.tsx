@@ -67,6 +67,7 @@ import { usePreviewKeyboardShortcuts, useScrollSync, useTabOverflow, useThemeDet
 import { useTranslation } from 'react-i18next';
 import './preview.css';
 import { PreviewEditSlot } from '@/renderer/mycowork-slots';
+import { SavedResultPreview } from '@mycowork/ui';
 
 /**
  * 预览面板主组件
@@ -905,6 +906,8 @@ const PreviewPanel: React.FC<{ hideMaximizeToggle?: boolean }> = ({ hideMaximize
 
   // 渲染预览内容 / Render preview content
   const renderContent = () => {
+    if (content_type === 'mycowork-result')
+      return <SavedResultPreview identity={content} fileName={metadata?.file_name ?? activeTab!.title} lang={i18n.language} />;
     if (metadata?.missingFile) return renderMissingFile();
     if (metadata?.oversized) return renderOversized();
     if (content_type === 'unsupported') return renderUnsupported();
@@ -1222,13 +1225,13 @@ const PreviewPanel: React.FC<{ hideMaximizeToggle?: boolean }> = ({ hideMaximize
           onClosePanel={handleClosePanel}
           isMaximized={isMaximized}
           // 单区预览无法并排还原；不提供回调即隐藏无效操作。
-          onToggleMaximize={layout?.isMobile || hideMaximizeToggle ? undefined : toggleMaximized}
+          onToggleMaximize={hideMaximizeToggle ? undefined : toggleMaximized}
           onNewBrowserTab={browserTabs.length > 0 ? handleNewBrowserTab : undefined}
         />
 
         {/* 工具栏（URL / 浏览器 类型不显示工具栏，因为不需要下载/编辑等功能）
             Toolbar (hidden for URL and browser types — no download/edit needed) */}
-        {content_type !== 'url' && content_type !== 'browser' && !metadata?.missingFile && (
+        {content_type !== 'url' && content_type !== 'browser' && content_type !== 'mycowork-result' && !metadata?.missingFile && (
           <PreviewToolbar
             content_type={content_type}
             isMarkdown={isMarkdown}

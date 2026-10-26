@@ -30,11 +30,6 @@ import { useProjectPreviewRegionWidth } from '@renderer/hooks/ui/useProjectPrevi
 import { useProjectPanelCollapse } from '@renderer/hooks/ui/useProjectPanelCollapse';
 
 import { dispatchWorkspaceToggleEvent } from '@renderer/utils/workspace/workspaceEvents';
-import {
-  MIN_CHAT_PANEL_PX,
-  MIN_PREVIEW_PANEL_PX,
-  PREVIEW_REGION_CHROME_PX,
-} from '@renderer/pages/conversation/utils/layoutCalc';
 import { PreviewPanel } from '@renderer/pages/conversation/Preview';
 import { LayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { NavigationHistoryProvider } from '@renderer/hooks/context/NavigationHistoryContext';
@@ -210,18 +205,16 @@ const Layout: React.FC<{
   // P4 (②B): hoist the preview region to the Layout host for project
   // conversations so it is structurally persistent (no remount on same-project
   // switches). ChatLayout renders chat only in that case (previewHosted).
-  // 主区不足并排时复用单区布局，不改变用户最大化或宽度偏好。
-  const previewNeedsFullWidth =
-    previewRegionActive &&
-    mainRowWidth > 0 &&
-    mainRowWidth - (explorerCollapsed ? 0 : explorerWidthPx) <
-      MIN_CHAT_PANEL_PX + MIN_PREVIEW_PANEL_PX + PREVIEW_REGION_CHROME_PX;
-  const previewMaximized = previewRegionActive && (isPreviewMaximized || previewNeedsFullWidth);
+  const previewMaximized = previewRegionActive && isPreviewMaximized;
   const { widthPx: previewWidthPx, createDragHandle: createPreviewRegionDragHandle } = useProjectPreviewRegionWidth(
     mainRowWidth,
     explorerCollapsed ? 0 : explorerWidthPx,
     previewRegionActive
   );
+  // Keep both panes visible without persisting a narrow-window width preference.
+  const previewAvailableWidth = mainRowWidth - (explorerCollapsed ? 0 : explorerWidthPx);
+  const shownPreviewWidth =
+    previewAvailableWidth > 0 ? Math.min(previewWidthPx, previewAvailableWidth * 0.6) : previewWidthPx;
   const routeLayoutMountedRef = useRef(false);
   useEffect(() => {
     if (!routeLayoutMountedRef.current) {
@@ -488,7 +481,7 @@ const Layout: React.FC<{
                 per-conversation subtree → persists across same-project switches. */}
             <div ref={mainRowRef} className='flex flex-1 min-w-0 min-h-0 overflow-hidden'>
               <ArcoLayout.Content
-                className={'bg-1 layout-content flex flex-col min-h-0 flex-1'}
+                className={'bg-1 layout-content flex flex-col min-h-0 flex-1 !min-w-0'}
                 onClick={() => {
                   if (isMobile && !collapsed) setCollapsed(true);
                 }}
@@ -526,14 +519,14 @@ const Layout: React.FC<{
                     // which restoring returns to automatically.
                     ...(previewMaximized
                       ? { flexGrow: 1, flexShrink: 1, flexBasis: 0 }
-                      : { width: `${Math.round(previewWidthPx)}px`, flexGrow: 0, flexShrink: 0 }),
+                      : { width: `${Math.round(shownPreviewWidth)}px`, flexGrow: 0, flexShrink: 0 }),
                     // 只保留左边框作为与会话区的分界；上/右/下不留边距，
                     // 否则窗口底色会从缝隙里透出来（深色模式下尤其突兀）。
                     // Left border only, as the divider from the chat area. No outer
                     // margins: any gap would expose the window's own background,
                     // which is jarring in dark mode.
                     borderLeft: '1px solid var(--bg-3)',
-                    minWidth: previewMaximized ? 0 : `${MIN_PREVIEW_PANEL_PX}px`,
+                    minWidth: 0,
                     boxSizing: 'border-box',
                   }}
                 >
@@ -541,6 +534,7 @@ const Layout: React.FC<{
                       While maximized the chat is hidden, so the resize handle has
                       nothing to drag against — hide it. */}
                   {!previewMaximized &&
+                    shownPreviewWidth === previewWidthPx &&
                     createPreviewRegionDragHandle({
                       className: 'absolute top-0 bottom-0 z-30',
                       style: { width: '20px', left: '-20px' },
@@ -550,7 +544,7 @@ const Layout: React.FC<{
                       lineStyle: { width: '2px' },
                     })}
                   <div className='h-full w-full overflow-hidden'>
-                    <PreviewPanel hideMaximizeToggle={previewNeedsFullWidth} />
+                    <PreviewPanel />
                   </div>
                 </div>
               )}

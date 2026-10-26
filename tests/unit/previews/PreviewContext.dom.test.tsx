@@ -131,6 +131,46 @@ describe('PreviewContext', () => {
     expect(result.current.isMaximized).toBe(false);
   });
 
+  it('opens another file beside chat without losing a dirty tab', () => {
+    const { result } = renderHook(() => usePreviewContext(), { wrapper });
+    act(() => result.current.openPreview('original', 'code', { title: 'first.ts' }));
+    act(() => result.current.updateContent('unsaved'));
+    act(() => result.current.toggleMaximized());
+    act(() => result.current.openPreview('# Next', 'markdown', { title: 'next.md' }, { replace: true }));
+
+    expect(result.current.isMaximized).toBe(false);
+    expect(result.current.tabs).toHaveLength(2);
+    expect(result.current.tabs[0]).toMatchObject({ content: 'unsaved', isDirty: true });
+  });
+
+  it('returns an already open file to the side panel', () => {
+    const { result } = renderHook(() => usePreviewContext(), { wrapper });
+    act(() =>
+      result.current.openPreview('image', 'image', {
+        title: 'chart.png',
+        fileRef: { kind: 'local', path: '/fixtures/chart.png' },
+      })
+    );
+    act(() => result.current.toggleMaximized());
+    act(() =>
+      result.current.openPreview('image', 'image', {
+        title: 'chart.png',
+        fileRef: { kind: 'local', path: '/fixtures/chart.png' },
+      })
+    );
+
+    expect(result.current.isMaximized).toBe(false);
+    expect(result.current.tabs).toHaveLength(1);
+  });
+
+  it('keeps explicit maximization when opening a browser tab', () => {
+    const { result } = renderHook(() => usePreviewContext(), { wrapper });
+    act(() => result.current.toggleMaximized());
+    act(() => result.current.openBrowserTab('https://example.com'));
+
+    expect(result.current.isMaximized).toBe(true);
+  });
+
   it('resets maximized when the panel is collapsed', () => {
     const { result } = renderHook(() => usePreviewContext(), { wrapper });
     act(() => {

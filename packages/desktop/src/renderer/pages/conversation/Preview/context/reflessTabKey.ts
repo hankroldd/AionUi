@@ -52,6 +52,7 @@ const SEP = '\0';
  * @param meta    Tab metadata, for the file name a diff carries.
  */
 export const reflessTabKey = (type: PreviewContentType, content?: string, meta?: PreviewMetadata): string | null => {
+  if (type === 'mycowork-result' && content) return `mycowork-result${SEP}${content}`;
   // A mermaid diagram is its code. Keying on the rendered title instead is what let
   // two different diagrams sharing a first line overwrite each other.
   if (type === 'markdown' && content?.startsWith('```mermaid')) {

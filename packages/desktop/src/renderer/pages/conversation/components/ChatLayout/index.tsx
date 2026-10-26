@@ -16,6 +16,10 @@ import classNames from 'classnames';
 import {
   DEFAULT_WORKSPACE_PANEL_PX,
   MAX_WORKSPACE_PANEL_PX,
+  MIN_CHAT_PANEL_PX,
+  MIN_CHAT_RATIO,
+  MIN_PREVIEW_PANEL_PX,
+  MIN_PREVIEW_RATIO,
   MIN_WORKSPACE_PANEL_PX,
   WORKSPACE_HEADER_HEIGHT,
   calcLayoutMetrics,
@@ -84,14 +88,8 @@ const ChatLayout: React.FC<{
   // ChatLayout must behave as if there is no preview: chat fills, no split, no
   // preview panel. Everywhere below uses `isPreviewOpen` for that local decision.
   const isPreviewOpen = isPreviewOpenRaw && !previewHosted;
-  // 最大化（仅桌面）：隐藏聊天区、让内联预览铺满；工作区右栏保持不变。
-  // 项目会话的预览被提升到 Layout host（previewHosted），其最大化在 Layout 处理，
-  // 这里的 isPreviewOpen 已排除该情况。
-  // Maximized (desktop only): hide the chat area so the inline preview fills it;
-  // the right workspace sider stays unchanged. Project conversations hoist the
-  // preview to the Layout host (previewHosted) and handle maximizing there —
-  // isPreviewOpen already excludes that case here.
-  const previewMaximized = isDesktop && isPreviewOpen && isMaximized;
+  // Only explicit expansion hides chat; project desktop previews are owned by Layout.
+  const previewMaximized = isPreviewOpen && isMaximized;
 
   // --- Hook A: workspace collapse ---
   const { rightSiderCollapsed, setRightSiderCollapsed } = useWorkspaceCollapse({
@@ -131,7 +129,7 @@ const ChatLayout: React.FC<{
   });
 
   // Pre-hook metrics: compute dynamic min/max for the chat-preview split hook
-  const { dynamicChatMinRatio, dynamicChatMaxRatio } = calcLayoutMetrics({
+  const { effectiveWorkspaceWidthPx, dynamicChatMinRatio, dynamicChatMaxRatio } = calcLayoutMetrics({
     containerWidth,
     workspaceWidthPx: workspaceWidthPxPref,
     chatSplitRatio: 60, // placeholder; only dynamicChatMinRatio/dynamicChatMaxRatio are used here
@@ -142,14 +140,20 @@ const ChatLayout: React.FC<{
     isMobile,
   });
 
+  // A narrow main area needs a temporary split, not impossible pixel minima persisted as percentages.
+  const compactPreview =
+    isDesktop && isPreviewOpen && containerWidth - effectiveWorkspaceWidthPx < MIN_CHAT_PANEL_PX + MIN_PREVIEW_PANEL_PX;
+  const minChatRatio = compactPreview ? MIN_CHAT_RATIO : dynamicChatMinRatio;
+  const maxChatRatio = compactPreview ? 100 - MIN_PREVIEW_RATIO : dynamicChatMaxRatio;
+
   const {
     splitRatio: chatSplitRatio,
     setSplitRatio: setChatSplitRatio,
     createDragHandle: createPreviewDragHandle,
   } = useResizableSplit({
     defaultWidth: 60,
-    minWidth: dynamicChatMinRatio,
-    maxWidth: dynamicChatMaxRatio,
+    minWidth: minChatRatio,
+    maxWidth: maxChatRatio,
     storageKey: 'chat-preview-split-ratio',
   });
 
@@ -165,6 +169,8 @@ const ChatLayout: React.FC<{
     isMobile,
   });
 
+  const shownChatFlex = compactPreview ? Math.min(chatFlex, 40) : chatFlex;
+
   // --- Hook E: layout constraints ---
   useLayoutConstraints({
     containerWidth,
@@ -177,8 +183,8 @@ const ChatLayout: React.FC<{
     setWorkspaceWidthPx: setWorkspaceWidthPxPref,
     chatSplitRatio,
     setChatSplitRatio,
-    dynamicChatMinRatio,
-    dynamicChatMaxRatio,
+    dynamicChatMinRatio: minChatRatio,
+    dynamicChatMaxRatio: maxChatRatio,
   });
 
   const [mobileActionsSlot, setMobileActionsSlot] = useState<HTMLElement | null>(null);
@@ -267,12 +273,9 @@ const ChatLayout: React.FC<{
               style={{
                 flexGrow: isPreviewOpen && isDesktop ? 0 : 1,
                 flexShrink: 0,
-                flexBasis: isPreviewOpen && isDesktop ? `${chatFlex}%` : 0,
-                // 最大化时（桌面）隐藏聊天区，预览铺满；移动端预览打开即覆盖聊天区。
-                // Hidden when maximized (desktop) so the preview fills; on mobile an
-                // open preview already covers the chat.
-                display: (isPreviewOpen && isMobile) || previewMaximized ? 'none' : 'flex',
-                minWidth: '240px',
+                flexBasis: isPreviewOpen && isDesktop ? `${shownChatFlex}%` : 0,
+                display: previewMaximized ? 'none' : 'flex',
+                minWidth: 0,
               }}
               onClick={() => {
                 if (window.innerWidth < 768 && !rightSiderCollapsed) setRightSiderCollapsed(true);
@@ -288,12 +291,7 @@ const ChatLayout: React.FC<{
               <div
                 className={classNames(
                   'preview-panel flex flex-col relative overflow-visible',
-                  // 移动端预览是覆盖层，保留内缩和圆角；桌面端不留边距，
-                  // 否则窗口底色会从缝隙透出（深色模式下尤其突兀）。
-                  // On mobile the preview is an overlay, so it keeps its inset and
-                  // rounding. On desktop no margin: a gap would expose the window's
-                  // own background, which is jarring in dark mode.
-                  isDesktop ? '' : 'm-[8px] rounded-[15px]'
+                  isDesktop ? '' : 'rounded-s-[15px]'
                 )}
                 style={{
                   flexGrow: 1,
@@ -302,9 +300,14 @@ const ChatLayout: React.FC<{
                   // 桌面端只用左边框分界；移动端覆盖层保留完整描边
                   // Desktop: left divider only. Mobile overlay keeps a full border.
                   ...(isDesktop ? { borderLeft: '1px solid var(--bg-3)' } : { border: '1px solid var(--bg-3)' }),
-                  minWidth: isDesktop ? '260px' : 0,
-                  maxWidth: isMobile ? 'calc(100% - 16px)' : undefined,
-                  width: isMobile ? 'calc(100% - 16px)' : undefined,
+                  minWidth: 0,
+                  position: isMobile ? 'absolute' : undefined,
+                  top: isMobile ? 0 : undefined,
+                  bottom: isMobile ? 0 : undefined,
+                  right: isMobile ? 0 : undefined,
+                  zIndex: isMobile ? 20 : undefined,
+                  maxWidth: isMobile && !previewMaximized ? '640px' : undefined,
+                  width: isMobile ? (previewMaximized ? '100%' : '85%') : undefined,
                   boxSizing: 'border-box',
                 }}
               >
@@ -313,6 +316,7 @@ const ChatLayout: React.FC<{
                     nothing to drag against — hide it. */}
                 {isDesktop &&
                   !previewMaximized &&
+                  !compactPreview &&
                   createPreviewDragHandle({
                     className: 'absolute top-0 bottom-0 z-30',
                     style: { width: '20px', left: '-20px' },

@@ -1,6 +1,6 @@
 /**
  * 文件：tests/unit/renderer/layout/LayoutSiderBrandHome.dom.test.tsx
- * 职责：验证侧栏原行为和项目预览的窄窗临时单区布局。
+ * 职责：验证侧栏原行为和项目预览的窄窗并排布局。
  * @license
  * Copyright 2025 AionUi (aionui.com)
  * SPDX-License-Identifier: Apache-2.0
@@ -263,7 +263,7 @@ describe('Layout sider brand Home button', () => {
     }
   });
 
-  it('768桌面窄主区临时单区，放宽和关闭后恢复聊天且不改宽度与折叠偏好', () => {
+  it('768桌面窄主区保持并排，放宽和关闭后不改草稿与宽度偏好', () => {
     currentPathname = '/conversation/preview';
     Object.assign(previewMocks, { projectId: 'project-1', mainRowWidth: 428, isOpen: true });
     window.innerWidth = 768;
@@ -274,18 +274,19 @@ describe('Layout sider brand Home button', () => {
     const draft = screen.getByLabelText('preview draft');
     const region = container.querySelector('[data-project-preview-region]')!;
     fireEvent.change(draft, { target: { value: 'unsaved preview' } });
-    expect(chat).not.toBeVisible();
-    expect(region).toHaveStyle({ flexGrow: 1, minWidth: 0 });
+    expect(chat).toBeVisible();
+    expect(region).toHaveStyle({ width: '257px', minWidth: 0 });
     expect(region.parentElement).toHaveClass('min-w-0');
     expect(region.querySelector('.cursor-col-resize')).toBeNull();
-    expect(screen.getByTestId('preview-probe')).toHaveAttribute('data-hide-maximize', 'true');
+    expect(screen.getByTestId('preview-probe')).toHaveAttribute('data-hide-maximize', 'false');
 
     previewMocks.mainRowWidth = 1228;
     rerender(<Layout sider={<div>sider</div>} />);
     expect(chat).toBeVisible();
     expect(screen.getByLabelText('preview draft')).toBe(draft);
     expect(draft).toHaveValue('unsaved preview');
-    expect(region).toHaveStyle({ width: '640px', minWidth: '340px' });
+    expect(region).toHaveStyle({ width: '640px', minWidth: 0 });
+    expect(region.querySelector('.cursor-col-resize')).not.toBeNull();
     expect(screen.getByTestId('preview-probe')).toHaveAttribute('data-hide-maximize', 'false');
     expect(localStorage.getItem('chat-preview-width-px')).toBe('640');
     expect(localStorage.getItem('project-panel-collapse:project-1')).toBe('expanded');
@@ -296,11 +297,11 @@ describe('Layout sider brand Home button', () => {
     expect(container.querySelector('[data-project-panel-host]')).toHaveAttribute('data-collapsed', 'false');
   });
 
-  it('临时单区不覆盖用户的手动最大化，放宽后保留还原动作', () => {
+  it('手动最大化在窄窗与宽窗都保留还原动作', () => {
     currentPathname = '/conversation/preview';
     Object.assign(previewMocks, { projectId: 'project-1', mainRowWidth: 428, isOpen: true, isMaximized: true });
     const { rerender } = renderLayout();
-    expect(screen.getByTestId('preview-probe')).toHaveAttribute('data-hide-maximize', 'true');
+    expect(screen.getByTestId('preview-probe')).toHaveAttribute('data-hide-maximize', 'false');
     previewMocks.mainRowWidth = 1228;
     rerender(<Layout sider={<div>sider</div>} />);
     expect(screen.getByLabelText('chat draft')).not.toBeVisible();
@@ -308,7 +309,7 @@ describe('Layout sider brand Home button', () => {
     expect(previewMocks.isMaximized).toBe(true);
   });
 
-  it('主区宽度0尚未测量时不误判临时单区', () => {
+  it('主区宽度0尚未测量时仍保留聊天和展开动作', () => {
     currentPathname = '/conversation/preview';
     Object.assign(previewMocks, { projectId: 'project-1', mainRowWidth: 0, isOpen: true });
     renderLayout();
@@ -316,14 +317,14 @@ describe('Layout sider brand Home button', () => {
     expect(screen.getByTestId('preview-probe')).toHaveAttribute('data-hide-maximize', 'false');
   });
 
-  it('按扣除可见Explorer后的主区判定单区，手动收起后恢复并排', () => {
+  it('手动展开Explorer时仍保持聊天与预览并排', () => {
     currentPathname = '/conversation/preview';
     Object.assign(previewMocks, { projectId: 'project-1', mainRowWidth: 900, isOpen: true });
     renderLayout();
     expect(screen.getByLabelText('chat draft')).toBeVisible();
     act(() => dispatchWorkspaceToggleEvent());
-    expect(screen.getByLabelText('chat draft')).not.toBeVisible();
-    expect(screen.getByTestId('preview-probe')).toHaveAttribute('data-hide-maximize', 'true');
+    expect(screen.getByLabelText('chat draft')).toBeVisible();
+    expect(screen.getByTestId('preview-probe')).toHaveAttribute('data-hide-maximize', 'false');
     act(() => dispatchWorkspaceToggleEvent());
     expect(screen.getByLabelText('chat draft')).toBeVisible();
     expect(screen.getByTestId('preview-probe')).toHaveAttribute('data-hide-maximize', 'false');

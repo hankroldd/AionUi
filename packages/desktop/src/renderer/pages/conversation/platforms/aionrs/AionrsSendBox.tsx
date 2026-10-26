@@ -263,7 +263,7 @@ const AionrsSendBox: React.FC<{
     prepareRuntime: teamPermission ? prepareRuntimeSync : undefined,
   });
 
-  const { setSendBoxHandler } = usePreviewContext();
+  const { setSendBoxHandler, openPreview } = usePreviewContext();
   const commandQueueRuntimeGate = teamRuntime?.runtimeGate ?? {
     hydrated: runtimeView.hydrated,
     canSendMessage: runtimeView.canSendMessage,
@@ -835,7 +835,16 @@ const AionrsSendBox: React.FC<{
         if (stopped) {
           const runtime = officeTaskRuntime(stopped);
           if (runtime) runtimeView.markStopAcknowledged(turnId, runtime);
-          if (stopped.saved_results?.length) Message.info({ content: <SavedResults run={stopped} lang={i18n?.language} />, duration: 0, closable: true }); // A513：已登记的结果（推定），无则不出；不自动消失，用户关
+          if (stopped.saved_results?.length) {
+            const dismiss = Message.info({
+              content: <SavedResults run={stopped} lang={i18n?.language} onOpen={(result) => {
+                dismiss();
+                openPreview(`${result.resource_id}/${result.revision_id}`, 'mycowork-result',
+                  { file_name: result.file_name, editable: false });
+              }} />,
+              duration: 0, closable: true,
+            }); // A513：已登记的结果（推定），固定版本在右侧预览。
+          }
           if (!stopped.stop_confirmed) { Message.warning('此步骤未确认完成，请检查任务状态；不会停止后来的轮次。'); return; }
           resetState(); resetActiveExecution('stop'); return;
         }

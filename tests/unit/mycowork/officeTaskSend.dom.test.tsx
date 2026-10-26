@@ -11,6 +11,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { DraftState, TaskRun } from '@mycowork/contracts';
 import { Conversation, Providers } from './officeTaskSend.harness';
+import { PreviewProvider, usePreviewContext } from '@/renderer/pages/conversation/Preview';
+import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
+import AionrsSendBox from '@/renderer/pages/conversation/platforms/aionrs/AionrsSendBox';
 import { count, fixture, fixtureFetch, idle, ipcCount, resetFixture } from './officeTaskSend.fixture';
 import { resetAccountScopedState, restoreScope, SavedResults, usePersistentDraft } from '@mycowork/ui';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
@@ -105,12 +108,36 @@ function Home() {
     </>
   );
 }
-async function mountConversation(team?: (payload: unknown) => Promise<void>) {
-  render(
-    <Providers>
-      <Conversation team={team} />
-    </Providers>
+function PreviewState() {
+  const { isOpen, activeTab } = usePreviewContext();
+  return <output data-testid='native-preview-state'>{JSON.stringify({ isOpen, activeTab })}</output>;
+}
+function ObservedConversation() {
+  const model = {
+    current_model: { id: 'provider-fixture', use_model: 'model-fixture' },
+    providers: [],
+    getAvailableModels: () => [],
+    formatModelLabel: () => '',
+    handleSelectModel: async () => {},
+  } as never;
+  return (
+    <ConversationProvider
+      value={{
+        conversation_id: fixture.conversation,
+        type: 'aionrs',
+        workspace: '/fixture/native',
+        assistantId: 'mycowork-scene-ppt',
+      }}
+    >
+      <PreviewProvider>
+        <AionrsSendBox conversation_id={fixture.conversation} modelSelection={model} />
+        <PreviewState />
+      </PreviewProvider>
+    </ConversationProvider>
   );
+}
+async function mountConversation(team?: (payload: unknown) => Promise<void>, observe = false) {
+  render(<Providers>{observe ? <ObservedConversation /> : <Conversation team={team} />}</Providers>);
   const input = await screen.findByTestId('sendbox-input');
   await waitFor(() => expect(input).not.toHaveAttribute('inert'));
   await waitFor(() => expect(ipcCount('conversation.get')).toBeGreaterThan(0));
@@ -315,36 +342,23 @@ const runOf = (status: TaskRun['status'], saved?: TaskRun['saved_results']): Tas
   created_at: '2026-10-17T00:00:00Z',
   ...(saved ? { saved_results: saved } : {}),
 });
-it('失败的任务带 2 个已登记结果：一行汇总 + 2 条指向对应版本的链接，链接可聚焦', () => {
-  render(<SavedResults run={runOf('failed', results(2))} lang='zh-CN' />);
-  expect(screen.getByText('已登记 2 个结果')).toBeInTheDocument();
-  const links = screen.getAllByRole('link');
-  expect(links.map((a) => a.getAttribute('href'))).toEqual([
-    '#/office/resources/res_0/versions?revision=rev_0',
-    '#/office/resources/res_1/versions?revision=rev_1',
-  ]);
-  expect(links[0]).toHaveTextContent('结果0.docx');
-  links[0].focus();
-  expect(links[0]).toHaveFocus();
-  expect(document.body).not.toHaveTextContent('全部');
-});
 it('已停止的任务显示；空或缺省、进行中都不出任何文字', () => {
-  const { unmount } = render(<SavedResults run={runOf('cancelled', results(1))} lang='en-US' />);
+  const { unmount } = render(<SavedResults run={runOf('cancelled', results(1))} lang='en-US' onOpen={vi.fn()} />);
   expect(screen.getByText('1 saved result registered')).toBeInTheDocument();
   unmount();
   for (const run of [runOf('failed', []), runOf('failed'), runOf('running', results(2))]) {
-    const { container, unmount: u } = render(<SavedResults run={run} lang='zh-CN' />);
+    const { container, unmount: u } = render(<SavedResults run={run} lang='zh-CN' onOpen={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
     u();
   }
 });
 it('7 个结果只列 5 条，其余写“还有 2 个”', () => {
-  render(<SavedResults run={runOf('failed', results(7))} lang='zh-CN' />);
-  expect(screen.getAllByRole('link')).toHaveLength(5);
+  render(<SavedResults run={runOf('failed', results(7))} lang='zh-CN' onOpen={vi.fn()} />);
+  expect(screen.getAllByRole('button')).toHaveLength(5);
   expect(screen.getByText('已登记 7 个结果')).toBeInTheDocument();
   expect(screen.getByText('还有 2 个')).toBeInTheDocument();
 });
-it('停止确认后在发送框提示已登记的结果', async () => {
+it('停止确认后的结果点击进入真实原生预览状态，保留固定版本且不导航', async () => {
   const input = await mountConversation();
   fireEvent.change(input, { target: { value: '停止后列结果的虚构输入' } });
   sendCurrent();
@@ -353,7 +367,7 @@ it('停止确认后在发送框提示已登记的结果', async () => {
   cleanup();
   resetConversationRuntimeViewStoreForTest();
   sessionStorage.clear();
-  await mountConversation();
+  await mountConversation(undefined, true);
   fixture.stopConfirmed = true;
   fixture.savedResults = results(2);
   const stop = await waitFor(() => {
@@ -364,5 +378,17 @@ it('停止确认后在发送框提示已登记的结果', async () => {
   fireEvent.click(stop);
   await waitFor(() => expect(count('/bridge/v1/tasks/run-native/stop')).toBe(1));
   await waitFor(() => expect(document.body).toHaveTextContent('2 saved results registered'));
-  expect(screen.getByRole('link', { name: '结果1.docx' })).toBeInTheDocument();
+  const before = window.location.href;
+  fireEvent.click(screen.getByRole('button', { name: '结果1.docx' }));
+  await waitFor(() =>
+    expect(JSON.parse(screen.getByTestId('native-preview-state').textContent!)).toMatchObject({
+      isOpen: true,
+      activeTab: {
+        content: 'res_1/rev_1',
+        content_type: 'mycowork-result',
+        metadata: { file_name: '结果1.docx', editable: false },
+      },
+    })
+  );
+  expect(window.location.href).toBe(before);
 });

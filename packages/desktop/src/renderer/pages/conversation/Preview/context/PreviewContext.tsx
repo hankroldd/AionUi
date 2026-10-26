@@ -287,6 +287,7 @@ const PERSISTABLE_CONTENT_TYPES = new Set<PreviewContentType>([
   'excel',
   'ppt',
   'unsupported',
+  'mycowork-result',
 ]);
 
 /**
@@ -858,6 +859,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
 
       setActiveTabId(targetTabId);
+      if (type !== 'browser') setIsMaximized(false);
       setIsOpen(true);
     },
     [extractFileName, findPreviewTabInList]

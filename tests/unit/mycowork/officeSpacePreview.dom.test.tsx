@@ -182,10 +182,48 @@ describe('PPT-only srcDoc zoom', () => {
       expect(srcDoc.startsWith(html)).toBe(true);
       expect(srcDoc.slice(html.length)).toContain('.main{align-items:safe center}');
       expect(srcDoc.slice(html.length)).toContain(`.main>.slide-container{zoom:${zoom / 100}}`);
-      expect(srcDoc.match(/<script>/g)).toHaveLength(1);
+      expect(srcDoc.slice(html.length).match(/<script>/g)).toHaveLength(1);
       expect(document.querySelector('iframe')).toBe(frame);
       expect(contentCalls()).toHaveLength(1);
     }
+  });
+
+  it('fits slides and thumbnails when the PPT viewport has usable dimensions', async () => {
+    fixture(() => page(html));
+    render(<PreviewBody text={text} resourceId='res_0' fileName='虚构.pptx' pptZoom={100} />);
+    const frame = await screen.findByTitle('虚构.pptx 的只读预览');
+    const srcDoc = frame.getAttribute('srcdoc')!;
+    const parser = new DOMParser();
+    const previewDocument = parser.parseFromString(html, 'text/html');
+    const script = parser.parseFromString(srcDoc.slice(html.length), 'text/html').querySelector('script');
+    expect(script).not.toBeNull();
+    const nativeFit = { scaleSlides: vi.fn(), scaleThumbs: vi.fn() };
+    const observe = vi.fn();
+    let onResize!: (entries: { contentRect: { width: number; height: number } }[]) => void;
+    class FixtureResizeObserver {
+      observe = observe;
+      constructor(callback: typeof onResize) {
+        onResize = callback;
+      }
+    }
+    // Execute only our appended script; the original HTML is parsed without running its scripts.
+    new Function('window', 'document', 'ResizeObserver', script!.textContent!)(
+      nativeFit,
+      previewDocument,
+      FixtureResizeObserver
+    );
+    expect(observe).toHaveBeenCalledExactlyOnceWith(previewDocument.querySelector('.main'));
+    onResize([{ contentRect: { width: 0, height: 480 } }]);
+    onResize([{ contentRect: { width: 640, height: 0 } }]);
+    for (const fit of Object.values(nativeFit)) expect(fit).not.toHaveBeenCalled();
+    onResize([{ contentRect: { width: 640, height: 480 } }]);
+    for (const fit of Object.values(nativeFit)) expect(fit).toHaveBeenCalledOnce();
+    previewDocument.body.classList.add('fullscreen');
+    onResize([{ contentRect: { width: 640, height: 480 } }]);
+    for (const fit of Object.values(nativeFit)) expect(fit).toHaveBeenCalledOnce();
+    previewDocument.body.classList.remove('fullscreen');
+    onResize([{ contentRect: { width: 320, height: 480 } }]);
+    for (const fit of Object.values(nativeFit)) expect(fit).toHaveBeenCalledTimes(2);
   });
 
   it('keeps existing PPT callers without a multiplier byte-for-byte unchanged', async () => {

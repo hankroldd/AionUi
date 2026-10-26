@@ -134,7 +134,14 @@ it('正文及引用保存后，刷新重新读服务端，submission_id在编辑
   });
   const view = await mount();
   expect(screen.getByLabelText('正文')).toHaveValue('旧虚构草稿');
+  const status = screen.getByTestId('mycowork-draft-status');
+  expect(status).toHaveAttribute('role', 'status');
+  expect(status).toHaveAttribute('aria-live', 'polite');
+  expect(status).toHaveTextContent('草稿已保存');
+  expect(status).toHaveClass('mcw-composer-feedback--quiet');
   edit('新虚构草稿');
+  expect(status).toHaveTextContent('草稿尚未保存');
+  expect(status).not.toHaveClass('mcw-composer-feedback--quiet');
   await waitFor(() => expect(saved?.state.content).toBe('新虚构草稿'));
   const submission = saved!.submission_id;
   edit('继续填写虚构草稿');
@@ -164,6 +171,8 @@ it('另一个标签页更新后冲突保留本页，明确保存本页输入后�
   edit('本页新稿');
   fireEvent.click(screen.getByText('保存', { exact: true }));
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('另一个页面'));
+  expect(screen.getByRole('alert')).toHaveClass('mcw-composer-feedback--alert');
+  expect(screen.getByRole('alert')).not.toHaveClass('mcw-composer-feedback--quiet');
   expect(screen.getByLabelText('正文')).toHaveValue('本页新稿');
   expect(saved.state.content).toBe('另一页新稿');
   fireEvent.click(screen.getByText('保存本页输入'));
@@ -188,7 +197,10 @@ it('保存响应丢失时重试同一请求，不换键、不重复加版本', a
   loseResponse = true;
   edit('响应丢失的虚构草稿');
   fireEvent.click(screen.getByText('保存', { exact: true }));
-  await screen.findByRole('alert');
+  const status = await screen.findByRole('alert');
+  expect(status).toHaveTextContent('草稿尚未保存，请保留本页并重试。');
+  expect(status).toHaveClass('mcw-composer-feedback--alert');
+  expect(status).not.toHaveClass('mcw-composer-feedback--quiet');
   fireEvent.click(screen.getByText('重试保存'));
   await waitFor(() => expect(screen.getByTestId('mycowork-draft-status')).toHaveTextContent('草稿已保存'));
   expect(writes).toHaveLength(2);
